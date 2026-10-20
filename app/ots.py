@@ -25,6 +25,8 @@ class OTSClient:
     _groups = _apibase + "/groups"
     _groups_members = _groups + "/members"
     _meshtastic = _apibase + "/meshtastic"
+    _missions = _apibase + "/missions"
+    _profiles = _apibase + "/profiles"
 
 
     def __init__(self, url, username, password):
@@ -385,5 +387,97 @@ class OTSClient:
         """Generate a new PSK for Meshtastic channel encryption"""
         endpoint = self._meshtastic + "/generate_psk"
         return self.request_handler(method="GET", endpoint=endpoint)
+
+    def get_missions(self, page=None, per_page=None, name=None, guid=None, tool=None):
+        """Get missions from OTS, optionally filtered by name, guid or tool"""
+        params = {}
+        if page is not None:
+            params["page"] = page
+        if per_page is not None:
+            params["per_page"] = per_page
+        if name is not None:
+            params["name"] = name
+        if guid is not None:
+            params["guid"] = guid
+        if tool is not None:
+            params["tool"] = tool
+        return self.request_handler(method="GET", endpoint=self._missions, params=params)
+
+    def create_mission(self, name, creator_uid, description=None, groups=None, default_role=None, tool=None):
+        """Create or update a mission in OTS. creator_uid must be an existing EUD UID.
+
+        groups is a list of OTS group IDs the mission is associated with.
+        """
+        body = {'name': name, 'creator_uid': creator_uid}
+        if description is not None:
+            body['description'] = description
+        if groups is not None:
+            body['groups'] = list(groups)
+        if default_role is not None:
+            body['default_role'] = default_role
+        if tool is not None:
+            body['tool'] = tool
+        return self.request_handler(method="POST", endpoint=self._missions, body=body)
+
+    def delete_mission(self, name):
+        """Delete a mission from OTS by name"""
+        return self.request_handler(method="DELETE", endpoint=self._missions, params={'name': name})
+
+    def get_device_profiles(self, page=None, per_page=None, preference_key=None, preference_value=None, tool=None):
+        """Get device profiles from OTS, optionally filtered by exact field values"""
+        params = {}
+        if page is not None:
+            params["page"] = page
+        if per_page is not None:
+            params["per_page"] = per_page
+        if preference_key is not None:
+            params["preference_key"] = preference_key
+        if preference_value is not None:
+            params["preference_value"] = preference_value
+        if tool is not None:
+            params["tool"] = tool
+        return self.request_handler(method="GET", endpoint=self._profiles, params=params)
+
+    def create_device_profile(self, preference_key, preference_value, value_class,
+                              enrollment=False, connection=True, active=True, tool=None, eud_uid=None):
+        """Create or update a device profile in OTS.
+
+        OTS validates this endpoint with a WTForm, so it expects form-encoded
+        data rather than JSON and cannot go through request_handler.
+        """
+        if not self.auth_token:
+            self.login()
+
+        data = {
+            'preference_key': preference_key,
+            'preference_value': preference_value,
+            'value_class': value_class,
+            'enrollment': 'true' if enrollment else 'false',
+            'connection': 'true' if connection else 'false',
+            'active': 'true' if active else 'false',
+        }
+        if tool is not None:
+            data['tool'] = tool
+        if eud_uid is not None:
+            data['eud_uid'] = eud_uid
+
+        url = self.base_url + self._profiles
+        headers = {"Referer": self.base_url + self._data_packages}
+        response = self.session.post(url, data=data, params={'auth_token': self.auth_token},
+                                     headers=headers, verify=OTS_VERIFY_SSL, timeout=30)
+
+        try:
+            payload = response.json() if response.text.strip() else {}
+        except ValueError:
+            payload = {"response": response.text}
+        result = {"response": payload, "status_code": response.status_code}
+
+        if response.status_code == 400:
+            raise BadRequestError(result)
+        if response.status_code == 401:
+            raise AuthorizationError(result)
+        if response.status_code != 200:
+            raise Exception(result)
+        return result
 
 otsClient = OTSClient(OTS_URL, OTS_USERNAME, OTS_PASSWORD)
