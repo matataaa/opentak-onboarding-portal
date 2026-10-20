@@ -175,6 +175,27 @@ def create_app():
             "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
         )
 
+        # Content-Security-Policy for the SPA. The Swagger UI at /api/docs loads
+        # its own inline bootstrap, so the stricter portal CSP is kept off it.
+        # style-src/font-src allow the Google Fonts stylesheet the SPA loads for
+        # Material Icons; img-src allows the data:/blob: URLs used for QR codes.
+        if not request.path.startswith("/api/docs"):
+            response.headers.setdefault(
+                "Content-Security-Policy",
+                "default-src 'self'; "
+                "base-uri 'self'; "
+                "object-src 'none'; "
+                "frame-ancestors 'none'; "
+                "form-action 'self'; "
+                "script-src 'self'; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "font-src 'self' data: https://fonts.gstatic.com; "
+                "img-src 'self' data: blob:; "
+                "connect-src 'self'; "
+                "worker-src 'self' blob:; "
+                "manifest-src 'self'",
+            )
+
         # Responses may carry JWTs or QR enrollment material; keep them out of
         # intermediary and browser caches.
         if request.path.startswith("/api/v1/"):
