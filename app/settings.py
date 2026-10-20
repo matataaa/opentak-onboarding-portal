@@ -1,8 +1,22 @@
 from os import environ
 from dotenv import load_dotenv
-from distutils.util import strtobool
 from urllib.parse import urlparse
 import secrets
+
+
+def strtobool(value):
+    """Convert a truthy/falsy string to a bool.
+
+    Replaces distutils.util.strtobool, which was removed in Python 3.12.
+    Keeps the same accepted values and raises ValueError on anything else.
+    """
+    value = str(value).strip().lower()
+    if value in ('y', 'yes', 't', 'true', 'on', '1'):
+        return True
+    if value in ('n', 'no', 'f', 'false', 'off', '0'):
+        return False
+    raise ValueError(f"invalid truth value {value!r}")
+
 
 load_dotenv()
 API_KEY = str(environ.get('API_KEY', secrets.token_hex(32)))
