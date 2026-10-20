@@ -43,8 +43,13 @@ class OTSClient:
     def execute_request(self, method, endpoint, body=None, params=None, response_type="json"):
         try:
             url = self.base_url + endpoint
-            self.headers["Referer"] = self.base_url+self._data_packages
-            response = self.session.request(method, url, json=body, headers=self.headers, params=params, verify=OTS_VERIFY_SSL, timeout=30)
+            # Send the auth token as a header rather than a query parameter so it
+            # does not end up in access logs, proxies or the Referer.
+            headers = dict(self.headers)
+            headers["Referer"] = self.base_url + self._data_packages
+            if self.auth_token:
+                headers["Authentication-Token"] = self.auth_token
+            response = self.session.request(method, url, json=body, headers=headers, params=params, verify=OTS_VERIFY_SSL, timeout=30)
             if response_type == "json":
 
                 if not response.text.strip():
@@ -67,12 +72,10 @@ class OTSClient:
    #     if not self.csrf_token:
    #         self.get_csrf_token()
 
-        if not self.auth_token:    
+        if not self.auth_token:
             self.login()
 
-        if self.auth_token:
-            params['auth_token'] = self.auth_token
-              
+        # execute_request attaches the auth token as a header.
         response = self.execute_request(method, endpoint, body, params, response_type)
 
         if response.get('status_code') == 400: 
@@ -475,9 +478,12 @@ class OTSClient:
             data['eud_uid'] = eud_uid
 
         url = self.base_url + self._profiles
-        headers = {"Referer": self.base_url + self._data_packages}
-        response = self.session.post(url, data=data, params={'auth_token': self.auth_token},
-                                     headers=headers, verify=OTS_VERIFY_SSL, timeout=30)
+        headers = {
+            "Referer": self.base_url + self._data_packages,
+            "Authentication-Token": self.auth_token,
+        }
+        response = self.session.post(url, data=data, headers=headers,
+                                     verify=OTS_VERIFY_SSL, timeout=30)
 
         try:
             payload = response.json() if response.text.strip() else {}
