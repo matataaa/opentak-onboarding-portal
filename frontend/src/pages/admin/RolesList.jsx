@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { rolesAPI } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
+import Pagination from '../../components/Pagination';
 import '../../components/AdminTable.css';
 
 function RolesList() {
@@ -20,14 +21,32 @@ function RolesList() {
     description: ''
   });
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(20);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1); // Reset to page 1 when search changes
+    }, 500); // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Fetch roles
   const { data: rolesData, isLoading } = useQuery({
-    queryKey: ['roles'],
+    queryKey: ['roles', page, perPage, debouncedSearch],
     queryFn: async () => {
-      const response = await rolesAPI.getAll();
+      // perPage 0 = all: omit paging so the API returns every role
+      const params = perPage ? { page, per_page: perPage, search: debouncedSearch } : { search: debouncedSearch };
+      const response = await rolesAPI.getAll(params);
       return response.data;
     },
+    // Keep showing the current rows while the next page/search loads, so the search box keeps focus
+    placeholderData: keepPreviousData,
   });
 
   // Create mutation
@@ -119,12 +138,20 @@ function RolesList() {
   }
 
   const roles = rolesData?.roles || [];
+  const total = rolesData?.total || 0;
 
   return (
     <div className="admin-page">
       <div className="admin-header">
         <h1>{t('admin.roles.title')}</h1>
         <div className="admin-actions">
+          <input
+            type="text"
+            className="search-box"
+            placeholder={t('admin.roles.searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
           {canEdit && (
             <button className="btn btn-primary" onClick={handleCreate}>
               {t('admin.roles.addRole')}
@@ -135,7 +162,9 @@ function RolesList() {
 
       <div className="admin-table-container">
         {roles.length === 0 ? (
-          <div className="empty-state">{t('admin.roles.noRoles')}</div>
+          <div className="empty-state">
+            {debouncedSearch ? t('common.noResults') : t('admin.roles.noRoles')}
+          </div>
         ) : (
           <table className="admin-table">
             <thead>
@@ -176,6 +205,15 @@ function RolesList() {
               ))}
             </tbody>
           </table>
+        )}
+        {total > 0 && (
+          <Pagination
+            page={page}
+            perPage={perPage}
+            total={total}
+            onPageChange={setPage}
+            onPerPageChange={(size) => { setPerPage(size); setPage(1); }}
+          />
         )}
       </div>
 

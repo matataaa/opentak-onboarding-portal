@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { usersAPI, rolesAPI, groupsAPI } from '../../services/api';
@@ -49,6 +49,8 @@ function UsersList() {
       const response = await usersAPI.getAll({ page, per_page: 20, search: debouncedSearch });
       return response.data;
     },
+    // Keep showing the current rows while the next page/search loads, so the search box keeps focus
+    placeholderData: keepPreviousData,
   });
 
   // Fetch roles for the form
@@ -287,7 +289,9 @@ function UsersList() {
 
       <div className="admin-table-container">
         {users.length === 0 ? (
-          <div className="empty-state">{t('admin.users.noUsers')}</div>
+          <div className="empty-state">
+            {debouncedSearch ? t('common.noResults') : t('admin.users.noUsers')}
+          </div>
         ) : (
           <>
             <table className="admin-table">

@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { meshtasticAPI } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
+import Pagination from '../../components/Pagination';
 import '../../components/AdminTable.css';
 
 function MeshtasticList() {
@@ -17,13 +18,31 @@ function MeshtasticList() {
   const [formData, setFormData] = useState({ name: '', url: '', description: '' });
   const [error, setError] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(20);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1); // Reset to page 1 when search changes
+    }, 500); // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const { data: configsData, isLoading, error: configsError } = useQuery({
-    queryKey: ['meshtasticAdmin'],
+    queryKey: ['meshtasticAdmin', page, perPage, debouncedSearch],
     queryFn: async () => {
-      const response = await meshtasticAPI.getAllAdmin();
+      // perPage 0 = all: omit paging so the API returns every channel
+      const params = perPage ? { page, per_page: perPage, search: debouncedSearch } : { search: debouncedSearch };
+      const response = await meshtasticAPI.getAllAdmin(params);
       return response.data;
     },
+    // Keep showing the current rows while the next page/search loads, so the search box keeps focus
+    placeholderData: keepPreviousData,
   });
 
   const updateMutation = useMutation({
@@ -100,6 +119,7 @@ function MeshtasticList() {
   }
 
   const configs = configsData?.configs || [];
+  const total = configsData?.total || 0;
 
   return (
     <div className="admin-page">
@@ -110,15 +130,26 @@ function MeshtasticList() {
             {t('admin.meshtastic.subtitle')} <a href="/admin/meshtastic/groups">{t('admin.meshtastic.manageGroups')}</a>
           </p>
         </div>
-        {canEdit && (
-          <button className="btn btn-primary" onClick={handleSyncFromOts} disabled={syncing}>
-            {syncing ? t('common.syncing') : t('admin.meshtastic.syncFromOts')}
-          </button>
-        )}
+        <div className="admin-actions">
+          <input
+            type="text"
+            className="search-box"
+            placeholder={t('admin.meshtastic.searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {canEdit && (
+            <button className="btn btn-primary" onClick={handleSyncFromOts} disabled={syncing}>
+              {syncing ? t('common.syncing') : t('admin.meshtastic.syncFromOts')}
+            </button>
+          )}
+        </div>
       </div>
       <div className="admin-table-container">
         {configs.length === 0 ? (
-          <div className="empty-state">{t('admin.meshtastic.noChannels')}</div>
+          <div className="empty-state">
+            {debouncedSearch ? t('common.noResults') : t('admin.meshtastic.noChannels')}
+          </div>
         ) : (
           <table className="admin-table">
             <thead>
@@ -186,6 +217,15 @@ function MeshtasticList() {
               ))}
             </tbody>
           </table>
+        )}
+        {total > 0 && (
+          <Pagination
+            page={page}
+            perPage={perPage}
+            total={total}
+            onPageChange={setPage}
+            onPerPageChange={(size) => { setPerPage(size); setPage(1); }}
+          />
         )}
       </div>
 
