@@ -44,7 +44,7 @@ class MeshtasticSyncService:
         errors = []
 
         try:
-            response = otsClient.get_meshtastic_channels()
+            response = otsClient.get_all_pages(otsClient.get_meshtastic_channels)
             if response is None:
                 errors.append("OTS returned no response - meshtastic endpoint may not be available")
                 return created, updated, errors
