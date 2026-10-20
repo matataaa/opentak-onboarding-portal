@@ -84,6 +84,19 @@ class OTSClient:
 
         return response 
 
+    def get_all_pages(self, fetch, per_page=100, **filters):
+        """Call a paginated list method (e.g. get_groups) for every page and merge the results"""
+        page = 1
+        response = fetch(page=page, per_page=per_page, **filters)
+        body = response.get('response', {})
+        results = list(body.get('results', []))
+        while page < body.get('total_pages', 1):
+            page += 1
+            next_body = fetch(page=page, per_page=per_page, **filters).get('response', {})
+            results.extend(next_body.get('results', []))
+        body['results'] = results
+        return response
+
 
     def get_csrf_token(self):
         response = self.execute_request(method="GET", endpoint=self._login)
@@ -151,12 +164,12 @@ class OTSClient:
         params = {'hash': hash}
         return self.request_handler(method="DELETE", endpoint=self._data_packages, params=params)
     
-    def get_data_packages(self, page=None, page_size=None, hash=None, filename=None, creator_uid=None, keywords=None, mime_type=None, size=None, tool=None):
+    def get_data_packages(self, page=None, per_page=None, hash=None, filename=None, creator_uid=None, keywords=None, mime_type=None, size=None, tool=None):
         params = {}
         if page is not None:
             params["page"] = page
-        if page_size is not None:
-            params["page_size"] = page_size
+        if per_page is not None:
+            params["per_page"] = per_page
         if hash is not None:
             params["hash"] = hash
         if filename is not None:
@@ -188,35 +201,35 @@ class OTSClient:
             print(f"Error: {e}")
             return False
 
-    def get_euds(self, page=None, page_size=None):
+    def get_euds(self, page=None, per_page=None):
         params = {}
         if page is not None:
             params["page"] = page
-        if page_size is not None:
-            params["page_size"] = page_size
+        if per_page is not None:
+            params["per_page"] = per_page
         return self.request_handler(method="GET", endpoint=self._eud, params=params)
         
     def get_jobs(self):
         return self.request_handler(method="GET", endpoint=self._jobs)
 
-    def get_points(self, page=None, page_size=None, callsign=None, uid=None):
+    def get_points(self, page=None, per_page=None, callsign=None, uid=None):
         params = {}
         if page is not None:
             params["page"] = page
-        if page_size is not None:
-            params["page_size"] = page_size
+        if per_page is not None:
+            params["per_page"] = per_page
         if callsign is not None:
             params["callsign"] = callsign
         if uid is not None:
             params["uid"] = uid
         return self.request_handler(method="GET", endpoint=self._points, params=params)
     
-    def get_users(self, page=None, page_size=None, username=None, email=None):
+    def get_users(self, page=None, per_page=None, username=None, email=None):
         params = {}
         if page is not None:
             params["page"] = page
-        if page_size is not None:
-            params["page_size"] = page_size
+        if per_page is not None:
+            params["per_page"] = per_page
         if username is not None:
             params["username"] = username
         
@@ -243,13 +256,13 @@ class OTSClient:
         return self.request_handler(method="POST", endpoint=self._user_deactivate, body=body)
 
 
-    def get_groups(self, page=None, page_size=None, name=None, active=None):
+    def get_groups(self, page=None, per_page=None, name=None, active=None):
         """Get all groups from OTS"""
         params = {}
         if page is not None:
             params["page"] = page
-        if page_size is not None:
-            params["page_size"] = page_size
+        if per_page is not None:
+            params["per_page"] = per_page
         if name is not None:
             params["name"] = name
         if active is not None:
@@ -356,13 +369,13 @@ class OTSClient:
     # Meshtastic endpoints - uses /api/meshtastic/channel
     _meshtastic_channel = _meshtastic + "/channel"
 
-    def get_meshtastic_channels(self, page=None, page_size=None, name=None, url=None):
+    def get_meshtastic_channels(self, page=None, per_page=None, name=None, url=None):
         """Get all Meshtastic channels from OTS"""
         params = {}
         if page is not None:
             params["page"] = page
-        if page_size is not None:
-            params["page_size"] = page_size
+        if per_page is not None:
+            params["per_page"] = per_page
         if name is not None:
             params["name"] = name
         if url is not None:

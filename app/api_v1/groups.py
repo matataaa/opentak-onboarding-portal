@@ -384,7 +384,7 @@ def sync_groups_from_ots():
         from app.ots import otsClient
 
         current_app.logger.info("Starting OTS group sync")
-        ots_response = otsClient.get_groups()
+        ots_response = otsClient.get_all_pages(otsClient.get_groups)
 
         ots_groups = ots_response.get('response', {})
         if isinstance(ots_groups, dict):
