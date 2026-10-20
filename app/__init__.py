@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request
 from flask_cors import CORS
 from flask import jsonify
 from app.models import db, migrate
@@ -161,6 +161,30 @@ def create_app():
                 SystemSettingsModel.initialize_defaults()
             except Exception as e:
                 print(f"Warning: Could not initialize system settings (likely pending migration): {e}")
+
+    @app.after_request
+    def add_security_headers(response):
+        """Baseline browser-hardening headers for the portal and its API."""
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+        response.headers.setdefault(
+            "Permissions-Policy",
+            "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+        )
+
+        # Responses may carry JWTs or QR enrollment material; keep them out of
+        # intermediary and browser caches.
+        if request.path.startswith("/api/v1/"):
+            response.headers.setdefault("Cache-Control", "no-store")
+
+        forwarded_proto = request.headers.get("X-Forwarded-Proto", "")
+        if request.is_secure or forwarded_proto.split(",", 1)[0].strip().lower() == "https":
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+        return response
+
     return app
 
 app = create_app()
