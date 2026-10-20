@@ -8,6 +8,23 @@ import sys
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# Test environment must be set before anything imports app: app/settings.py reads
+# these at import time, and `import app` runs the module-level create_app().
+os.environ.update({
+    'TESTING': 'True',
+    'DEBUG': 'False',
+    'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:',
+    'SECRET_KEY': 'test-secret-key',
+    'JWT_SECRET_KEY': 'test-jwt-secret-key-at-least-32-bytes',
+    'OTS_URL': 'http://localhost:8080',
+    'OTS_USERNAME': 'test',
+    'OTS_PASSWORD': 'test',
+    'MAIL_ENABLED': 'False',
+    'MAIL_PORT': '25',
+    'MAIL_USE_TLS': 'False',
+    'MAIL_USE_SSL': 'False',
+})
+
 from app import create_app
 from app.models import db as _db
 
@@ -15,68 +32,8 @@ from app.models import db as _db
 @pytest.fixture(scope='session')
 def app():
     """Create application for testing"""
-    # Set testing config BEFORE importing
-    # Don't load .env file in tests
-    os.environ['DOTENV_PATH'] = '/dev/null'
-    os.environ['TESTING'] = 'True'
-    os.environ['ENABLE_API'] = 'True'
-    os.environ['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-    os.environ['SECRET_KEY'] = 'test-secret-key'
-    os.environ['JWT_SECRET_KEY'] = 'test-jwt-secret'
-    os.environ['OTS_URL'] = 'http://localhost:8080'
-    os.environ['OTS_USERNAME'] = 'test'
-    os.environ['OTS_PASSWORD'] = 'test'
-    os.environ['DEBUG'] = 'False'
-    os.environ['MAIL_ENABLED'] = 'False'
-
-    # Need to create app manually to avoid the global app instance
-    from flask import Flask
-    app = Flask(__name__)
-
-    # Use absolute path to settings.py in app directory
-    settings_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'app', 'settings.py'))
-    app.config.from_pyfile(settings_path)
-
-    # Override config after loading settings.py to ensure test values are used
-    app.config['TESTING'] = True
-    app.config['OTS_URL'] = 'http://localhost:8080'
-    app.config['TESTING'] = True
+    app = create_app()
     app.config['WTF_CSRF_ENABLED'] = False
-
-    # Import and register everything except scheduler
-    from app.models import db as _db, migrate
-    from app.jina_filters import jina2_filters_blueprint
-    from flask_breadcrumbs import Breadcrumbs
-    from flask_menu import Menu
-    from app.extensions import mail, jwt_manager, qrcode
-    from flask_cors import CORS
-    import logging
-
-    # Enable CORS
-    CORS(app, resources={
-        r"/api/*": {
-            "origins": app.config.get('CORS_ORIGINS', '*'),
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"],
-            "supports_credentials": True
-        }
-    })
-
-    _db.init_app(app)
-    migrate.init_app(app, _db, render_as_batch=False)
-    menu = Menu()
-    breadcrumbs = Breadcrumbs(init_menu=False)
-    menu.init_app(app)
-    breadcrumbs.init_app(app)
-    qrcode.init_app(app)
-    jwt_manager.init_app(app)
-
-    # Register API blueprint
-    if app.config['ENABLE_API']:
-        from app.api_v1 import api_v1
-        app.register_blueprint(api_v1)
-
-    mail.init_app(app)
 
     with app.app_context():
         _db.create_all()
