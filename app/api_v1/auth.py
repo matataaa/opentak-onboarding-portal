@@ -280,10 +280,23 @@ def refresh():
         claims['impersonated_by'] = jwt_data['impersonated_by']
         claims['impersonated_by_username'] = jwt_data.get('impersonated_by_username', '')
 
+    # A kiosk session is a short-lived, shared-terminal session. Refreshing it
+    # must keep the kiosk_session claim and the short kiosk lifetime; otherwise
+    # a kiosk refresh token could be exchanged for a 12-hour general session.
+    expires_delta = timedelta(hours=12)
+    if jwt_data.get('kiosk_session'):
+        from app.models import SystemSettingsModel
+        claims['kiosk_session'] = True
+        timeout_str = SystemSettingsModel.get_setting('kiosk_session_timeout_minutes', '10')
+        try:
+            expires_delta = timedelta(minutes=int(timeout_str))
+        except (ValueError, TypeError):
+            expires_delta = timedelta(minutes=10)
+
     access_token = create_access_token(
         identity=str(user.id),
         additional_claims=claims,
-        expires_delta=timedelta(hours=12)
+        expires_delta=expires_delta
     )
 
     return jsonify({'access_token': access_token}), 200
