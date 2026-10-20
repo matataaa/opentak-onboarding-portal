@@ -11,6 +11,7 @@ from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from app.api_v1 import api_v1
 from app.models import MeshtasticModel, UserRoleModel, UserModel, db
 from app.services.meshtastic_sync import MeshtasticSyncService
+from app.pagination import search_and_paginate
 import yaml
 
 
@@ -86,12 +87,15 @@ def get_meshtastic_configs():
 @api_v1.route('/meshtastic/admin', methods=['GET'])
 @jwt_required()
 def get_all_meshtastic_configs_admin():
-    """Get ALL Meshtastic configs (admin or readonly, no filtering)"""
+    """Get ALL Meshtastic configs (admin or readonly, no role filtering).
+    Optionally filtered by search and paginated (all configs when per_page is omitted)."""
     error = require_view_role()
     if error:
         return error
 
-    configs = MeshtasticModel.query.all()
+    configs, meta = search_and_paginate(
+        MeshtasticModel.query, MeshtasticModel.name,
+        [MeshtasticModel.name, MeshtasticModel.description])
 
     return jsonify({
         'configs': [{
@@ -107,7 +111,8 @@ def get_all_meshtastic_configs_admin():
             'group_id': m.group_id,
             'slot_number': m.slot_number,
             'roles': [{'id': r.id, 'name': r.name} for r in m.roles]
-        } for m in configs]
+        } for m in configs],
+        **meta
     }), 200
 
 

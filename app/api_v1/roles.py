@@ -7,6 +7,7 @@ from flask import request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
 from app.api_v1 import api_v1
 from app.models import UserRoleModel
+from app.pagination import search_and_paginate
 from app.rbac import ADMIN_ROLES
 
 
@@ -45,8 +46,10 @@ def is_protected_role(role):
 @api_v1.route('/roles', methods=['GET'])
 @jwt_required()
 def get_roles():
-    """Get all roles"""
-    roles = UserRoleModel.get_all_roles()
+    """Get roles, optionally filtered by search and paginated (all roles when per_page is omitted)"""
+    roles, meta = search_and_paginate(
+        UserRoleModel.query, UserRoleModel.name,
+        [UserRoleModel.name, UserRoleModel.display_name, UserRoleModel.description])
 
     return jsonify({
         'roles': [{
@@ -56,7 +59,8 @@ def get_roles():
             'description': role.description,
             'userCount': len(role.users),
             'isProtected': is_protected_role(role)
-        } for role in roles]
+        } for role in roles],
+        **meta
     }), 200
 
 

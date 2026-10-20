@@ -37,6 +37,8 @@ tags:
     description: TAK profile management and downloads
   - name: Meshtastic
     description: Meshtastic radio configuration management
+  - name: OTS Groups
+    description: OTS group (channel) management
   - name: Radios
     description: Radio device inventory management
   - name: Packages
@@ -558,6 +560,22 @@ paths:
       summary: List all roles
       security:
         - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          description: Page size; omit to return everything
+          schema:
+            type: integer
+        - name: search
+          in: query
+          description: Search name, display name or description
+          schema:
+            type: string
       responses:
         '200':
           description: List of roles
@@ -570,6 +588,13 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Role'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+                    nullable: true
 
     post:
       tags:
@@ -605,6 +630,22 @@ paths:
       summary: List onboarding codes (admin) 🔒
       security:
         - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          description: Page size; omit to return everything
+          schema:
+            type: integer
+        - name: search
+          in: query
+          description: Search name, description or code
+          schema:
+            type: string
       responses:
         '200':
           description: List of onboarding codes
@@ -617,6 +658,13 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/OnboardingCode'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+                    nullable: true
 
   /onboarding-codes/validate/{code}:
     get:
@@ -657,6 +705,22 @@ paths:
       description: Get list of accessible TAK profiles
       security:
         - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          description: Page size; omit to return everything
+          schema:
+            type: integer
+        - name: search
+          in: query
+          description: Search name or description
+          schema:
+            type: string
       responses:
         '200':
           description: List of TAK profiles
@@ -669,6 +733,13 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/TakProfile'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+                    nullable: true
 
   /tak-profiles/{id}/download:
     get:
@@ -717,6 +788,117 @@ paths:
                     items:
                       $ref: '#/components/schemas/Meshtastic'
 
+  /meshtastic/admin:
+    get:
+      tags:
+        - Meshtastic
+      summary: List all Meshtastic configurations (admin) 🔒
+      description: All configs without role filtering, sorted by name. Returns every config unless per_page is given.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          description: Page size; omit to return all configs
+          schema:
+            type: integer
+        - name: search
+          in: query
+          description: Search name or description
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of Meshtastic configs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Meshtastic'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+                    nullable: true
+        '403':
+          description: Meshtastic admin or readonly role required
+
+  /groups:
+    get:
+      tags:
+        - OTS Groups
+      summary: List OTS groups (admin) 🔒
+      description: OTS groups synced into the portal, sorted by name. Returns every group unless per_page is given.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          description: Page size; omit to return all groups
+          schema:
+            type: integer
+        - name: search
+          in: query
+          description: Search name, display name or description
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of OTS groups
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  groups:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        displayName:
+                          type: string
+                        description:
+                          type: string
+                        active:
+                          type: boolean
+                        syncedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        userCount:
+                          type: integer
+                        onboardingCodeCount:
+                          type: integer
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+                    nullable: true
+        '403':
+          description: Group admin or readonly role required
+
   /radios:
     get:
       tags:
@@ -725,6 +907,22 @@ paths:
       description: Get list of accessible radios
       security:
         - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          description: Page size; omit to return everything
+          schema:
+            type: integer
+        - name: search
+          in: query
+          description: Search name, description, short/long name or MAC
+          schema:
+            type: string
       responses:
         '200':
           description: List of radios
@@ -737,6 +935,13 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Radio'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+                    nullable: true
 
   /radios/{id}/assign:
     put:

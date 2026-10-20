@@ -7,6 +7,7 @@ from flask import request, jsonify, send_file, g
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity, verify_jwt_in_request, decode_token
 from app.api_v1 import api_v1
 from app.models import TakProfileModel, UserRoleModel, UserModel, OneTimeTokenModel, db
+from app.pagination import search_and_paginate
 from werkzeug.utils import secure_filename
 import os
 import zipfile
@@ -92,13 +93,14 @@ def require_view_role():
 @api_v1.route('/tak-profiles', methods=['GET'])
 @jwt_required()
 def get_tak_profiles():
-    """Get all TAK profiles (filter by user access)"""
+    """Get TAK profiles (filter by user access), optionally filtered by search and paginated
+    (all accessible profiles when per_page is omitted)"""
     current_user_id = int(get_jwt_identity())  # Convert string to int
     claims = get_jwt()
     is_admin = 'administrator' in claims.get('roles', [])
 
     if is_admin:
-        profiles = TakProfileModel.get_all_tak_profiles()
+        query = TakProfileModel.query
     else:
         user = UserModel.get_user_by_id(current_user_id)
         profiles_dict = {}
@@ -123,7 +125,10 @@ def get_tak_profiles():
                 if not p.roles and not p.users:
                     profiles_dict[p.id] = p
 
-        profiles = list(profiles_dict.values())
+        query = TakProfileModel.query.filter(TakProfileModel.id.in_(profiles_dict.keys()))
+
+    profiles, meta = search_and_paginate(
+        query, TakProfileModel.name, [TakProfileModel.name, TakProfileModel.description])
 
     return jsonify({
         'profiles': [{
@@ -131,7 +136,8 @@ def get_tak_profiles():
             'name': p.name,
             'description': p.description,
             'isPublic': p.isPublic
-        } for p in profiles]
+        } for p in profiles],
+        **meta
     }), 200
 
 

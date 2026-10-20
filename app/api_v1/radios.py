@@ -7,6 +7,7 @@ from flask import request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from app.api_v1 import api_v1
 from app.models import RadioModel, UserModel, MeshtasticChannelGroup, MeshtasticModel, SystemSettingsModel
+from app.pagination import search_and_paginate
 from datetime import datetime
 import re
 
@@ -105,7 +106,8 @@ def check_radio_duplicates(data, exclude_id=None):
 @api_v1.route('/radios', methods=['GET'])
 @jwt_required()
 def get_radios():
-    """Get all radios (admin/readonly) or user's radios"""
+    """Get all radios (admin/readonly) or user's radios, optionally filtered by search and paginated
+    (all radios when per_page is omitted)"""
     from app.rbac import has_any_role
     current_user_id = int(get_jwt_identity())  # Convert string to int
     claims = get_jwt()
@@ -113,11 +115,15 @@ def get_radios():
     is_admin = has_any_role(['administrator', 'radio_admin', 'radio_readonly'])
 
     if is_admin and not is_kiosk:
-        radios = RadioModel.get_all()
+        query = RadioModel.query
     else:
-        radios = RadioModel.query.filter(
+        query = RadioModel.query.filter(
             RadioModel.assignedTo == current_user_id
-        ).all()
+        )
+
+    radios, meta = search_and_paginate(
+        query, RadioModel.name,
+        [RadioModel.name, RadioModel.description, RadioModel.shortName, RadioModel.longName, RadioModel.mac])
 
     return jsonify({
         'radios': [{
@@ -137,7 +143,8 @@ def get_radios():
             'owner': r.owner,
             'createdAt': r.createdAt.isoformat() if r.createdAt else None,
             'updatedAt': r.updatedAt.isoformat() if r.updatedAt else None
-        } for r in radios]
+        } for r in radios],
+        **meta
     }), 200
 
 

@@ -7,6 +7,7 @@ from flask import request, jsonify, current_app
 from flask_jwt_extended import jwt_required
 from app.api_v1 import api_v1
 from app.models import OTSGroupModel, UserModel, db
+from app.pagination import search_and_paginate
 import datetime
 
 
@@ -29,12 +30,14 @@ def require_view_role():
 @api_v1.route('/groups', methods=['GET'])
 @jwt_required()
 def get_groups():
-    """Get all OTS groups"""
+    """Get OTS groups, optionally filtered by search and paginated (all groups when per_page is omitted)"""
     error = require_view_role()
     if error:
         return error
 
-    groups = OTSGroupModel.get_all()
+    groups, meta = search_and_paginate(
+        OTSGroupModel.query, OTSGroupModel.name,
+        [OTSGroupModel.name, OTSGroupModel.display_name, OTSGroupModel.description])
 
     return jsonify({
         'groups': [{
@@ -46,7 +49,8 @@ def get_groups():
             'syncedAt': g.synced_at.isoformat() if g.synced_at else None,
             'userCount': len(g.users),
             'onboardingCodeCount': len(g.onboarding_codes)
-        } for g in groups]
+        } for g in groups],
+        **meta
     }), 200
 
 
