@@ -127,7 +127,9 @@ function Login() {
       if (result.needsProfileCompletion) {
         navigate('/complete-profile');
       } else {
-        navigate('/dashboard');
+        const next = searchParams.get('next');
+        const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+        navigate(safeNext || '/dashboard');
       }
     } else {
       setError(result.error);
