@@ -28,8 +28,10 @@ def create_app():
     # initialize scheduler (skip in testing mode)
     if not app.config.get('TESTING'):
         logging.getLogger("apscheduler").setLevel(logging.INFO)
-        # if you don't wanna use a config, you can set options here:
-        scheduler.api_enabled = True
+        # The scheduler's HTTP API is not used by the portal; jobs are
+        # registered in code via @scheduler.task. Keep it disabled to avoid
+        # exposing unused endpoints.
+        scheduler.api_enabled = False
         scheduler.init_app(app)
     jwt_manager.init_app(app)
 
