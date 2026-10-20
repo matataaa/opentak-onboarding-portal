@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { onboardingCodesAPI, rolesAPI, usersAPI, groupsAPI } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
+import Pagination from '../../components/Pagination';
 import '../../components/AdminTable.css';
 
 function OnboardingCodesList() {
@@ -30,13 +31,31 @@ function OnboardingCodesList() {
   });
   const [error, setError] = useState('');
   const [copiedCodeId, setCopiedCodeId] = useState(null);
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(20);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1); // Reset to page 1 when search changes
+    }, 500); // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const { data: codesData, isLoading } = useQuery({
-    queryKey: ['onboardingCodes'],
+    queryKey: ['onboardingCodes', page, perPage, debouncedSearch],
     queryFn: async () => {
-      const response = await onboardingCodesAPI.getAll();
+      // perPage 0 = all: omit paging so the API returns every code
+      const params = perPage ? { page, per_page: perPage, search: debouncedSearch } : { search: debouncedSearch };
+      const response = await onboardingCodesAPI.getAll(params);
       return response.data;
     },
+    // Keep showing the current rows while the next page/search loads, so the search box keeps focus
+    placeholderData: keepPreviousData,
   });
 
   const { data: rolesData } = useQuery({
@@ -197,6 +216,7 @@ function OnboardingCodesList() {
   if (isLoading) return <div className="admin-page"><div className="loading-state">{t('common.loading')}</div></div>;
 
   const codes = codesData?.codes || [];
+  const total = codesData?.total || 0;
   const users = usersData?.users || [];
   const roles = rolesData?.roles || [];
   const otsGroups = groupsData?.groups || [];
@@ -205,16 +225,27 @@ function OnboardingCodesList() {
     <div className="admin-page">
       <div className="admin-header">
         <h1>{t('admin.onboardingCodes.title')}</h1>
-        {canEdit && (
-          <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true); }}>
-            {t('admin.onboardingCodes.addCode')}
-          </button>
-        )}
+        <div className="admin-actions">
+          <input
+            type="text"
+            className="search-box"
+            placeholder={t('admin.onboardingCodes.searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {canEdit && (
+            <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true); }}>
+              {t('admin.onboardingCodes.addCode')}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="admin-table-container">
         {codes.length === 0 ? (
-          <div className="empty-state">{t('admin.onboardingCodes.noCodes')}</div>
+          <div className="empty-state">
+            {debouncedSearch ? t('common.noResults') : t('admin.onboardingCodes.noCodes')}
+          </div>
         ) : (
           <table className="admin-table">
             <thead>
@@ -282,6 +313,15 @@ function OnboardingCodesList() {
               ))}
             </tbody>
           </table>
+        )}
+        {total > 0 && (
+          <Pagination
+            page={page}
+            perPage={perPage}
+            total={total}
+            onPageChange={setPage}
+            onPerPageChange={(size) => { setPerPage(size); setPage(1); }}
+          />
         )}
       </div>
 

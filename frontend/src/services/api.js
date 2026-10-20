@@ -149,8 +149,8 @@ export const usersAPI = {
 
 // Roles API
 export const rolesAPI = {
-  getAll: () =>
-    api.get('/roles'),
+  getAll: (params) =>
+    api.get('/roles', { params }),
 
   getById: (id) =>
     api.get(`/roles/${id}`),
@@ -167,8 +167,8 @@ export const rolesAPI = {
 
 // Onboarding Codes API
 export const onboardingCodesAPI = {
-  getAll: () =>
-    api.get('/onboarding-codes'),
+  getAll: (params) =>
+    api.get('/onboarding-codes', { params }),
 
   getById: (id) =>
     api.get(`/onboarding-codes/${id}`),
@@ -188,8 +188,8 @@ export const onboardingCodesAPI = {
 
 // TAK Profiles API
 export const takProfilesAPI = {
-  getAll: () =>
-    api.get('/tak-profiles'),
+  getAll: (params) =>
+    api.get('/tak-profiles', { params }),
 
   getById: (id) =>
     api.get(`/tak-profiles/${id}`),
@@ -228,8 +228,8 @@ export const meshtasticAPI = {
     api.get('/meshtastic'),
 
   // Admin endpoint - returns ALL channels without role filtering
-  getAllAdmin: () =>
-    api.get('/meshtastic/admin'),
+  getAllAdmin: (params) =>
+    api.get('/meshtastic/admin', { params }),
 
   getById: (id) =>
     api.get(`/meshtastic/${id}`),
@@ -300,8 +300,8 @@ export const meshtasticGroupsAPI = {
 
 // OTS Groups API
 export const groupsAPI = {
-  getAll: () =>
-    api.get('/groups'),
+  getAll: (params) =>
+    api.get('/groups', { params }),
 
   getById: (id) =>
     api.get(`/groups/${id}`),
@@ -330,8 +330,8 @@ export const groupsAPI = {
 
 // Radios API
 export const radiosAPI = {
-  getAll: () =>
-    api.get('/radios'),
+  getAll: (params) =>
+    api.get('/radios', { params }),
 
   getById: (id) =>
     api.get(`/radios/${id}`),

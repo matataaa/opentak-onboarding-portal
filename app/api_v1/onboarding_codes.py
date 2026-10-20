@@ -7,6 +7,7 @@ from flask import request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
 from app.api_v1 import api_v1
 from app.models import OnboardingCodeModel, UserModel, UserRoleModel, OTSGroupModel, GroupOnboardingCodeAssociation, db
+from app.pagination import search_and_paginate
 from datetime import datetime
 
 
@@ -29,12 +30,15 @@ def require_view_role():
 @api_v1.route('/onboarding-codes', methods=['GET'])
 @jwt_required()
 def get_onboarding_codes():
-    """Get all onboarding codes (admin only)"""
+    """Get onboarding codes (admin only), optionally filtered by search and paginated
+    (all codes when per_page is omitted)"""
     error = require_view_role()
     if error:
         return error
 
-    codes = OnboardingCodeModel.get_all_onboarding_codes()
+    codes, meta = search_and_paginate(
+        OnboardingCodeModel.query, OnboardingCodeModel.name,
+        [OnboardingCodeModel.name, OnboardingCodeModel.description, OnboardingCodeModel.onboardingCode])
 
     return jsonify({
         'codes': [{
@@ -59,7 +63,8 @@ def get_onboarding_codes():
             'userExpiryDate': code.userExpiryDate.isoformat() if code.userExpiryDate else None,
             'roles': [{'id': r.id, 'name': r.name, 'displayName': r.display_name} for r in code.roles],
             'groups': [{'id': a.group.id, 'name': a.group.name, 'displayName': a.group.display_name, 'direction': a.direction} for a in code.group_associations]
-        } for code in codes]
+        } for code in codes],
+        **meta
     }), 200
 
 

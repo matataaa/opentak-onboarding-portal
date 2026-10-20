@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { radiosAPI, usersAPI, settingsAPI } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,6 +9,7 @@ import { meshtasticSerial } from '../../services/meshtasticSerial';
 import { getModelOptions } from '../../constants/hardwareModels';
 import ProgramRadioModal from '../../components/ProgramRadioModal';
 import ConfigValidatorModal from '../../components/ConfigValidatorModal';
+import Pagination from '../../components/Pagination';
 import '../../components/AdminTable.css';
 
 const FRONTEND_URL = window.location.origin;
@@ -46,16 +47,35 @@ function RadiosList() {
   const [findingRadio, setFindingRadio] = useState(false);
   const [highlightedRadioId, setHighlightedRadioId] = useState(null);
   const [resettingRadio, setResettingRadio] = useState(null);
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(20);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const deepLinkHandled = useRef(false);
 
   // Check if Web Serial is supported
   const browserSupport = meshtasticSerial.getBrowserSupport();
 
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1); // Reset to page 1 when search changes
+    }, 500); // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const { data: radiosData, isLoading } = useQuery({
-    queryKey: ['radios'],
+    queryKey: ['radios', page, perPage, debouncedSearch],
     queryFn: async () => {
-      const response = await radiosAPI.getAll();
+      // perPage 0 = all: omit paging so the API returns every radio
+      const params = perPage ? { page, per_page: perPage, search: debouncedSearch } : { search: debouncedSearch };
+      const response = await radiosAPI.getAll(params);
       return response.data;
     },
+    // Keep showing the current rows while the next page/search loads, so the search box keeps focus
+    placeholderData: keepPreviousData,
   });
 
   const { data: usersData } = useQuery({
@@ -300,10 +320,12 @@ function RadiosList() {
     }
   };
 
-  const _findRadioByMac = (mac) => {
-    if (!mac || radios.length === 0) return null;
+  const _findRadioByMac = async (mac) => {
+    if (!mac) return null;
+    // The table only holds one page, so match against the full list
+    const allRadios = (await radiosAPI.getAll()).data?.radios || [];
     const normMac = mac.replace(/[:\-]/g, '').toLowerCase();
-    return radios.find(r => {
+    return allRadios.find(r => {
       if (!r.mac) return false;
       return r.mac.replace(/[:\-]/g, '').toLowerCase() === normMac;
     }) || null;
@@ -378,7 +400,7 @@ function RadiosList() {
         if (info?.macAddr) {
           resolved = true;
           try { await meshtasticSerial.disconnect(); } catch (e) { /* ignore */ }
-          const found = _findRadioByMac(info.macAddr);
+          const found = await _findRadioByMac(info.macAddr);
           if (found) {
             _showFoundRadio(found);
           } else {
@@ -418,8 +440,9 @@ function RadiosList() {
   };
 
   // CSV Export
-  const exportRadiosCSV = () => {
-    const csvRadios = radiosData?.radios || [];
+  const exportRadiosCSV = async () => {
+    // Export every radio, not just the page or search results on screen
+    const csvRadios = (await radiosAPI.getAll()).data?.radios || [];
     const csvUsers = usersData?.users || [];
     if (csvRadios.length === 0) return;
 
@@ -467,13 +490,27 @@ function RadiosList() {
   // Auto-highlight and scroll to a radio when navigating to /admin/radios/:radioId
   // Must be above the early return so hooks run in the same order every render.
   const radios = radiosData?.radios || [];
+  const total = radiosData?.total || 0;
   const users = usersData?.users || [];
 
+  // The radio may not be on the first page: look it up and search for it so its row is shown
   useEffect(() => {
-    if (!radioId || radios.length === 0) return;
+    if (!radioId) return;
+    radiosAPI.getById(parseInt(radioId, 10))
+      .then(({ data }) => {
+        const term = data.mac || data.name;
+        setSearch(term);
+        setDebouncedSearch(term);
+      })
+      .catch(() => {});
+  }, [radioId]);
+
+  useEffect(() => {
+    if (!radioId || deepLinkHandled.current) return;
     const id = parseInt(radioId, 10);
-    const found = radios.find(r => r.id === id);
+    const found = radiosData?.radios?.find(r => r.id === id);
     if (found) {
+      deepLinkHandled.current = true;
       setHighlightedRadioId(id);
       setTimeout(() => {
         const row = document.getElementById(`radio-row-${id}`);
@@ -481,7 +518,7 @@ function RadiosList() {
       }, 100);
       setTimeout(() => setHighlightedRadioId(null), 5000);
     }
-  }, [radioId, radios.length]);
+  }, [radioId, radiosData]);
 
   if (isLoading) return <div className="admin-page"><div className="loading-state">{t('common.loading')}</div></div>;
 
@@ -489,11 +526,18 @@ function RadiosList() {
     <div className="admin-page">
       <div className="admin-header">
         <h1>{t('admin.radios.title')}</h1>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div className="admin-actions">
+          <input
+            type="text"
+            className="search-box"
+            placeholder={t('admin.radios.searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
           <button
             className="btn btn-secondary"
             onClick={exportRadiosCSV}
-            disabled={!radios.length}
+            disabled={!total && !debouncedSearch}
           >
             {t('admin.radios.exportCsv')}
           </button>
@@ -516,7 +560,9 @@ function RadiosList() {
 
       <div className="admin-table-container">
         {radios.length === 0 ? (
-          <div className="empty-state">{t('admin.radios.noRadios')}</div>
+          <div className="empty-state">
+            {debouncedSearch ? t('common.noResults') : t('admin.radios.noRadios')}
+          </div>
         ) : (
           <table className="admin-table">
             <thead>
@@ -609,6 +655,15 @@ function RadiosList() {
               ))}
             </tbody>
           </table>
+        )}
+        {total > 0 && (
+          <Pagination
+            page={page}
+            perPage={perPage}
+            total={total}
+            onPageChange={setPage}
+            onPerPageChange={(size) => { setPerPage(size); setPage(1); }}
+          />
         )}
       </div>
 

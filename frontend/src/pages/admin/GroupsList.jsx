@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useMemo, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { groupsAPI, usersAPI } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
+import Pagination from '../../components/Pagination';
 import '../../components/AdminTable.css';
 
 function GroupsList() {
@@ -22,13 +23,31 @@ function GroupsList() {
     active: true
   });
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(20);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1); // Reset to page 1 when search changes
+    }, 500); // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const { data: groupsData, isLoading } = useQuery({
-    queryKey: ['groups'],
+    queryKey: ['groups', page, perPage, debouncedSearch],
     queryFn: async () => {
-      const response = await groupsAPI.getAll();
+      // perPage 0 = all: omit paging so the API returns every group
+      const params = perPage ? { page, per_page: perPage, search: debouncedSearch } : { search: debouncedSearch };
+      const response = await groupsAPI.getAll(params);
       return response.data;
     },
+    // Keep showing the current rows while the next page/search loads, so the search box keeps focus
+    placeholderData: keepPreviousData,
   });
 
   const { data: membersData, isLoading: membersLoading } = useQuery({
@@ -205,12 +224,20 @@ function GroupsList() {
   if (isLoading) return <div className="admin-page"><div className="loading-state">{t('common.loading')}</div></div>;
 
   const groups = groupsData?.groups || [];
+  const total = groupsData?.total || 0;
 
   return (
     <div className="admin-page">
       <div className="admin-header">
         <h1>{t('admin.groups.title')}</h1>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div className="admin-actions">
+          <input
+            type="text"
+            className="search-box"
+            placeholder={t('admin.groups.searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
           {canEdit && (
             <button
               className="btn btn-secondary"
@@ -237,7 +264,7 @@ function GroupsList() {
       <div className="admin-table-container">
         {groups.length === 0 ? (
           <div className="empty-state">
-            {t('admin.groups.noGroups')}
+            {debouncedSearch ? t('common.noResults') : t('admin.groups.noGroups')}
           </div>
         ) : (
           <table className="admin-table">
@@ -291,6 +318,15 @@ function GroupsList() {
               ))}
             </tbody>
           </table>
+        )}
+        {total > 0 && (
+          <Pagination
+            page={page}
+            perPage={perPage}
+            total={total}
+            onPageChange={setPage}
+            onPerPageChange={(size) => { setPerPage(size); setPage(1); }}
+          />
         )}
       </div>
 

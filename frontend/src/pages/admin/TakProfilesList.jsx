@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { takProfilesAPI, rolesAPI } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
+import Pagination from '../../components/Pagination';
 import '../../components/AdminTable.css';
 import './TakProfilesList.css';
 
@@ -30,13 +31,31 @@ function TakProfilesList() {
   const [expandedFolders, setExpandedFolders] = useState(new Set());
   const [currentBrowserPath, setCurrentBrowserPath] = useState([]);
   const [fileSearchQuery, setFileSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(20);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1); // Reset to page 1 when search changes
+    }, 500); // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const { data: profilesData, isLoading } = useQuery({
-    queryKey: ['takProfiles'],
+    queryKey: ['takProfiles', page, perPage, debouncedSearch],
     queryFn: async () => {
-      const response = await takProfilesAPI.getAll();
+      // perPage 0 = all: omit paging so the API returns every profile
+      const params = perPage ? { page, per_page: perPage, search: debouncedSearch } : { search: debouncedSearch };
+      const response = await takProfilesAPI.getAll(params);
       return response.data;
     },
+    // Keep showing the current rows while the next page/search loads, so the search box keeps focus
+    placeholderData: keepPreviousData,
   });
 
   const { data: rolesData } = useQuery({
@@ -257,21 +276,33 @@ function TakProfilesList() {
   if (isLoading) return <div className="admin-page"><div className="loading-state">{t('common.loading')}</div></div>;
 
   const profiles = profilesData?.profiles || [];
+  const total = profilesData?.total || 0;
 
   return (
     <div className="admin-page">
       <div className="admin-header">
         <h1>{t('admin.takProfiles.title')}</h1>
-        {canEdit && (
-          <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true); }}>
-            {t('admin.takProfiles.addProfile')}
-          </button>
-        )}
+        <div className="admin-actions">
+          <input
+            type="text"
+            className="search-box"
+            placeholder={t('admin.takProfiles.searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {canEdit && (
+            <button className="btn btn-primary" onClick={() => { resetForm(); setShowModal(true); }}>
+              {t('admin.takProfiles.addProfile')}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="admin-table-container">
         {profiles.length === 0 ? (
-          <div className="empty-state">{t('admin.takProfiles.noProfiles')}</div>
+          <div className="empty-state">
+            {debouncedSearch ? t('common.noResults') : t('admin.takProfiles.noProfiles')}
+          </div>
         ) : (
           <table className="admin-table">
             <thead>
@@ -316,6 +347,15 @@ function TakProfilesList() {
               ))}
             </tbody>
           </table>
+        )}
+        {total > 0 && (
+          <Pagination
+            page={page}
+            perPage={perPage}
+            total={total}
+            onPageChange={setPage}
+            onPerPageChange={(size) => { setPerPage(size); setPage(1); }}
+          />
         )}
       </div>
 
