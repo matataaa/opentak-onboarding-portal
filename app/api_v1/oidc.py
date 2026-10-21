@@ -5,6 +5,7 @@ Supports multiple OIDC providers with per-provider branding and role mapping.
 
 import json
 import os
+import re
 import uuid
 import secrets
 import requests as http_requests
@@ -61,6 +62,19 @@ def _extract_claim(token_data, claim_path):
         else:
             return None
     return value
+
+
+def _sanitize_ots_username(raw):
+    """Make an OIDC-derived username valid for OTS.
+
+    OTS 1.7.13 only accepts letters, numbers, underscores and periods, so any
+    other character (e.g. a hyphen in a preferred_username) is mapped to an
+    underscore. Without this, the account set-password step later fails to
+    create the OTS user.
+    """
+    cleaned = re.sub(r'[^a-z0-9_.]', '_', (raw or '').lower().strip())
+    cleaned = cleaned.strip('_.')
+    return cleaned or 'user'
 
 
 def _build_callback_url(provider_id):
@@ -274,8 +288,9 @@ def oidc_callback(provider_id):
             if not auto_create:
                 return redirect(f"{frontend_url}/login?oidc_error=No+account+found+for+this+email.+Contact+your+administrator.")
 
-            # Create new user
-            username = preferred_username.lower().strip() if preferred_username else email.split('@')[0].lower()
+            # Create new user. The username must be valid for OTS, so sanitize
+            # whatever the provider supplied (preferred_username or email local part).
+            username = _sanitize_ots_username(preferred_username or email.split('@')[0])
             # Ensure username is unique
             base_username = username
             counter = 1
