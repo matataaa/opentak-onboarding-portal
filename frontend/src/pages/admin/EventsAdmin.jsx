@@ -4,6 +4,12 @@ import { QRCodeSVG } from 'qrcode.react';
 import { eventsAPI, groupsAPI, onboardingCodesAPI } from '../../services/api';
 import './EventsAdmin.css';
 
+// The fixed set of TAK team colours ATAK accepts.
+const TAK_TEAM_COLORS = [
+  'White', 'Yellow', 'Orange', 'Magenta', 'Red', 'Maroon', 'Purple',
+  'Dark Blue', 'Blue', 'Cyan', 'Teal', 'Green', 'Dark Green', 'Brown',
+];
+
 function toLocalInput(iso) {
   if (!iso) return '';
   // ISO -> value for <input type="datetime-local">
@@ -121,7 +127,10 @@ export default function EventsAdmin() {
         <h2>{t('events.teams')}</h2>
         <div className="events-form-row">
           <input placeholder={t('events.teamName')} value={teamForm.name} onChange={(e) => setTeamForm({ ...teamForm, name: e.target.value })} />
-          <input placeholder={t('events.color')} value={teamForm.color} onChange={(e) => setTeamForm({ ...teamForm, color: e.target.value })} />
+          <select value={teamForm.color} onChange={(e) => setTeamForm({ ...teamForm, color: e.target.value })}>
+            <option value="">{t('events.noColor')}</option>
+            {TAK_TEAM_COLORS.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
           <select value={teamForm.otsGroupId} onChange={(e) => setTeamForm({ ...teamForm, otsGroupId: e.target.value })}>
             <option value="">{t('events.noGroup')}</option>
             {groups.map((g) => <option key={g.id} value={g.id}>{g.displayName || g.name}</option>)}

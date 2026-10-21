@@ -489,6 +489,7 @@
     "teams": "Teams",
     "teamName": "Teamnaam",
     "color": "Kleur",
+    "noColor": "Geen kleur",
     "group": "OTS-groep",
     "noGroup": "Geen OTS-groep",
     "addTeam": "Team toevoegen",
