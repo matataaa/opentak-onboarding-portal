@@ -25,6 +25,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import UsersList from './pages/admin/UsersList';
 import RolesList from './pages/admin/RolesList';
 import OnboardingCodesList from './pages/admin/OnboardingCodesList';
+import EventsAdmin from './pages/admin/EventsAdmin';
 import PendingRegistrationsList from './pages/admin/PendingRegistrationsList';
 import TakProfilesList from './pages/admin/TakProfilesList';
 import MeshtasticList from './pages/admin/MeshtasticList';
@@ -292,6 +293,14 @@ function AppContent() {
                 element={
                   <ProtectedRoute adminOnly>
                     <OnboardingCodesList />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/events"
+                element={
+                  <ProtectedRoute adminOnly>
+                    <EventsAdmin />
                   </ProtectedRoute>
                 }
               />
