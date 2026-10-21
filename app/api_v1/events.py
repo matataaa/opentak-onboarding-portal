@@ -101,8 +101,6 @@ def _event_to_dict(event):
         'description': event.description,
         'validFrom': event.validFrom.isoformat() if event.validFrom else None,
         'validUntil': event.validUntil.isoformat() if event.validUntil else None,
-        'cutoffTime': event.cutoffTime,
-        'timezone': event.timezone,
         'playerAccessMode': event.playerAccessMode,
         'accountCleanup': event.accountCleanup,
         'active': event.active,
@@ -286,8 +284,6 @@ def create_event():
             description=data.get('description'),
             validFrom=_parse_dt(data.get('validFrom')),
             validUntil=_parse_dt(data.get('validUntil')),
-            cutoffTime=data.get('cutoffTime'),
-            timezone=data.get('timezone'),
             playerAccessMode=player_mode,
             accountCleanup=cleanup,
             active=data.get('active', True),
@@ -320,10 +316,6 @@ def update_event(event_id):
             event.validFrom = _parse_dt(data['validFrom'])
         if 'validUntil' in data:
             event.validUntil = _parse_dt(data['validUntil'])
-        if 'cutoffTime' in data:
-            event.cutoffTime = data['cutoffTime']
-        if 'timezone' in data:
-            event.timezone = data['timezone']
         if 'playerAccessMode' in data:
             if data['playerAccessMode'] not in PLAYER_ACCESS_MODES:
                 return jsonify({'error': 'playerAccessMode must be one of %s' % (PLAYER_ACCESS_MODES,)}), 400
