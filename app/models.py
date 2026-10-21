@@ -2027,3 +2027,71 @@ class ApiKeyModel(db.Model):
             db.session.commit()
             return {"message": "API key deleted successfully"}
         return {"error": "api_key.not.found"}
+
+
+# =============================================================================
+# Events module
+# =============================================================================
+class EventTeamModel(db.Model):
+    """A reusable team: an OTS group plus a display colour."""
+    __tablename__ = 'event_teams'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(200), unique=True, nullable=False)
+    otsGroupId = Column(Integer, ForeignKey('ots_groups.id'), nullable=True)
+    color = Column(String(20), nullable=True)
+    createdAt = Column(DateTime, default=datetime.datetime.utcnow)
+
+    otsGroup = relationship("OTSGroupModel")
+
+
+class EventModel(db.Model):
+    """A time-windowed event that hands out temporary team access."""
+    __tablename__ = 'events'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    validFrom = Column(DateTime, nullable=True)
+    validUntil = Column(DateTime, nullable=True)
+    cutoffTime = Column(String(5), nullable=True)                 # "HH:MM" local time
+    timezone = Column(String(64), nullable=True)                  # e.g. "Europe/Amsterdam"
+    playerAccessMode = Column(String(20), nullable=False, default='individual')  # shared | individual
+    accountCleanup = Column(String(20), nullable=False, default='deactivate')    # deactivate | delete
+    active = Column(Boolean, nullable=False, default=True)
+    createdAt = Column(DateTime, default=datetime.datetime.utcnow)
+    createdBy = Column(Integer, ForeignKey('users.id'), nullable=True)
+
+
+class EventLinkModel(db.Model):
+    """One scannable link per event, team and role; only the token hash is stored."""
+    __tablename__ = 'event_links'
+
+    id = Column(Integer, primary_key=True)
+    eventId = Column(Integer, ForeignKey('events.id'), nullable=False)
+    eventTeamId = Column(Integer, ForeignKey('event_teams.id'), nullable=False)
+    role = Column(String(20), nullable=False)                     # leader | player
+    tokenHash = Column(String(128), unique=True, nullable=False)
+    tokenVersion = Column(Integer, nullable=False, default=1)
+    createdAt = Column(DateTime, default=datetime.datetime.utcnow)
+
+    event = relationship("EventModel")
+    team = relationship("EventTeamModel")
+
+
+class EventSessionModel(db.Model):
+    """One issued temporary access grant, tracked for cutoff and cleanup."""
+    __tablename__ = 'event_sessions'
+
+    id = Column(Integer, primary_key=True)
+    eventId = Column(Integer, ForeignKey('events.id'), nullable=False)
+    eventTeamId = Column(Integer, ForeignKey('event_teams.id'), nullable=False)
+    otsUsername = Column(String(200), nullable=True)
+    mode = Column(String(20), nullable=True)                      # shared | individual
+    createdAt = Column(DateTime, default=datetime.datetime.utcnow)
+    expiresAt = Column(DateTime, nullable=True)
+    closedAt = Column(DateTime, nullable=True)
+    closeReason = Column(String(200), nullable=True)
+
+    event = relationship("EventModel")
+    team = relationship("EventTeamModel")
