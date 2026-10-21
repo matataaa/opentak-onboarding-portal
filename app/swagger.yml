@@ -116,6 +116,10 @@ components:
         maxUses:
           type: integer
           nullable: true
+        validFrom:
+          type: string
+          format: date-time
+          nullable: true
         expiryDate:
           type: string
           format: date-time

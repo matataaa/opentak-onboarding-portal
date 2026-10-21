@@ -640,6 +640,8 @@
       "onboardContact": "Onboarding-contact",
       "noContact": "Geen contact",
       "contactHelp": "Gebruiker die nieuwe registraties ontvangt",
+      "validFrom": "Actief vanaf",
+      "validFromHelp": "De code kan niet voor deze datum worden gebruikt (leeg = direct)",
       "codeExpiryDate": "Vervaldatum code",
       "codeExpiryHelp": "Wanneer deze code verloopt",
       "userExpiryDate": "Vervaldatum gebruikersaccount",
