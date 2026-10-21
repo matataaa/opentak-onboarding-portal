@@ -611,3 +611,28 @@ def _join_as_leader(event, team):
         'event': {'id': event.id, 'name': event.name},
         'user': {'id': leader.id, 'username': leader.username},
     }), 200
+
+
+def record_event_registration(username, onboarding_code):
+    """Track an individual-mode player registration so the team colour can be applied.
+
+    Called after assign_ots_groups in the registration flows; the caller commits.
+    Players may register before the event starts. Never raises into the
+    registration flow.
+    """
+    try:
+        now = datetime.now()
+        with db.session.no_autoflush:
+            links = EventLinkModel.query.filter_by(
+                onboardingCodeId=onboarding_code.id, role='player').all()
+            # A code may sit on several links; use one whose event is still usable.
+            for link in links:
+                event = link.event
+                if (event and event.active and event.playerAccessMode == 'individual'
+                        and (not event.validUntil or now <= event.validUntil)):
+                    db.session.add(EventSessionModel(
+                        eventId=link.eventId, eventTeamId=link.eventTeamId, otsUsername=username,
+                        mode='individual', expiresAt=event.validUntil))
+                    return
+    except Exception:
+        current_app.logger.exception('Failed to record event registration for %s', username)

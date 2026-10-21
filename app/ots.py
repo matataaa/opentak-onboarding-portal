@@ -206,8 +206,10 @@ class OTSClient:
             print(f"Error: {e}")
             return False
 
-    def get_euds(self, page=None, per_page=None):
+    def get_euds(self, page=None, per_page=None, username=None):
         params = {}
+        if username is not None:
+            params["username"] = username
         if page is not None:
             params["page"] = page
         if per_page is not None:
@@ -453,6 +455,17 @@ class OTSClient:
         if tool is not None:
             params["tool"] = tool
         return self.request_handler(method="GET", endpoint=self._profiles, params=params)
+
+    def delete_device_profile(self, preference_key, eud_uid):
+        """Delete the device profile of one EUD.
+
+        OTS ignores an empty eud_uid filter and would delete the first profile
+        with that key (possibly a global one), so an eud_uid is required.
+        """
+        if not eud_uid:
+            raise ValueError("eud_uid is required to delete a device profile")
+        return self.request_handler(method="DELETE", endpoint=self._profiles,
+                                    params={'preference_key': preference_key, 'eud_uid': eud_uid})
 
     def create_device_profile(self, preference_key, preference_value, value_class,
                               enrollment=False, connection=True, active=True, tool=None, eud_uid=None):
