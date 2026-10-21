@@ -16,7 +16,7 @@ from flask_jwt_extended import jwt_required, create_access_token, create_refresh
 from datetime import datetime, timedelta
 
 from app.api_v1 import api_v1
-from app.models import db, EventTeamModel, EventModel, EventLinkModel, OTSGroupModel, UserModel, SystemSettingsModel
+from app.models import db, EventTeamModel, EventModel, EventLinkModel, EventSessionModel, OTSGroupModel, UserModel, SystemSettingsModel
 from app.ots import otsClient
 from app.rbac import require_role
 
@@ -451,8 +451,95 @@ def join_event(token):
     if link.role == 'leader':
         return _join_as_leader(event, team)
 
-    # Player access modes are handled in a later increment.
-    return jsonify({'error': 'Player access is not available yet'}), 501
+    if link.role == 'player':
+        if event.playerAccessMode == 'shared':
+            return _join_as_player_shared(event, team)
+        # individual mode is handled in a later increment.
+        return jsonify({'error': 'Individual player access is not available yet'}), 501
+
+    return jsonify({'error': 'Unsupported link role'}), 400
+
+
+def _event_remaining_seconds(event, default_seconds):
+    if event.validUntil:
+        return (event.validUntil - datetime.now()).total_seconds()
+    return default_seconds
+
+
+def _ensure_shared_player_account(event, team):
+    """Return (username, created) for the one shared OTS account of this team/event."""
+    session = EventSessionModel.query.filter_by(
+        eventId=event.id, eventTeamId=team.id, mode='shared', closedAt=None
+    ).first()
+    if session and session.otsUsername:
+        return session.otsUsername, False
+
+    username = 'evt%s_t%s' % (event.id, team.id)
+    password = secrets.token_urlsafe(18)
+    otsClient.create_user(username, password, roles=['user'])
+    otsClient.activate_user(username)
+    if team.otsGroup:
+        for direction in ('IN', 'OUT'):
+            try:
+                otsClient.add_user_to_group(username, team.otsGroup.name, direction)
+            except Exception:
+                current_app.logger.exception(
+                    'Failed to add shared account %s to group %s (%s)',
+                    username, team.otsGroup.name, direction
+                )
+
+    new_session = EventSessionModel(
+        eventId=event.id,
+        eventTeamId=team.id,
+        otsUsername=username,
+        mode='shared',
+        expiresAt=event.validUntil,
+    )
+    db.session.add(new_session)
+    db.session.commit()
+    return username, True
+
+
+def _join_as_player_shared(event, team):
+    try:
+        username, _created = _ensure_shared_player_account(event, team)
+    except Exception:
+        current_app.logger.exception('Failed to provision shared player account')
+        return jsonify({'error': 'Could not provision team access'}), 500
+
+    remaining = _event_remaining_seconds(event, 24 * 3600)
+    if remaining <= 0:
+        return jsonify({'error': 'This event has ended'}), 403
+    exp = int(time.time() + remaining)
+
+    try:
+        atak = otsClient.create_atak_qr_string(username=username, exp=exp, max_uses=500)
+        atak_payload = atak.get('response', atak) if isinstance(atak, dict) else {}
+    except Exception:
+        current_app.logger.exception('Failed to generate ATAK enrollment for %s', username)
+        return jsonify({'error': 'Could not generate TAK enrollment'}), 500
+
+    # iTAK enrollment is best-effort for shared mode (the OTS endpoint returns
+    # plain text the client does not yet handle); never fail the join over it.
+    itak_payload = None
+    try:
+        itak = otsClient.get_itak_qr_string(username)
+        itak_payload = itak.get('response', itak) if isinstance(itak, dict) else itak
+    except Exception:
+        current_app.logger.info('iTAK enrollment not available for %s', username)
+
+    return jsonify({
+        'role': 'player',
+        'mode': 'shared',
+        'team': {'id': team.id, 'name': team.name, 'color': team.color},
+        'event': {'id': event.id, 'name': event.name},
+        'expiresAt': event.validUntil.isoformat() if event.validUntil else None,
+        'atak': {
+            'qrString': atak_payload.get('qr_string') if isinstance(atak_payload, dict) else None,
+            'expiresAt': exp,
+        },
+        'itak': itak_payload,
+    }), 200
 
 
 def _join_as_leader(event, team):
