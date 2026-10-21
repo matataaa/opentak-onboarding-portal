@@ -179,7 +179,7 @@
     "continue": "Continue",
     "failedUpdateProfile": "Failed to update profile",
     "setPasswordTitle": "Set Your Password",
-    "setPasswordDesc": "Please set a password for your account to continue.",
+    "setPasswordDesc": "Set a password for your account. You'll use it to connect the ATAK (Android) or iTAK (iOS) client to the TAK server.",
     "enterAPassword": "Enter a password",
     "confirmYourPassword": "Confirm your password",
     "bothFieldsRequired": "Both fields are required",

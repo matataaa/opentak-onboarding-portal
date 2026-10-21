@@ -179,7 +179,7 @@
     "continue": "Doorgaan",
     "failedUpdateProfile": "Profiel bijwerken mislukt",
     "setPasswordTitle": "Stel je wachtwoord in",
-    "setPasswordDesc": "Stel een wachtwoord in voor je account om door te gaan.",
+    "setPasswordDesc": "Stel een wachtwoord in voor je account. Je gebruikt dit om de ATAK- (Android) of iTAK-client (iOS) met de TAK-server te verbinden.",
     "enterAPassword": "Voer een wachtwoord in",
     "confirmYourPassword": "Bevestig je wachtwoord",
     "bothFieldsRequired": "Beide velden zijn verplicht",

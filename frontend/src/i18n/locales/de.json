@@ -179,7 +179,7 @@
     "continue": "Weiter",
     "failedUpdateProfile": "Profil konnte nicht aktualisiert werden",
     "setPasswordTitle": "Passwort festlegen",
-    "setPasswordDesc": "Bitte legen Sie ein Passwort für Ihr Konto fest, um fortzufahren.",
+    "setPasswordDesc": "Legen Sie ein Passwort für Ihr Konto fest. Sie verwenden es, um den ATAK- (Android) oder iTAK-Client (iOS) mit dem TAK-Server zu verbinden.",
     "enterAPassword": "Passwort eingeben",
     "confirmYourPassword": "Passwort bestätigen",
     "bothFieldsRequired": "Beide Felder sind erforderlich",
