@@ -1,7 +1,9 @@
 from app.extensions import scheduler
 from app.models import UserModel, AnnouncementModel, OneTimeTokenModel, EventSessionModel, db
 from datetime import datetime, timedelta
+from flask import current_app
 from app.ots import otsClient
+from app.services.event_team_colors import sync_event_team_colors, remove_event_colors_for_username, read_profiles
 import os
 import shutil
 import time
@@ -77,14 +79,28 @@ def cleanup_temp_downloads():
             print(f"Cleaned up {expired} expired download tokens")
 
 
+@scheduler.task(id="apply_event_team_colors", trigger="interval", minutes=2, misfire_grace_time=60, max_instances=1)
+def apply_event_team_colors():
+    """Apply event team colours to the ATAK devices of event participants"""
+    with scheduler.app.app_context():
+        try:
+            sync_event_team_colors()
+        except Exception as e:
+            print(f"Event team colour sync failed: {e}")
+            current_app.logger.exception("Event team colour sync failed")
+    return
+
+
 @scheduler.task(id="close_expired_event_sessions", trigger="interval", minutes=15, misfire_grace_time=300, max_instances=1)
 def close_expired_event_sessions():
-    """Close shared event-player sessions whose event has ended.
+    """Close event-player sessions whose event has ended.
 
-    Each such session owns a temporary OTS account; clean it up per the
-    event's accountCleanup policy (deactivate by default, or delete). Leader
-    accounts are persistent shared logins, not EventSessions, so they are
-    untouched here.
+    The team colour profiles on the session account's devices are removed first.
+    Shared sessions own a temporary OTS account; clean it up per the event's
+    accountCleanup policy (deactivate by default, or delete). Individual
+    sessions belong to a normal self-registered account, which is left alone;
+    only the session is closed. Leader accounts are persistent shared logins,
+    not EventSessions, so they are untouched here.
     """
     print('Closing expired event sessions...')
     with scheduler.app.app_context():
@@ -94,11 +110,23 @@ def close_expired_event_sessions():
             EventSessionModel.expiresAt.isnot(None),
             EventSessionModel.expiresAt < now,
         ).all()
+        existing = None
+        if sessions:
+            # Read the OTS profiles once for all sessions of this run
+            try:
+                existing = read_profiles()
+            except Exception as e:
+                print(f"Event colour removal skipped, could not read OTS profiles: {e}")
         for session in sessions:
             event = session.event
             cleanup = event.accountCleanup if event else 'deactivate'
             username = session.otsUsername
-            if username:
+            if username and existing is not None and session.team and session.team.color:
+                try:
+                    remove_event_colors_for_username(username, session.team.color, existing)
+                except Exception as e:
+                    print(f"Event colour removal failed for {username}: {e}")
+            if username and session.mode != 'individual':
                 try:
                     if cleanup == 'delete':
                         otsClient.delete_user(username)

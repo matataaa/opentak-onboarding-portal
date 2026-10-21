@@ -644,6 +644,8 @@ def register():
 
             # Assign OTS groups from onboarding code
             assign_ots_groups(username, onboarding_code, user)
+            from app.api_v1.events import record_event_registration
+            record_event_registration(username, onboarding_code)
 
             # Increment onboarding code uses
             onboarding_code.uses += 1
@@ -1044,6 +1046,8 @@ def verify_email():
 
         # Assign OTS groups from onboarding code
         assign_ots_groups(pending.username, onboarding_code, user)
+        from app.api_v1.events import record_event_registration
+        record_event_registration(pending.username, onboarding_code)
 
         # Increment onboarding code uses
         onboarding_code.uses += 1
@@ -1553,6 +1557,8 @@ def approve_registration(token):
             new_user.roles.append(role)
 
         assign_ots_groups(pending.username, onboarding_code, new_user)
+        from app.api_v1.events import record_event_registration
+        record_event_registration(pending.username, onboarding_code)
 
         onboarding_code.uses += 1
 

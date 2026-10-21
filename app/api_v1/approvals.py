@@ -204,6 +204,8 @@ def approve_pending(pending_id):
         # Assign OTS groups from onboarding code
         from app.api_v1.auth import assign_ots_groups
         assign_ots_groups(pending.username, onboarding_code, new_user)
+        from app.api_v1.events import record_event_registration
+        record_event_registration(pending.username, onboarding_code)
 
         # Increment onboarding code uses
         onboarding_code.uses += 1
