@@ -293,6 +293,18 @@ def refresh():
         except (ValueError, TypeError):
             expires_delta = timedelta(minutes=10)
 
+    # A bounded event-leader session keeps its scope claims and can never be
+    # refreshed past its original hard expiry (event_leader_until, UTC epoch).
+    if jwt_data.get('event_leader_team') is not None:
+        import time
+        claims['event_leader_team'] = jwt_data['event_leader_team']
+        claims['event_leader_event'] = jwt_data.get('event_leader_event')
+        claims['event_leader_until'] = jwt_data.get('event_leader_until')
+        remaining = int(jwt_data.get('event_leader_until') or 0) - int(time.time())
+        if remaining <= 0:
+            return jsonify({'error': 'Session expired'}), 401
+        expires_delta = timedelta(seconds=min(remaining, 12 * 3600))
+
     access_token = create_access_token(
         identity=str(user.id),
         additional_claims=claims,

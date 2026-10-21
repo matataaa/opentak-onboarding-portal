@@ -16,7 +16,7 @@ Admin roles (stored in local database, not OTS):
 
 from functools import wraps
 from flask import jsonify
-from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import get_jwt, get_jwt_identity
 
 # Define admin roles with description and display name
 # Format: role_name: (description, display_name)
@@ -71,6 +71,15 @@ def get_user_roles():
     from app.models import UserModel
 
     try:
+        # A bounded event-leader session is least-privilege: whoever holds the
+        # shared leader link gets only the synthetic 'event_leader' role,
+        # regardless of any DB roles on the underlying shared account.
+        try:
+            if get_jwt().get('event_leader_team') is not None:
+                return ['event_leader']
+        except Exception:
+            pass
+
         current_user_id = get_jwt_identity()
         if not current_user_id:
             return []
