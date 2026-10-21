@@ -66,6 +66,11 @@ def _link_to_dict(link, raw_token=None):
 
 PLAYER_ACCESS_MODES = ('shared', 'individual')
 ACCOUNT_CLEANUP_MODES = ('deactivate', 'delete')
+# The fixed set of TAK team colours ATAK accepts (the __group/locationTeam value).
+TAK_TEAM_COLORS = (
+    'White', 'Yellow', 'Orange', 'Magenta', 'Red', 'Maroon', 'Purple',
+    'Dark Blue', 'Blue', 'Cyan', 'Teal', 'Green', 'Dark Green', 'Brown',
+)
 
 
 def _parse_dt(value):
@@ -143,6 +148,8 @@ def create_event_team():
         return jsonify({'error': 'Unknown otsGroupId'}), 400
     if data.get('leaderUserId') and not UserModel.get_user_by_id(data['leaderUserId']):
         return jsonify({'error': 'Unknown leaderUserId'}), 400
+    if data.get('color') and data['color'] not in TAK_TEAM_COLORS:
+        return jsonify({'error': 'color must be a TAK team colour'}), 400
 
     team = EventTeamModel(
         name=data['name'],
@@ -172,6 +179,8 @@ def update_event_team(team_id):
             return jsonify({'error': 'A team with this name already exists'}), 409
         team.name = data['name']
     if 'color' in data:
+        if data['color'] and data['color'] not in TAK_TEAM_COLORS:
+            return jsonify({'error': 'color must be a TAK team colour'}), 400
         team.color = data['color']
     if 'otsGroupId' in data:
         if data['otsGroupId'] and not OTSGroupModel.query.get(data['otsGroupId']):

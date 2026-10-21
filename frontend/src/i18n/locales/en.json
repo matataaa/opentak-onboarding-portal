@@ -489,6 +489,7 @@
     "teams": "Teams",
     "teamName": "Team name",
     "color": "Colour",
+    "noColor": "No colour",
     "group": "OTS group",
     "noGroup": "No OTS group",
     "addTeam": "Add team",
