@@ -150,6 +150,10 @@ def create_app():
     mail.init_app(app)
     if not app.config.get('TESTING'):
         with app.app_context():
+            # Imported only for its side effect: the @scheduler.task decorators
+            # register the jobs. Must happen before start(); under TESTING the
+            # scheduler is not initialised, so this stays inside the non-TESTING block.
+            from app import jobs  # noqa: F401
             scheduler.start()
             # Seed admin roles
             from app.rbac import seed_admin_roles

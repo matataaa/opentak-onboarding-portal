@@ -24,12 +24,20 @@ class FakeOTS:
         self.deleted = []
         self.fail_uids = set()
         self.profile_reads = 0
+        self.fail_deactivate = False
+        self.fail_delete = False
+        self.fail_euds = False
+        self.fail_profile_delete = False
 
     def get_euds(self, page=None, per_page=None, username=None):
+        if self.fail_euds:
+            raise Exception('euds down')
         euds = [e for e in self.euds if username is None or e['username'] == username]
         return {'response': {'results': euds, 'total_pages': 1}}
 
     def get_device_profiles(self, page=None, per_page=None, preference_key=None):
+        if self.fail_euds:
+            raise Exception('profiles down')
         self.profile_reads += 1
         results = [
             {'preference_key': k, 'eud_uid': uid, 'preference_value': v}
@@ -50,13 +58,19 @@ class FakeOTS:
     def delete_device_profile(self, key, eud_uid):
         if not eud_uid:
             raise ValueError("eud_uid is required to delete a device profile")
+        if self.fail_profile_delete:
+            raise Exception('profile delete failed')
         self.deleted.append((key, eud_uid))
         del self.profiles[(key, eud_uid)]
 
     def deactivate_user(self, username):
+        if self.fail_deactivate:
+            raise Exception('deactivate failed')
         self.deactivated = getattr(self, 'deactivated', []) + [username]
 
     def delete_user(self, username):
+        if self.fail_delete:
+            raise Exception('delete failed')
         self.removed_users = getattr(self, 'removed_users', []) + [username]
 
 
@@ -378,3 +392,95 @@ def test_record_never_raises(data, monkeypatch):
     _, code = _registration_setup(data)
     monkeypatch.setattr(events, 'EventSessionModel', None)
     events.record_event_registration('zz_boom', code)
+
+
+def _expiring(data, ots, app, monkeypatch, mode='shared', ago=timedelta(minutes=1)):
+    monkeypatch.setattr(scheduler, 'app', app, raising=False)
+    event = make_event(data, end=-0.5)
+    team = make_team(data)
+    session = make_session(data, event, team, 'zz_acc', mode=mode, expires=datetime.now() - ago)
+    data.session.commit()
+    ots.euds = [eud('a1', 'zz_acc')]
+    ots.profiles = {('locationTeam', 'a1'): 'Red', ('atakRoleType', 'a1'): 'Team Member'}
+    return session
+
+
+def test_close_job_retries_after_deactivate_failure(data, ots, app, monkeypatch):
+    session = _expiring(data, ots, app, monkeypatch)
+    ots.fail_deactivate = True
+    jobs.close_expired_event_sessions()
+    data.session.expire_all()
+    assert EventSessionModel.query.get(session.id).closedAt is None
+    ots.fail_deactivate = False
+    data.session.expire_all()  # the job commits through its own app-context session
+    jobs.close_expired_event_sessions()
+    data.session.expire_all()
+    closed = EventSessionModel.query.get(session.id)
+    assert closed.closedAt is not None and closed.closeReason == 'expired'
+    assert ots.deactivated == ['zz_acc']
+
+
+def test_close_job_profile_read_failure_leaves_account_alone(data, ots, app, monkeypatch):
+    session = _expiring(data, ots, app, monkeypatch)
+    ots.fail_euds = True
+    jobs.close_expired_event_sessions()
+    data.session.expire_all()
+    assert EventSessionModel.query.get(session.id).closedAt is None
+    assert getattr(ots, 'deactivated', []) == []
+
+
+def test_close_job_individual_with_colours_ok_closes_without_account_call(data, ots, app, monkeypatch):
+    session = _expiring(data, ots, app, monkeypatch, mode='individual')
+    jobs.close_expired_event_sessions()
+    data.session.expire_all()
+    closed = EventSessionModel.query.get(session.id)
+    assert closed.closedAt is not None and closed.closeReason == 'expired'
+    assert getattr(ots, 'deactivated', []) == [] and getattr(ots, 'removed_users', []) == []
+
+
+def test_close_job_gives_up_after_seven_days(data, ots, app, monkeypatch):
+    session = _expiring(data, ots, app, monkeypatch, ago=timedelta(days=8))
+    ots.fail_deactivate = True
+    jobs.close_expired_event_sessions()
+    data.session.expire_all()
+    closed = EventSessionModel.query.get(session.id)
+    assert closed.closedAt is not None
+    assert closed.closeReason == 'expired (OTS cleanup failed)'
+
+
+def test_close_job_profile_delete_failure_keeps_session_and_account(data, ots, app, monkeypatch):
+    session = _expiring(data, ots, app, monkeypatch)
+    ots.fail_profile_delete = True
+    jobs.close_expired_event_sessions()
+    data.session.expire_all()
+    assert EventSessionModel.query.get(session.id).closedAt is None
+    assert getattr(ots, 'deactivated', []) == []
+    ots.fail_profile_delete = False
+    jobs.close_expired_event_sessions()
+    data.session.expire_all()
+    assert EventSessionModel.query.get(session.id).closedAt is not None
+    assert ots.deactivated == ['zz_acc']
+
+
+def test_close_job_colour_removal_raising_keeps_session_and_account(data, ots, app, monkeypatch):
+    session = _expiring(data, ots, app, monkeypatch)
+
+    def boom(*args, **kwargs):
+        raise Exception('removal exploded')
+
+    monkeypatch.setattr(jobs, 'remove_event_colors_for_username', boom)
+    jobs.close_expired_event_sessions()
+    data.session.expire_all()
+    assert EventSessionModel.query.get(session.id).closedAt is None
+    assert getattr(ots, 'deactivated', []) == [] and getattr(ots, 'removed_users', []) == []
+
+
+def test_close_job_delete_policy_deletes_once(data, ots, app, monkeypatch):
+    session = _expiring(data, ots, app, monkeypatch)
+    EventModel.query.filter_by(id=session.eventId).update({'accountCleanup': 'delete'})
+    data.session.commit()
+    jobs.close_expired_event_sessions()
+    jobs.close_expired_event_sessions()
+    data.session.expire_all()
+    assert EventSessionModel.query.get(session.id).closedAt is not None
+    assert ots.removed_users == ['zz_acc'] and getattr(ots, 'deactivated', []) == []
