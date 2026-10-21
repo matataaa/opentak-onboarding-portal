@@ -7,17 +7,22 @@ elsewhere.
 """
 
 import re
+import time
 import hashlib
 import secrets
 
 from flask import request, jsonify, current_app
-from flask_jwt_extended import jwt_required
-from datetime import datetime
+from flask_jwt_extended import jwt_required, create_access_token, create_refresh_token
+from datetime import datetime, timedelta
 
 from app.api_v1 import api_v1
-from app.models import db, EventTeamModel, EventModel, EventLinkModel, OTSGroupModel, UserModel
+from app.models import db, EventTeamModel, EventModel, EventLinkModel, OTSGroupModel, UserModel, SystemSettingsModel
 from app.ots import otsClient
 from app.rbac import require_role
+
+# Access tokens stay short even when the leader session lives (via refresh)
+# until the event ends.
+LEADER_ACCESS_MAX_SECONDS = 12 * 3600
 
 OTS_USERNAME_RE = re.compile(r'^[a-z0-9_.]+$')
 LINK_ROLES = ('leader', 'player')
@@ -410,3 +415,85 @@ def delete_event_link(link_id):
     db.session.delete(link)
     db.session.commit()
     return jsonify({'message': 'Link deleted'}), 200
+
+
+# ----------------------------------------------------------------------------
+# Public join flow (no prior login; the link token is the credential)
+# ----------------------------------------------------------------------------
+def _event_window_error(event):
+    """Return an error response if the event is not currently open, else None."""
+    if not event or not event.active:
+        return jsonify({'error': 'This event is not active'}), 403
+    now = datetime.now()
+    if event.validFrom and now < event.validFrom:
+        return jsonify({'error': 'This event has not started yet'}), 403
+    if event.validUntil and now > event.validUntil:
+        return jsonify({'error': 'This event has ended'}), 403
+    return None
+
+
+@api_v1.route('/events/join/<token>', methods=['POST'])
+def join_event(token):
+    """Exchange an event link token for access. Public: the token is the credential."""
+    if not SystemSettingsModel.get_setting('events_enabled', False):
+        return jsonify({'error': 'Events are not enabled'}), 403
+
+    link = EventLinkModel.query.filter_by(tokenHash=_hash_token(token)).first()
+    if not link:
+        return jsonify({'error': 'Invalid or revoked link'}), 404
+
+    event = link.event
+    team = link.team
+    window_error = _event_window_error(event)
+    if window_error:
+        return window_error
+
+    if link.role == 'leader':
+        return _join_as_leader(event, team)
+
+    # Player access modes are handled in a later increment.
+    return jsonify({'error': 'Player access is not available yet'}), 501
+
+
+def _join_as_leader(event, team):
+    leader = team.leaderUser if team else None
+    if not leader:
+        return jsonify({'error': 'No leader account is configured for this team'}), 409
+
+    if event.validUntil:
+        hard_seconds = (event.validUntil - datetime.now()).total_seconds()
+    else:
+        hard_seconds = LEADER_ACCESS_MAX_SECONDS
+    if hard_seconds <= 0:
+        return jsonify({'error': 'This event has ended'}), 403
+
+    until_epoch = int(time.time() + hard_seconds)
+    claims = {
+        'username': leader.username,
+        'event_leader_team': team.id,
+        'event_leader_event': event.id,
+        'event_leader_until': until_epoch,
+    }
+    access_token = create_access_token(
+        identity=str(leader.id),
+        additional_claims=claims,
+        expires_delta=timedelta(seconds=min(hard_seconds, LEADER_ACCESS_MAX_SECONDS)),
+    )
+    refresh_token = create_refresh_token(
+        identity=str(leader.id),
+        additional_claims=claims,
+        expires_delta=timedelta(seconds=hard_seconds),
+    )
+
+    current_app.logger.info(
+        'Event leader join: team %s (%s) for event %s', team.id, leader.username, event.id
+    )
+    return jsonify({
+        'role': 'leader',
+        'access_token': access_token,
+        'refresh_token': refresh_token,
+        'expiresAt': event.validUntil.isoformat() if event.validUntil else None,
+        'team': {'id': team.id, 'name': team.name, 'color': team.color},
+        'event': {'id': event.id, 'name': event.name},
+        'user': {'id': leader.id, 'username': leader.username},
+    }), 200
