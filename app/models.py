@@ -2065,8 +2065,6 @@ class EventModel(db.Model):
     description = Column(Text, nullable=True)
     validFrom = Column(DateTime, nullable=True)
     validUntil = Column(DateTime, nullable=True)
-    cutoffTime = Column(String(5), nullable=True)                 # "HH:MM" local time
-    timezone = Column(String(64), nullable=True)                  # e.g. "Europe/Amsterdam"
     playerAccessMode = Column(String(20), nullable=False, default='individual')  # shared | individual
     accountCleanup = Column(String(20), nullable=False, default='deactivate')    # deactivate | delete
     active = Column(Boolean, nullable=False, default=True)
