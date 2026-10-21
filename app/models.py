@@ -1491,6 +1491,13 @@ class SystemSettingsModel(db.Model):
                 'category': 'security',
                 'description': 'Automatically create a local account when a user logs in via OIDC for the first time'
             },
+            # Events module
+            {
+                'key': 'events_enabled',
+                'value': 'false',
+                'category': 'general',
+                'description': 'Enable the events module (teams, events and access links)'
+            },
             # Installer QR Codes
             {
                 'key': 'atak_installer_qr_enabled',
