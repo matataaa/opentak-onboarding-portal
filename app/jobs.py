@@ -1,5 +1,5 @@
 from app.extensions import scheduler
-from app.models import UserModel, AnnouncementModel, OneTimeTokenModel, db
+from app.models import UserModel, AnnouncementModel, OneTimeTokenModel, EventSessionModel, db
 from datetime import datetime, timedelta
 from app.ots import otsClient
 import os
@@ -75,3 +75,39 @@ def cleanup_temp_downloads():
         db.session.commit()
         if expired:
             print(f"Cleaned up {expired} expired download tokens")
+
+
+@scheduler.task(id="close_expired_event_sessions", trigger="interval", minutes=15, misfire_grace_time=300, max_instances=1)
+def close_expired_event_sessions():
+    """Close shared event-player sessions whose event has ended.
+
+    Each such session owns a temporary OTS account; clean it up per the
+    event's accountCleanup policy (deactivate by default, or delete). Leader
+    accounts are persistent shared logins, not EventSessions, so they are
+    untouched here.
+    """
+    print('Closing expired event sessions...')
+    with scheduler.app.app_context():
+        now = datetime.now()
+        sessions = EventSessionModel.query.filter(
+            EventSessionModel.closedAt.is_(None),
+            EventSessionModel.expiresAt.isnot(None),
+            EventSessionModel.expiresAt < now,
+        ).all()
+        for session in sessions:
+            event = session.event
+            cleanup = event.accountCleanup if event else 'deactivate'
+            username = session.otsUsername
+            if username:
+                try:
+                    if cleanup == 'delete':
+                        otsClient.delete_user(username)
+                    else:
+                        otsClient.deactivate_user(username)
+                    print(f"Event session cleanup: {cleanup} {username}")
+                except Exception as e:
+                    print(f"Event session cleanup failed for {username}: {e}")
+            session.closedAt = now
+            session.closeReason = 'expired'
+            db.session.commit()
+    return
