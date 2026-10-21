@@ -521,7 +521,17 @@
     "version": "Version",
     "revoke": "Widerrufen",
     "loadFailed": "Events konnten nicht geladen werden",
-    "actionFailed": "Aktion fehlgeschlagen"
+    "actionFailed": "Aktion fehlgeschlagen",
+    "printSheet": "Druckbogen",
+    "clearSheet": "Leeren"
+  },
+  "eventsJoin": {
+    "loading": "Wird geladen…",
+    "title": "Event-Zugang",
+    "failed": "Dieser Link ist ungültig.",
+    "sharedIntro": "Scannen Sie diesen Code in ATAK, um Ihrem Team beizutreten.",
+    "scanAtak": "ATAK → Enrollment → diesen QR-Code scannen.",
+    "noEnrollment": "Derzeit ist kein Enrollment verfügbar."
   },
   "admin": {
     "dashboard": {

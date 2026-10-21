@@ -26,6 +26,7 @@ import UsersList from './pages/admin/UsersList';
 import RolesList from './pages/admin/RolesList';
 import OnboardingCodesList from './pages/admin/OnboardingCodesList';
 import EventsAdmin from './pages/admin/EventsAdmin';
+import EventsJoin from './pages/EventsJoin';
 import PendingRegistrationsList from './pages/admin/PendingRegistrationsList';
 import TakProfilesList from './pages/admin/TakProfilesList';
 import MeshtasticList from './pages/admin/MeshtasticList';
@@ -199,6 +200,7 @@ function AppContent() {
                 </PublicRoute>
               }
             />
+            <Route path="/events/join/:token" element={<EventsJoin />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/verify-email-sent" element={<VerifyEmailSent />} />
             <Route path="/registration-pending" element={<RegistrationPending />} />

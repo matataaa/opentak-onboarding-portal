@@ -521,7 +521,17 @@
     "version": "Version",
     "revoke": "Revoke",
     "loadFailed": "Could not load events",
-    "actionFailed": "Action failed"
+    "actionFailed": "Action failed",
+    "printSheet": "Print sheet",
+    "clearSheet": "Clear"
+  },
+  "eventsJoin": {
+    "loading": "Loading…",
+    "title": "Event access",
+    "failed": "This link is not valid.",
+    "sharedIntro": "Scan this code in ATAK to join your team.",
+    "scanAtak": "ATAK → enrollment → scan this QR code.",
+    "noEnrollment": "No enrollment is available right now."
   },
   "admin": {
     "dashboard": {

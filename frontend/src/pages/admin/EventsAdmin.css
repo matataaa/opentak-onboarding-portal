@@ -16,3 +16,16 @@
 .events-new-link { background: #e7f1fb; padding: 0.75rem; border-radius: 6px; margin-bottom: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; }
 .events-new-link code { word-break: break-all; font-size: 0.9rem; }
 @media (max-width: 640px) { .events-form-row { flex-direction: column; align-items: stretch; } }
+.events-print-sheet { margin-top: 1.5rem; }
+.events-print-actions { margin-bottom: 1rem; }
+.events-print-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; }
+.events-print-card { border: 1px solid var(--border-color, #ddd); border-radius: 8px; padding: 1rem; text-align: center; background: #fff; }
+.events-print-card svg { width: 100%; height: auto; max-width: 200px; }
+.events-print-label { margin-top: 0.5rem; font-weight: 600; color: #111; }
+@media print {
+  body * { visibility: hidden; }
+  .events-print-sheet, .events-print-sheet * { visibility: visible; }
+  .events-print-sheet { position: absolute; top: 0; left: 0; width: 100%; }
+  .no-print { display: none !important; }
+  .events-print-card { break-inside: avoid; page-break-inside: avoid; }
+}

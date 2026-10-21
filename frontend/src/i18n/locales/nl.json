@@ -521,7 +521,17 @@
     "version": "Versie",
     "revoke": "Intrekken",
     "loadFailed": "Kon events niet laden",
-    "actionFailed": "Actie mislukt"
+    "actionFailed": "Actie mislukt",
+    "printSheet": "Printvel",
+    "clearSheet": "Wissen"
+  },
+  "eventsJoin": {
+    "loading": "Laden…",
+    "title": "Event-toegang",
+    "failed": "Deze link is niet geldig.",
+    "sharedIntro": "Scan deze code in ATAK om bij je team te komen.",
+    "scanAtak": "ATAK → enrollment → scan deze QR-code.",
+    "noEnrollment": "Er is nu geen enrollment beschikbaar."
   },
   "admin": {
     "dashboard": {
