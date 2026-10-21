@@ -7,17 +7,51 @@ elsewhere.
 """
 
 import re
+import hashlib
+import secrets
 
 from flask import request, jsonify, current_app
 from flask_jwt_extended import jwt_required
 from datetime import datetime
 
 from app.api_v1 import api_v1
-from app.models import db, EventTeamModel, EventModel, OTSGroupModel, UserModel
+from app.models import db, EventTeamModel, EventModel, EventLinkModel, OTSGroupModel, UserModel
 from app.ots import otsClient
 from app.rbac import require_role
 
 OTS_USERNAME_RE = re.compile(r'^[a-z0-9_.]+$')
+LINK_ROLES = ('leader', 'player')
+
+
+def _hash_token(token):
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()
+
+
+def _generate_link_token():
+    raw = secrets.token_urlsafe(32)
+    return raw, _hash_token(raw)
+
+
+def _link_url(token):
+    base = (current_app.config.get('FRONTEND_URL') or '').rstrip('/')
+    return "%s/events/join/%s" % (base, token)
+
+
+def _link_to_dict(link, raw_token=None):
+    data = {
+        'id': link.id,
+        'eventId': link.eventId,
+        'eventTeamId': link.eventTeamId,
+        'team': {'id': link.team.id, 'name': link.team.name} if link.team else None,
+        'role': link.role,
+        'tokenVersion': link.tokenVersion,
+        'createdAt': link.createdAt.isoformat() if link.createdAt else None,
+    }
+    # The raw token is only returned once, when generated or regenerated.
+    if raw_token is not None:
+        data['token'] = raw_token
+        data['url'] = _link_url(raw_token)
+    return data
 
 PLAYER_ACCESS_MODES = ('shared', 'individual')
 ACCOUNT_CLEANUP_MODES = ('deactivate', 'delete')
@@ -306,3 +340,73 @@ def delete_event(event_id):
     db.session.delete(event)
     db.session.commit()
     return jsonify({'message': 'Event deleted'}), 200
+
+
+# ----------------------------------------------------------------------------
+# Access links (one per event/team/role; only the token hash is stored)
+# ----------------------------------------------------------------------------
+@api_v1.route('/events/<int:event_id>/links', methods=['GET'])
+@jwt_required()
+@require_role('events_admin', 'events_readonly')
+def list_event_links(event_id):
+    if not EventModel.query.get(event_id):
+        return jsonify({'error': 'Event not found'}), 404
+    links = EventLinkModel.query.filter_by(eventId=event_id).all()
+    return jsonify({'links': [_link_to_dict(l) for l in links]}), 200
+
+
+@api_v1.route('/events/<int:event_id>/links', methods=['POST'])
+@jwt_required()
+@require_role('events_admin')
+def create_event_link(event_id):
+    if not EventModel.query.get(event_id):
+        return jsonify({'error': 'Event not found'}), 404
+    data = request.get_json() or {}
+
+    team_id = data.get('teamId')
+    role = (data.get('role') or '').strip().lower()
+    if not team_id or role not in LINK_ROLES:
+        return jsonify({'error': 'teamId and a valid role (leader/player) are required'}), 400
+    if not EventTeamModel.query.get(team_id):
+        return jsonify({'error': 'Unknown teamId'}), 400
+    if EventLinkModel.query.filter_by(eventId=event_id, eventTeamId=team_id, role=role).first():
+        return jsonify({'error': 'A link for this team and role already exists; revoke it to get a new one'}), 409
+
+    raw, token_hash = _generate_link_token()
+    link = EventLinkModel(
+        eventId=event_id,
+        eventTeamId=team_id,
+        role=role,
+        tokenHash=token_hash,
+        tokenVersion=1,
+    )
+    db.session.add(link)
+    db.session.commit()
+    return jsonify(_link_to_dict(link, raw_token=raw)), 201
+
+
+@api_v1.route('/events/links/<int:link_id>/revoke', methods=['POST'])
+@jwt_required()
+@require_role('events_admin')
+def revoke_event_link(link_id):
+    """Regenerate the token: the old printed link/QR stops working."""
+    link = EventLinkModel.query.get(link_id)
+    if not link:
+        return jsonify({'error': 'Link not found'}), 404
+    raw, token_hash = _generate_link_token()
+    link.tokenHash = token_hash
+    link.tokenVersion = (link.tokenVersion or 0) + 1
+    db.session.commit()
+    return jsonify(_link_to_dict(link, raw_token=raw)), 200
+
+
+@api_v1.route('/events/links/<int:link_id>', methods=['DELETE'])
+@jwt_required()
+@require_role('events_admin')
+def delete_event_link(link_id):
+    link = EventLinkModel.query.get(link_id)
+    if not link:
+        return jsonify({'error': 'Link not found'}), 404
+    db.session.delete(link)
+    db.session.commit()
+    return jsonify({'message': 'Link deleted'}), 200
