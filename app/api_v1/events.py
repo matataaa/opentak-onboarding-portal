@@ -16,7 +16,7 @@ from flask_jwt_extended import jwt_required, create_access_token, create_refresh
 from datetime import datetime, timedelta
 
 from app.api_v1 import api_v1
-from app.models import db, EventTeamModel, EventModel, EventLinkModel, EventSessionModel, OTSGroupModel, UserModel, SystemSettingsModel
+from app.models import db, EventTeamModel, EventModel, EventLinkModel, EventSessionModel, OTSGroupModel, UserModel, OnboardingCodeModel, SystemSettingsModel
 from app.ots import otsClient
 from app.rbac import require_role
 
@@ -50,6 +50,12 @@ def _link_to_dict(link, raw_token=None):
         'team': {'id': link.team.id, 'name': link.team.name} if link.team else None,
         'role': link.role,
         'tokenVersion': link.tokenVersion,
+        'onboardingCodeId': link.onboardingCodeId,
+        'onboardingCode': {
+            'id': link.onboardingCode.id,
+            'name': link.onboardingCode.name,
+            'onboardingCode': link.onboardingCode.onboardingCode,
+        } if link.onboardingCode else None,
         'createdAt': link.createdAt.isoformat() if link.createdAt else None,
     }
     # The raw token is only returned once, when generated or regenerated.
@@ -377,6 +383,10 @@ def create_event_link(event_id):
     if EventLinkModel.query.filter_by(eventId=event_id, eventTeamId=team_id, role=role).first():
         return jsonify({'error': 'A link for this team and role already exists; revoke it to get a new one'}), 409
 
+    onboarding_code_id = data.get('onboardingCodeId')
+    if onboarding_code_id and not OnboardingCodeModel.get_onboarding_code_by_id(onboarding_code_id):
+        return jsonify({'error': 'Unknown onboardingCodeId'}), 400
+
     raw, token_hash = _generate_link_token()
     link = EventLinkModel(
         eventId=event_id,
@@ -384,6 +394,7 @@ def create_event_link(event_id):
         role=role,
         tokenHash=token_hash,
         tokenVersion=1,
+        onboardingCodeId=onboarding_code_id,
     )
     db.session.add(link)
     db.session.commit()
@@ -454,10 +465,25 @@ def join_event(token):
     if link.role == 'player':
         if event.playerAccessMode == 'shared':
             return _join_as_player_shared(event, team)
-        # individual mode is handled in a later increment.
-        return jsonify({'error': 'Individual player access is not available yet'}), 501
+        return _join_as_player_individual(event, team, link)
 
     return jsonify({'error': 'Unsupported link role'}), 400
+
+
+def _join_as_player_individual(event, team, link):
+    """Individual mode: point the player at the normal registration with the
+    event-specific onboarding code on this link (reuses self-service)."""
+    code = link.onboardingCode
+    if not code:
+        return jsonify({'error': 'No registration code is configured for this team'}), 409
+    return jsonify({
+        'role': 'player',
+        'mode': 'individual',
+        'team': {'id': team.id, 'name': team.name, 'color': team.color},
+        'event': {'id': event.id, 'name': event.name},
+        'onboardingCode': code.onboardingCode,
+        'redirectPath': '/register/%s' % code.onboardingCode,
+    }), 200
 
 
 def _event_remaining_seconds(event, default_seconds):
