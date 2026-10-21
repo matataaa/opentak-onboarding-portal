@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { QRCodeSVG } from 'qrcode.react';
 import { eventsAPI, groupsAPI, onboardingCodesAPI } from '../../services/api';
 import './EventsAdmin.css';
 
@@ -28,6 +29,12 @@ export default function EventsAdmin() {
   const [openLinksFor, setOpenLinksFor] = useState(null);
   const [links, setLinks] = useState([]);
   const [linkForm, setLinkForm] = useState({ teamId: '', role: 'leader', onboardingCodeId: '' });
+  const [printSheet, setPrintSheet] = useState([]);
+
+  const addGenerated = (d) => {
+    setNewLink(d);
+    setPrintSheet((prev) => [...prev, { url: d.url, label: `${d.team?.name || ''} · ${d.role}` }]);
+  };
 
   const reload = useCallback(async () => {
     try {
@@ -87,6 +94,7 @@ export default function EventsAdmin() {
   const openLinks = async (eventId) => {
     setOpenLinksFor(eventId);
     setNewLink(null);
+    setPrintSheet([]);
     try {
       const r = await eventsAPI.listLinks(eventId);
       setLinks(r.data.links || []);
@@ -98,7 +106,7 @@ export default function EventsAdmin() {
     if (linkForm.role === 'player' && linkForm.onboardingCodeId) payload.onboardingCodeId = Number(linkForm.onboardingCodeId);
     call(
       () => eventsAPI.createLink(openLinksFor, payload),
-      (res) => setNewLink(res.data),
+      (res) => addGenerated(res.data),
     ).then(() => openLinks(openLinksFor));
   };
 
@@ -217,13 +225,29 @@ export default function EventsAdmin() {
                   <td>{l.onboardingCode?.name || l.onboardingCode?.onboardingCode || '-'}</td>
                   <td>v{l.tokenVersion}</td>
                   <td>
-                    <button onClick={() => call(() => eventsAPI.revokeLink(l.id), (res) => setNewLink(res.data)).then(() => openLinks(openLinksFor))}>{t('events.revoke')}</button>
+                    <button onClick={() => call(() => eventsAPI.revokeLink(l.id), (res) => addGenerated(res.data)).then(() => openLinks(openLinksFor))}>{t('events.revoke')}</button>
                     <button className="events-danger" onClick={() => call(() => eventsAPI.deleteLink(l.id)).then(() => openLinks(openLinksFor))}>{t('common.delete')}</button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {printSheet.length > 0 && (
+            <div className="events-print-sheet">
+              <div className="events-print-actions no-print">
+                <button onClick={() => window.print()}>{t('events.printSheet')}</button>
+                <button onClick={() => setPrintSheet([])}>{t('events.clearSheet')}</button>
+              </div>
+              <div className="events-print-grid">
+                {printSheet.map((item, i) => (
+                  <div key={i} className="events-print-card">
+                    <QRCodeSVG value={item.url} size={200} level="M" />
+                    <div className="events-print-label">{item.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       )}
     </div>
