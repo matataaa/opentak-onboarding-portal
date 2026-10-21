@@ -129,6 +129,7 @@ function Layout() {
                 {hasModuleAccess('roles') && <Link to="/admin/roles">{t('layout.roles')}</Link>}
                 {hasModuleAccess('groups') && <Link to="/admin/groups">{t('layout.otsGroups')}</Link>}
                 {hasModuleAccess('onboarding_codes') && <Link to="/admin/onboarding-codes">{t('layout.onboardingCodes')}</Link>}
+                {hasModuleAccess('events') && <Link to="/admin/events">{t('layout.events')}</Link>}
                 {hasModuleAccess('pending_registrations') && <Link to="/admin/pending-registrations">{t('layout.pendingRegistrations')}</Link>}
                 {hasModuleAccess('tak_profiles') && <Link to="/admin/tak-profiles">{t('layout.takProfiles')}</Link>}
                 {hasModuleAccess('meshtastic') && <Link to="/admin/meshtastic">{t('layout.meshtasticChannels')}</Link>}
