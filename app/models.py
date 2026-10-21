@@ -2040,9 +2040,13 @@ class EventTeamModel(db.Model):
     name = Column(String(200), unique=True, nullable=False)
     otsGroupId = Column(Integer, ForeignKey('ots_groups.id'), nullable=True)
     color = Column(String(20), nullable=True)
+    # Shared leader login for this team (e.g. "leaderrood"), used by whoever
+    # scans the team's leader link. One pre-created account shared by many.
+    leaderUserId = Column(Integer, ForeignKey('users.id'), nullable=True)
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
 
     otsGroup = relationship("OTSGroupModel")
+    leaderUser = relationship("UserModel", foreign_keys=[leaderUserId])
 
 
 class EventModel(db.Model):
