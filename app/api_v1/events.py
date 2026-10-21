@@ -6,13 +6,18 @@ events management surface; the public link flow and session handling live
 elsewhere.
 """
 
-from flask import request, jsonify
+import re
+
+from flask import request, jsonify, current_app
 from flask_jwt_extended import jwt_required
 from datetime import datetime
 
 from app.api_v1 import api_v1
 from app.models import db, EventTeamModel, EventModel, OTSGroupModel, UserModel
+from app.ots import otsClient
 from app.rbac import require_role
+
+OTS_USERNAME_RE = re.compile(r'^[a-z0-9_.]+$')
 
 PLAYER_ACCESS_MODES = ('shared', 'individual')
 ACCOUNT_CLEANUP_MODES = ('deactivate', 'delete')
@@ -148,6 +153,50 @@ def delete_event_team(team_id):
     db.session.delete(team)
     db.session.commit()
     return jsonify({'message': 'Team deleted'}), 200
+
+
+@api_v1.route('/events/teams/<int:team_id>/leader', methods=['POST'])
+@jwt_required()
+@require_role('events_admin')
+def create_event_team_leader(team_id):
+    """Create a shared leader account (OTS + local) and assign it to the team."""
+    team = EventTeamModel.query.get(team_id)
+    if not team:
+        return jsonify({'error': 'Team not found'}), 404
+    if team.leaderUserId:
+        return jsonify({'error': 'Team already has a leader account; clear it first'}), 409
+
+    data = request.get_json() or {}
+    username = (data.get('username') or '').strip().lower()
+    password = data.get('password') or ''
+    if not username or not password:
+        return jsonify({'error': 'username and password are required'}), 400
+    if len(password) < 8:
+        return jsonify({'error': 'Password must be at least 8 characters'}), 400
+    if not OTS_USERNAME_RE.match(username):
+        return jsonify({'error': 'Username can contain only letters, numbers, underscores and periods'}), 400
+    if UserModel.get_user_by_username(username):
+        return jsonify({'error': 'A user with this username already exists'}), 409
+
+    # OTS is the source of truth for accounts, so create there first.
+    try:
+        otsClient.create_user(username, password, roles=['user'])
+    except Exception:
+        current_app.logger.exception('Failed to create leader account in OTS: %s', username)
+        return jsonify({'error': 'Failed to create leader account in OTS'}), 400
+
+    user = UserModel.create_user(username=username)
+    if isinstance(user, dict):
+        # Local creation failed after OTS succeeded; roll back OTS to avoid drift.
+        try:
+            otsClient.deactivate_user(username)
+        except Exception:
+            current_app.logger.exception('Failed to roll back OTS leader account: %s', username)
+        return jsonify({'error': 'Failed to create leader account'}), 500
+
+    team.leaderUserId = user.id
+    db.session.commit()
+    return jsonify(_team_to_dict(team)), 201
 
 
 # ----------------------------------------------------------------------------
