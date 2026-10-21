@@ -640,6 +640,8 @@
       "onboardContact": "Onboard Contact",
       "noContact": "No Contact",
       "contactHelp": "User who will receive new registrations",
+      "validFrom": "Active From",
+      "validFromHelp": "The code cannot be used before this date (leave empty for immediately)",
       "codeExpiryDate": "Code Expiry Date",
       "codeExpiryHelp": "When this code expires",
       "userExpiryDate": "User Account Expiry Date",

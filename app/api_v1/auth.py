@@ -550,6 +550,10 @@ def register():
     if not onboarding_code:
         return jsonify({'error': 'Invalid onboarding code'}), 400
 
+    # Check if code is not active yet
+    if onboarding_code.validFrom and onboarding_code.validFrom > datetime.now():
+        return jsonify({'error': 'Onboarding code is not active yet'}), 400
+
     # Check if code is expired
     if onboarding_code.expiryDate and onboarding_code.expiryDate < datetime.now():
         return jsonify({'error': 'Onboarding code has expired'}), 400

@@ -640,6 +640,8 @@
       "onboardContact": "Onboarding-Kontakt",
       "noContact": "Kein Kontakt",
       "contactHelp": "Benutzer, der neue Registrierungen erhält",
+      "validFrom": "Aktiv ab",
+      "validFromHelp": "Der Code kann vor diesem Datum nicht verwendet werden (leer = sofort)",
       "codeExpiryDate": "Code-Ablaufdatum",
       "codeExpiryHelp": "Wann dieser Code abläuft",
       "userExpiryDate": "Benutzerkonto-Ablaufdatum",

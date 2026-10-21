@@ -21,6 +21,7 @@ function OnboardingCodesList() {
     onboardingCode: '',
     maxUses: '',
     onboardContact: null,
+    validFrom: '',
     expiryDate: '',
     userExpiryDate: '',
     roleIds: [],
@@ -128,6 +129,7 @@ function OnboardingCodesList() {
       onboardingCode: generateUUID(),
       maxUses: '',
       onboardContact: null,
+      validFrom: '',
       expiryDate: '',
       userExpiryDate: '',
       roleIds: [],
@@ -172,6 +174,7 @@ function OnboardingCodesList() {
         onboardingCode: fullCode.onboardingCode || '',
         maxUses: fullCode.maxUses || '',
         onboardContact: fullCode.onboardContact?.id || null,
+        validFrom: fullCode.validFrom ? fullCode.validFrom.split('T')[0] : '',
         expiryDate: fullCode.expiryDate ? fullCode.expiryDate.split('T')[0] : '',
         userExpiryDate: fullCode.userExpiryDate ? fullCode.userExpiryDate.split('T')[0] : '',
         roleIds: fullCode.roles?.map(r => r.id) || [],
@@ -197,6 +200,7 @@ function OnboardingCodesList() {
       onboardingCode: formData.onboardingCode,
       maxUses: formData.maxUses ? parseInt(formData.maxUses) : null,
       onboardContactId: formData.onboardContact || null,
+      validFrom: formData.validFrom || null,
       expiryDate: formData.expiryDate || null,
       userExpiryDate: formData.userExpiryDate || null,
       roleIds: formData.roleIds,
@@ -369,6 +373,12 @@ function OnboardingCodesList() {
                     ))}
                   </select>
                   <span className="help-text">{t('admin.onboardingCodes.contactHelp')}</span>
+                </div>
+
+                <div className="form-group">
+                  <label>{t('admin.onboardingCodes.validFrom')}</label>
+                  <input type="date" value={formData.validFrom} onChange={(e) => setFormData({...formData, validFrom: e.target.value})} />
+                  <span className="help-text">{t('admin.onboardingCodes.validFromHelp')}</span>
                 </div>
 
                 <div className="form-group">

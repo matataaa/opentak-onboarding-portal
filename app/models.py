@@ -438,6 +438,7 @@ class OnboardingCodeModel(db.Model):
     uses: Mapped[int] = mapped_column(nullable=True, default=0)
     maxUses: Mapped[int] = mapped_column(nullable=True)
     onboardContactId = Column(Integer, ForeignKey('users.id'), nullable=True)
+    validFrom = mapped_column(DateTime, nullable=True)
     expiryDate = mapped_column(DateTime, nullable=True)
     userExpiryDate = mapped_column(DateTime, nullable=True)
     autoApprove: Mapped[bool] = mapped_column(default=False, nullable=False)
@@ -468,7 +469,7 @@ class OnboardingCodeModel(db.Model):
         return [assoc.group for assoc in self.group_associations]
 
     @staticmethod
-    def create_onboarding_code(onboardingcode, name=None, description=None, users=[], roles=[], onboardcontact=None, maxuses=None, userexpirydate=None, expirydate=None, autoapprove=False, requireapproval=False, approverroleid=None):
+    def create_onboarding_code(onboardingcode, name=None, description=None, users=[], roles=[], onboardcontact=None, maxuses=None, userexpirydate=None, validfrom=None, expirydate=None, autoapprove=False, requireapproval=False, approverroleid=None):
         try:
             onboarding_code = OnboardingCodeModel(
                 description=description,
@@ -479,6 +480,7 @@ class OnboardingCodeModel(db.Model):
                 onboardContactId=onboardcontact,
                 maxUses=maxuses,
                 userExpiryDate=userexpirydate,
+                validFrom=validfrom,
                 expiryDate=expirydate,
                 autoApprove=autoapprove,
                 requireApproval=requireapproval,

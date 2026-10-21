@@ -59,6 +59,7 @@ def get_onboarding_codes():
                 'id': code.onboardContact.id,
                 'username': code.onboardContact.username
             } if code.onboardContact else None,
+            'validFrom': code.validFrom.isoformat() if code.validFrom else None,
             'expiryDate': code.expiryDate.isoformat() if code.expiryDate else None,
             'userExpiryDate': code.userExpiryDate.isoformat() if code.userExpiryDate else None,
             'roles': [{'id': r.id, 'name': r.name, 'displayName': r.display_name} for r in code.roles],
@@ -98,6 +99,7 @@ def get_onboarding_code(code_id):
             'id': code.onboardContact.id,
             'username': code.onboardContact.username
         } if code.onboardContact else None,
+        'validFrom': code.validFrom.isoformat() if code.validFrom else None,
         'expiryDate': code.expiryDate.isoformat() if code.expiryDate else None,
         'userExpiryDate': code.userExpiryDate.isoformat() if code.userExpiryDate else None,
         'roles': [{'id': r.id, 'name': r.name, 'displayName': r.display_name} for r in code.roles],
@@ -113,6 +115,10 @@ def validate_onboarding_code(code):
 
     if not onboarding_code:
         return jsonify({'valid': False, 'error': 'Invalid code'}), 404
+
+    # Check not-yet-active
+    if onboarding_code.validFrom and onboarding_code.validFrom > datetime.now():
+        return jsonify({'valid': False, 'error': 'Code is not active yet'}), 400
 
     # Check expiry
     if onboarding_code.expiryDate and onboarding_code.expiryDate < datetime.now():
@@ -151,6 +157,10 @@ def create_onboarding_code():
 
     try:
         # Parse dates
+        valid_from = None
+        if data.get('validFrom'):
+            valid_from = datetime.fromisoformat(data['validFrom'].replace('Z', '+00:00'))
+
         expiry_date = None
         if data.get('expiryDate'):
             expiry_date = datetime.fromisoformat(data['expiryDate'].replace('Z', '+00:00'))
@@ -168,6 +178,7 @@ def create_onboarding_code():
             description=data.get('description', ''),
             maxuses=data.get('maxUses'),
             onboardcontact=onboard_contact_id,
+            validfrom=valid_from,
             expirydate=expiry_date,
             userexpirydate=user_expiry_date,
             autoapprove=data.get('autoApprove', False),
@@ -242,6 +253,12 @@ def update_onboarding_code(code_id):
             code.maxUses = data['maxUses']
         if 'onboardContactId' in data:
             code.onboardContactId = data['onboardContactId']
+
+        if 'validFrom' in data:
+            if data['validFrom']:
+                code.validFrom = datetime.fromisoformat(data['validFrom'].replace('Z', '+00:00'))
+            else:
+                code.validFrom = None
 
         if 'expiryDate' in data:
             if data['expiryDate']:
