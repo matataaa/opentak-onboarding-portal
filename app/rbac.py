@@ -44,6 +44,8 @@ ADMIN_ROLES = {
     'api_key_readonly': ('View API keys (read-only)', 'API Key Read-Only'),
     'group_admin': ('Manage OTS groups', 'Group Admin'),
     'group_readonly': ('View OTS groups (read-only)', 'Group Read-Only'),
+    'events_admin': ('Manage events, teams and access links', 'Events Admin'),
+    'events_readonly': ('View events (read-only)', 'Events Read-Only'),
 }
 
 # Map modules to required roles (administrator always has access)
@@ -60,6 +62,7 @@ MODULE_ROLES = {
     'api_keys': ['administrator', 'api_key_admin', 'api_key_readonly'],
     'api_docs': ['administrator', 'api_key_admin', 'api_key_readonly'],
     'groups': ['administrator', 'group_admin', 'group_readonly'],
+    'events': ['administrator', 'events_admin', 'events_readonly'],
 }
 
 
