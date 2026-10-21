@@ -1380,6 +1380,12 @@ class SystemSettingsModel(db.Model):
                 'category': 'registration',
                 'description': 'Allow administrators to manually approve pending registrations without email verification'
             },
+            {
+                'key': 'remove_expired_accounts_enabled',
+                'value': 'false',
+                'category': 'registration',
+                'description': 'Nightly at 01:00, delete accounts whose expiry date has passed from OpenTAK Server and the portal (administrators are never removed)'
+            },
             # General - Branding (enabled flag + value)
             {
                 'key': 'brand_name_enabled',

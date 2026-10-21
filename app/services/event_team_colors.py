@@ -131,10 +131,12 @@ def remove_event_colors_for_username(username, color, existing=None):
 
     Only values equal to the team colour / role this service writes are removed.
     Pass existing (from read_profiles) to avoid re-reading profiles per call.
+    Returns True only if every delete succeeded.
     """
     euds = otsClient.get_all_pages(otsClient.get_euds, username=username).get('response', {}).get('results', [])
     if existing is None:
         existing = read_profiles()
+    ok = True
     for eud in euds:
         uid = eud.get('uid')
         if not uid or eud.get('username') != username:
@@ -142,4 +144,6 @@ def remove_event_colors_for_username(username, color, existing=None):
         try:
             _delete_profiles(uid, existing, color)
         except Exception as e:
+            ok = False
             current_app.logger.error(f"Removing event colour for EUD {uid} ({username}) failed: {e}")
+    return ok
