@@ -595,4 +595,25 @@ export const magicLinkAPI = {
     axios.post(`${API_BASE_URL}/api/v1/auth/magic-link/verify`, { token }),
 };
 
+// Events module API
+export const eventsAPI = {
+  listTeams: () => api.get('/events/teams'),
+  createTeam: (data) => api.post('/events/teams', data),
+  updateTeam: (id, data) => api.put(`/events/teams/${id}`, data),
+  deleteTeam: (id) => api.delete(`/events/teams/${id}`),
+  createTeamLeader: (id, data) => api.post(`/events/teams/${id}/leader`, data),
+
+  listEvents: () => api.get('/events'),
+  createEvent: (data) => api.post('/events', data),
+  updateEvent: (id, data) => api.put(`/events/${id}`, data),
+  deleteEvent: (id) => api.delete(`/events/${id}`),
+
+  listLinks: (eventId) => api.get(`/events/${eventId}/links`),
+  createLink: (eventId, data) => api.post(`/events/${eventId}/links`, data),
+  revokeLink: (linkId) => api.post(`/events/links/${linkId}/revoke`),
+  deleteLink: (linkId) => api.delete(`/events/links/${linkId}`),
+
+  join: (token) => axios.post(`${API_BASE_URL}/api/v1/events/join/${token}`),
+};
+
 export default api;
