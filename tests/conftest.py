@@ -25,6 +25,20 @@ os.environ.update({
     'MAIL_USE_SSL': 'False',
 })
 
+from sqlalchemy import event as sa_event
+from sqlalchemy.engine import Engine
+
+
+@sa_event.listens_for(Engine, 'connect')
+def _sqlite_enforce_fks(dbapi_connection, connection_record):
+    """Enforce FKs on SQLite like PostgreSQL does (test-only)."""
+    import sqlite3
+    if isinstance(dbapi_connection, sqlite3.Connection):
+        cursor = dbapi_connection.cursor()
+        cursor.execute('PRAGMA foreign_keys=ON')
+        cursor.close()
+
+
 from app import create_app
 from app.models import db as _db
 

@@ -195,6 +195,16 @@ def update_event_team(team_id):
     return jsonify(_team_to_dict(team)), 200
 
 
+def _delete_closed_sessions(**filters):
+    """Bulk-delete closed sessions, logging those whose OTS cleanup was given up."""
+    base = EventSessionModel.query.filter_by(**filters).filter(EventSessionModel.closedAt.isnot(None))
+    for sess in base.filter_by(closeReason='expired (OTS cleanup failed)').all():
+        current_app.logger.warning(
+            'Deleting event session %s with failed OTS cleanup; check OTS account %s manually',
+            sess.id, sess.otsUsername)
+    base.delete(synchronize_session=False)
+
+
 @api_v1.route('/events/teams/<int:team_id>', methods=['DELETE'])
 @jwt_required()
 @require_role('events_admin')
@@ -202,6 +212,12 @@ def delete_event_team(team_id):
     team = EventTeamModel.query.get(team_id)
     if not team:
         return jsonify({'error': 'Team not found'}), 404
+    # Open sessions are the cleanup ledger for OTS accounts/profiles: keep them.
+    if EventSessionModel.query.filter_by(eventTeamId=team_id, closedAt=None).count():
+        return jsonify({'error': 'Team has open sessions; end the event(s) first (set the end time to now or earlier), wait for the session cleanup to run, then delete the team'}), 409
+    # FKs do not cascade: remove children explicitly, in one transaction.
+    _delete_closed_sessions(eventTeamId=team_id)
+    EventLinkModel.query.filter_by(eventTeamId=team_id).delete(synchronize_session=False)
     db.session.delete(team)
     db.session.commit()
     return jsonify({'message': 'Team deleted'}), 200
@@ -325,6 +341,12 @@ def update_event(event_id):
             event.validFrom = _parse_dt(data['validFrom'])
         if 'validUntil' in data:
             event.validUntil = _parse_dt(data['validUntil'])
+            # Keep open sessions in step with the new end time. When it is cleared
+            # (None) their expiresAt stays as is: the cleanup job never closes a
+            # session without expiresAt, which would orphan the OTS accounts.
+            if event.validUntil is not None:
+                EventSessionModel.query.filter_by(eventId=event.id, closedAt=None).update(
+                    {'expiresAt': event.validUntil}, synchronize_session=False)
         if 'playerAccessMode' in data:
             if data['playerAccessMode'] not in PLAYER_ACCESS_MODES:
                 return jsonify({'error': 'playerAccessMode must be one of %s' % (PLAYER_ACCESS_MODES,)}), 400
@@ -349,6 +371,12 @@ def delete_event(event_id):
     event = EventModel.query.get(event_id)
     if not event:
         return jsonify({'error': 'Event not found'}), 404
+    # Open sessions are the cleanup ledger for OTS accounts/profiles: keep them.
+    if EventSessionModel.query.filter_by(eventId=event_id, closedAt=None).count():
+        return jsonify({'error': 'Event has open sessions; end the event first (set its end time to now or earlier), wait for the session cleanup to run, then delete it'}), 409
+    # FKs do not cascade: remove children explicitly, in one transaction.
+    _delete_closed_sessions(eventId=event_id)
+    EventLinkModel.query.filter_by(eventId=event_id).delete(synchronize_session=False)
     db.session.delete(event)
     db.session.commit()
     return jsonify({'message': 'Event deleted'}), 200

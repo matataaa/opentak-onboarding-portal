@@ -111,8 +111,8 @@ def leader_team(db, monkeypatch):
     db.session.add(team)
     db.session.commit()
     yield team, fake
+    EventTeamModel.query.filter_by(id=team.id).delete()  # before the user it references
     UserModel.query.filter_by(username='abc').delete()
-    EventTeamModel.query.filter_by(id=team.id).delete()
     db.session.commit()
 
 
