@@ -133,7 +133,7 @@ export default function EventsAdmin() {
           </select>
           <select value={teamForm.otsGroupId} onChange={(e) => setTeamForm({ ...teamForm, otsGroupId: e.target.value })}>
             <option value="">{t('events.noGroup')}</option>
-            {groups.map((g) => <option key={g.id} value={g.id}>{g.displayName || g.name}</option>)}
+            {groups.filter((g) => !g.missingInOts).map((g) => <option key={g.id} value={g.id}>{g.displayName || g.name}</option>)}
           </select>
           <button onClick={createTeam} disabled={!teamForm.name}>{t('events.addTeam')}</button>
         </div>
@@ -144,7 +144,14 @@ export default function EventsAdmin() {
               <tr key={team.id}>
                 <td>{team.name}</td>
                 <td>{team.color || '-'}</td>
-                <td>{team.otsGroup?.name || '-'}</td>
+                <td>
+                  {team.otsGroup?.name || '-'}
+                  {team.otsGroup?.missingInOts && (
+                    <span className="badge badge-warning" style={{ marginLeft: '0.5rem' }} title={t('admin.groups.notFoundInOtsHint')}>
+                      {t('admin.groups.notFoundInOts')}
+                    </span>
+                  )}
+                </td>
                 <td>
                   {team.leaderUser ? team.leaderUser.username : (
                     <span className="events-leader-form">

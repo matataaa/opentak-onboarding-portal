@@ -1077,6 +1077,13 @@ paths:
                           type: string
                           format: date-time
                           nullable: true
+                        missingInOts:
+                          type: boolean
+                          description: True when the last sync did not find the group in OpenTAK Server
+                        missingSince:
+                          type: string
+                          format: date-time
+                          nullable: true
                         userCount:
                           type: integer
                         onboardingCodeCount:
@@ -1090,6 +1097,233 @@ paths:
                     nullable: true
         '403':
           description: Group admin or readonly role required
+
+  /groups/sync:
+    post:
+      tags:
+        - OTS Groups
+      summary: Sync groups from OTS (group admin) 🔒
+      description: >
+        Imports groups from OpenTAK Server. Groups that are no longer in OTS are flagged
+        (missingInOts), never deleted. The missing-group check only runs on a complete list;
+        otherwise nothing is flagged or cleared and missingCheckSkipped holds the reason.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  synced:
+                    type: integer
+                  created:
+                    type: integer
+                  updated:
+                    type: integer
+                  markedMissing:
+                    type: integer
+                  markedMissingGroups:
+                    type: array
+                    items:
+                      type: string
+                  restored:
+                    type: integer
+                  restoredGroups:
+                    type: array
+                    items:
+                      type: string
+                  missingTotal:
+                    type: integer
+                    description: Groups currently flagged as missing in OTS
+                  missingCheckSkipped:
+                    type: string
+                    nullable: true
+                    enum: [incomplete, empty, malformed, invalid]
+                    description: Why the missing-group check did not run (null when it ran)
+        '400':
+          description: Sync failed
+        '403':
+          description: Group admin role required
+        '503':
+          description: OTS not reachable
+
+  /groups/{id}/members:
+    post:
+      tags:
+        - OTS Groups
+      summary: Add or change a group member (group admin) 🔒
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: integer
+                username:
+                  type: string
+                direction:
+                  type: string
+                  enum: [IN, OUT, BOTH]
+      responses:
+        '200':
+          description: Member set
+        '400':
+          description: Invalid request or OTS failure
+        '403':
+          description: Group admin role required
+        '404':
+          description: Group or user not found
+        '409':
+          description: The group is flagged as missing in OTS
+
+  /groups/{id}:
+    get:
+      tags:
+        - OTS Groups
+      summary: Get an OTS group with its members and usage (admin) 🔒
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Group details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+                  displayName:
+                    type: string
+                  description:
+                    type: string
+                  active:
+                    type: boolean
+                  syncedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  missingInOts:
+                    type: boolean
+                  missingSince:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  users:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        username:
+                          type: string
+                        callsign:
+                          type: string
+                        email:
+                          type: string
+                  onboardingCodes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                  eventTeams:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+        '403':
+          description: Group admin or readonly role required
+        '404':
+          description: Group not found
+    delete:
+      tags:
+        - OTS Groups
+      summary: Remove an OTS group (group admin) 🔒
+      description: >
+        A group flagged as missing in OTS is only removed from the portal (force removal).
+        Otherwise it is deleted in OTS first (an OTS 404 counts as already gone); any other OTS
+        failure returns 502 and keeps the local group. User and onboarding-code assignments are
+        removed with the group and event teams are detached from it.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Group removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  removedFromOts:
+                    type: boolean
+                  affected:
+                    type: object
+                    properties:
+                      memberCount:
+                        type: integer
+                      onboardingCodes:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            name:
+                              type: string
+                      eventTeams:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            name:
+                              type: string
+        '403':
+          description: Group admin role required
+        '404':
+          description: Group not found
+        '502':
+          description: Deleting the group in OTS failed; the local group is kept
 
   /radios:
     get:

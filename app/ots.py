@@ -263,7 +263,7 @@ class OTSClient:
         return self.request_handler(method="POST", endpoint=self._user_deactivate, body=body)
 
 
-    def get_groups(self, page=None, per_page=None, name=None, active=None):
+    def get_groups(self, page=None, per_page=None, name=None, active=None, sort_by=None):
         """Get all groups from OTS"""
         params = {}
         if page is not None:
@@ -274,6 +274,8 @@ class OTSClient:
             params["name"] = name
         if active is not None:
             params["active"] = active
+        if sort_by is not None:
+            params["sort_by"] = sort_by
         return self.request_handler(method="GET", endpoint=self._groups, params=params)
 
     def create_group(self, name, description=None):

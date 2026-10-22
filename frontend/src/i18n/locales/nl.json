@@ -668,7 +668,22 @@
       "failedDelete": "Verwijderen van groep mislukt",
       "failedAddMember": "Toevoegen van lid mislukt",
       "failedRemoveMember": "Verwijderen van lid mislukt",
-      "failedSync": "Synchroniseren van groepen vanuit OTS mislukt"
+      "failedSync": "Synchroniseren van groepen vanuit OTS mislukt",
+      "notFoundInOts": "Niet gevonden in OTS",
+      "notFoundInOtsHint": "Deze groep is verwijderd in OpenTAK Server en wordt niet meer toegewezen. Maak de groep opnieuw aan of verwijder hem uit de portal.",
+      "removeFromPortal": "Verwijderen uit portal",
+      "removeConfirm": "Groep \"{{name}}\" uit de portal verwijderen? De groep bestaat niet meer in OpenTAK Server.",
+      "affectedMembers": "Gebruikers die deze groep kwijtraken: {{count}}",
+      "affectedCodes": "Onboardingcodes die deze groep kwijtraken: {{names}}",
+      "affectedTeams": "Eventteams die deze groep kwijtraken: {{names}}",
+      "syncResult": "{{synced}} groepen gesynchroniseerd vanuit OTS ({{created}} nieuw, {{updated}} bijgewerkt)",
+      "syncRestored": "{{count}} groep(en) weer gevonden in OTS: {{names}}",
+      "syncMissingWarning": "{{count}} groep(en) niet gevonden in OTS: {{names}}. Onboardingcodes en eventteams die ze gebruiken slaan ze over.",
+      "syncCheckSkipped": "Controle op verwijderde groepen overgeslagen: {{reason}}",
+      "skipReason_incomplete": "OTS gaf een onvolledige groepenlijst terug",
+      "skipReason_empty": "OTS gaf geen groepen terug",
+      "skipReason_malformed": "OTS gaf een onverwachte groepenlijst terug",
+      "skipReason_invalid": "OTS gaf een ongeldige groepenlijst terug"
     },
     "onboardingCodes": {
       "title": "Onboarding-codes beheer",
@@ -719,7 +734,8 @@
       "failedUpdate": "Bijwerken van code mislukt",
       "failedDelete": "Verwijderen van code mislukt",
       "failedLoad": "Laden van code mislukt",
-      "unlimited": "Onbeperkt"
+      "unlimited": "Onbeperkt",
+      "missingGroupsWarning": "Deze code gebruikt groepen die niet gevonden zijn in OTS ({{names}}). Ze worden bij registratie niet toegewezen."
     },
     "pendingRegistrations": {
       "title": "Openstaande registraties",
