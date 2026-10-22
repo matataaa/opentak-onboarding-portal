@@ -45,6 +45,8 @@ tags:
     description: ATAK package management
   - name: Settings
     description: System settings management (admin only)
+  - name: Announcements
+    description: Announcement management (admin or announcement_admin / announcement_readonly)
 
 components:
   securitySchemes:
@@ -213,6 +215,186 @@ components:
         description:
           type: string
           description: Human-readable description of what this setting does
+
+    AnnouncementEmailStatus:
+      type: object
+      description: |
+        Email delivery state. `status` of the announcement itself only says whether it is
+        published in-app; mail is delivered separately by a background job with retries.
+      properties:
+        emailStatus:
+          type: string
+          nullable: true
+          enum: [pending, sent, failed, skipped]
+          description: null when sendEmail is false
+        emailAttempts:
+          type: integer
+          description: Number of failed delivery runs so far (terminal "failed" after 6)
+        emailLastError:
+          type: string
+          nullable: true
+          description: Hidden (null) for the announcement_readonly role
+        emailNextAttemptAt:
+          type: string
+          format: date-time
+          nullable: true
+        emailPendingCount:
+          type: integer
+          description: Recipients still owed a mail
+        emailFailureCount:
+          type: integer
+          description: Recipients dropped because their address was refused
+
+    AnnouncementEmailRecipient:
+      type: object
+      properties:
+        userId:
+          type: integer
+        username:
+          type: string
+          nullable: true
+          description: null when the user no longer exists
+        email:
+          type: string
+          nullable: true
+          description: Hidden (null) for the announcement_readonly role
+        error:
+          type: string
+          nullable: true
+          description: Only for dropped (refused) recipients; hidden (null) for the announcement_readonly role
+
+    AnnouncementSummary:
+      allOf:
+        - $ref: '#/components/schemas/AnnouncementEmailStatus'
+        - type: object
+          properties:
+            id:
+              type: integer
+            title:
+              type: string
+            content:
+              type: string
+            targetType:
+              type: string
+              enum: [all, roles, users]
+            status:
+              type: string
+              enum: [draft, scheduled, sent]
+            sendEmail:
+              type: boolean
+            scheduledAt:
+              type: string
+              format: date-time
+              nullable: true
+            sentAt:
+              type: string
+              format: date-time
+              nullable: true
+            createdAt:
+              type: string
+              format: date-time
+            readCount:
+              type: integer
+            totalTargeted:
+              type: integer
+
+    AnnouncementDetail:
+      allOf:
+        - $ref: '#/components/schemas/AnnouncementEmailStatus'
+        - type: object
+          properties:
+            id:
+              type: integer
+            title:
+              type: string
+            content:
+              type: string
+            targetType:
+              type: string
+              enum: [all, roles, users]
+            status:
+              type: string
+              enum: [draft, scheduled, sent]
+            sendEmail:
+              type: boolean
+            scheduledAt:
+              type: string
+              format: date-time
+              nullable: true
+            sentAt:
+              type: string
+              format: date-time
+              nullable: true
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+            createdBy:
+              type: object
+              nullable: true
+              properties:
+                id:
+                  type: integer
+                username:
+                  type: string
+            targetRoles:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+                  displayName:
+                    type: string
+            targetUsers:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  username:
+                    type: string
+            stats:
+              type: object
+              properties:
+                totalReads:
+                  type: integer
+                emailOpens:
+                  type: integer
+                totalTargeted:
+                  type: integer
+            reads:
+              type: array
+              items:
+                type: object
+                properties:
+                  userId:
+                    type: integer
+                  username:
+                    type: string
+                  readAt:
+                    type: string
+                    format: date-time
+                  emailOpened:
+                    type: boolean
+                  emailOpenedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+            emailPending:
+              type: array
+              items:
+                $ref: '#/components/schemas/AnnouncementEmailRecipient'
+            emailFailures:
+              type: array
+              description: Recipients dropped because their address was refused
+              items:
+                $ref: '#/components/schemas/AnnouncementEmailRecipient'
 
 paths:
   /auth/login:
@@ -1278,6 +1460,67 @@ paths:
                 $ref: '#/components/schemas/Error'
         '500':
           description: Failed to update setting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/announcements:
+    get:
+      tags:
+        - Announcements
+      summary: List all announcements
+      description: Requires administrator, announcement_admin or announcement_readonly. Includes email delivery state.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Announcements
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  announcements:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AnnouncementSummary'
+        '403':
+          description: Announcement admin or readonly access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/announcements/{announcement_id}:
+    get:
+      tags:
+        - Announcements
+      summary: Get announcement details
+      description: Requires administrator, announcement_admin or announcement_readonly. Includes email delivery state with pending and dropped recipients resolved to users.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: announcement_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Announcement detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnouncementDetail'
+        '403':
+          description: Announcement admin or readonly access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Announcement not found
           content:
             application/json:
               schema:

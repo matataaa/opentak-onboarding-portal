@@ -1073,7 +1073,21 @@
       "email": "E-mail",
       "nUsers": "{{count}} Gebruikers",
       "sentSuccess": "Aankondiging succesvol verzonden",
-      "sent": "Verzonden"
+      "sent": "Verzonden",
+      "emailPending": "E-mail in wachtrij",
+      "emailRetrying": "Mislukte pogingen {{count}}/6",
+      "emailSent": "E-mails verzonden",
+      "emailFailed": "E-mail mislukt",
+      "emailSkipped": "E-mail uitgeschakeld",
+      "emailInfo": "E-mailinfo",
+      "emailDeliveryTitle": "E-mailbezorging",
+      "emailAttempts": "Mislukte pogingen",
+      "emailNextAttempt": "Volgende poging",
+      "emailLastError": "Laatste fout",
+      "emailPendingRecipients": "Ontvangers die nog wachten",
+      "emailFailedRecipients": "Overgeslagen ontvangers (adres geweigerd)",
+      "emailNoRecipients": "Geen",
+      "emailUnknownUser": "(verwijderde gebruiker)"
     },
     "apiKeys": {
       "title": "API-sleutels",

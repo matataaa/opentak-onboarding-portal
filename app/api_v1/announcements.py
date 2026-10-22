@@ -6,9 +6,9 @@ CRUD operations for announcement management
 from flask import request, jsonify, current_app, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.api_v1 import api_v1
-from app.notifications import get_frontend_url_safe
 from app.models import AnnouncementModel, AnnouncementReadModel, UserModel, UserRoleModel, db
 from datetime import datetime
+import json
 
 
 def require_admin_role():
@@ -25,6 +25,12 @@ def require_view_role():
     if not has_any_role(['administrator', 'announcement_admin', 'announcement_readonly']):
         return jsonify({'error': 'Announcement admin or readonly access required'}), 403
     return None
+
+
+def _can_see_email_details():
+    """Recipient email addresses and raw delivery errors are hidden from the read-only role"""
+    from app.rbac import has_any_role
+    return has_any_role(['administrator', 'announcement_admin'])
 
 
 def _get_total_targeted(announcement):
@@ -60,35 +66,97 @@ def _get_targeted_users(announcement):
     return []
 
 
-def _send_announcement_emails(announcement):
-    """Send emails for an announcement"""
+def _queue_announcement_emails(announcement):
+    """Queue email delivery for a published announcement (sent by the scheduled job).
+
+    Snapshots the targeted users that have an email address. Does not commit.
+    """
     if not announcement.send_email:
         return
+    announcement.email_status = 'pending'
+    announcement.email_attempts = 0
+    announcement.email_next_attempt_at = datetime.now()
+    announcement.email_last_error = None
+    announcement.email_failures = None
+    announcement.email_pending_user_ids = json.dumps(
+        [u.id for u in _get_targeted_users(announcement) if u.email]
+    )
 
+
+def _send_announcement_email_to_user(announcement, user, frontend_url):
+    """Send the announcement mail to one user. Raises on delivery failure."""
     from app.email import send_html_email
 
-    frontend_url = get_frontend_url_safe()
-    users = _get_targeted_users(announcement)
+    # Add tracking pixel to content
+    tracking_url = f"{frontend_url}/api/v1/announcements/{announcement.id}/pixel/{user.id}.gif"
+    content_with_tracking = f'{announcement.content}<img src="{tracking_url}" width="1" height="1" style="display:none;" />'
 
-    for user in users:
-        if not user.email:
-            continue
+    send_html_email(
+        subject=announcement.title,
+        recipients=[user.email],
+        message=content_with_tracking,
+        title=announcement.title,
+        link_url=f"{frontend_url}/dashboard",
+        link_title="View in Portal",
+        raise_errors=True
+    )
 
-        # Add tracking pixel to content
-        tracking_url = f"{frontend_url}/api/v1/announcements/{announcement.id}/pixel/{user.id}.gif"
-        content_with_tracking = f'{announcement.content}<img src="{tracking_url}" width="1" height="1" style="display:none;" />'
 
-        try:
-            send_html_email(
-                subject=announcement.title,
-                recipients=[user.email],
-                message=content_with_tracking,
-                title=announcement.title,
-                link_url=f"{frontend_url}/dashboard",
-                link_title="View in Portal"
-            )
-        except Exception as e:
-            current_app.logger.error(f"Failed to send announcement email to {user.email}: {e}")
+def _load_id_list(raw):
+    try:
+        value = json.loads(raw) if raw else []
+    except ValueError:
+        return []
+    return value if isinstance(value, list) else []
+
+
+def _load_failures(raw):
+    return [f for f in _load_id_list(raw) if isinstance(f, dict) and 'userId' in f]
+
+
+def _email_status_fields(a, can_see_details=False):
+    """camelCase email delivery fields shared by the admin serializers.
+
+    Raw error text is only included for users who may see recipient details.
+    """
+    return {
+        'emailStatus': a.email_status,
+        'emailAttempts': a.email_attempts or 0,
+        'emailLastError': a.email_last_error if can_see_details else None,
+        'emailNextAttemptAt': a.email_next_attempt_at.isoformat() if a.email_next_attempt_at else None,
+        'emailPendingCount': len(_load_id_list(a.email_pending_user_ids)),
+        'emailFailureCount': len(_load_failures(a.email_failures))
+    }
+
+
+def _email_detail_fields(a, can_see_details=False):
+    """Pending recipients and dropped recipients resolved to users (tolerates deleted users).
+
+    Email addresses and raw errors are only included when can_see_details.
+    """
+    pending_ids = _load_id_list(a.email_pending_user_ids)
+    failures = _load_failures(a.email_failures)
+    ids = set(pending_ids) | {f['userId'] for f in failures}
+    users = {u.id: u for u in UserModel.query.filter(UserModel.id.in_(ids)).all()} if ids else {}
+
+    def resolve(user_id):
+        user = users.get(user_id)
+        return {
+            'userId': user_id,
+            'username': user.username if user else None,
+            'email': user.email if user and can_see_details else None
+        }
+
+    failure_list = []
+    for f in failures:
+        entry = resolve(f['userId'])
+        entry['error'] = f.get('error') if can_see_details else None
+        failure_list.append(entry)
+
+    return {
+        'emailPending': [resolve(i) for i in pending_ids],
+        'emailFailures': failure_list
+    }
 
 
 # ==================== ADMIN ENDPOINTS ====================
@@ -102,6 +170,7 @@ def get_all_announcements():
         return error
 
     announcements = AnnouncementModel.get_all()
+    can_see = _can_see_email_details()
 
     return jsonify({
         'announcements': [{
@@ -121,7 +190,8 @@ def get_all_announcements():
             'targetRoles': [{'id': r.id, 'name': r.name, 'displayName': r.display_name} for r in a.target_roles],
             'targetUsers': [{'id': u.id, 'username': u.username} for u in a.target_users],
             'readCount': len(a.reads),
-            'totalTargeted': _get_total_targeted(a)
+            'totalTargeted': _get_total_targeted(a),
+            **_email_status_fields(a, can_see)
         } for a in announcements]
     }), 200
 
@@ -139,6 +209,7 @@ def get_announcement_admin(announcement_id):
         return jsonify({'error': 'Announcement not found'}), 404
 
     stats = AnnouncementReadModel.get_read_stats(announcement_id)
+    can_see = _can_see_email_details()
 
     return jsonify({
         'id': announcement.id,
@@ -168,7 +239,9 @@ def get_announcement_admin(announcement_id):
             'readAt': r.read_at.isoformat(),
             'emailOpened': r.email_opened,
             'emailOpenedAt': r.email_opened_at.isoformat() if r.email_opened_at else None
-        } for r in announcement.reads]
+        } for r in announcement.reads],
+        **_email_status_fields(announcement, can_see),
+        **_email_detail_fields(announcement, can_see)
     }), 200
 
 
@@ -237,13 +310,12 @@ def create_announcement():
                 if user:
                     announcement.target_users.append(user)
 
-        db.session.commit()
-
-        # If send immediately, trigger sending
+        # If send immediately, publish now; emails are sent by the scheduled job
         if data.get('sendImmediately'):
             announcement.sent_at = datetime.now()
-            db.session.commit()
-            _send_announcement_emails(announcement)
+            _queue_announcement_emails(announcement)
+
+        db.session.commit()
 
         return jsonify({
             'message': 'Announcement created successfully',
@@ -358,9 +430,8 @@ def send_announcement_now(announcement_id):
     try:
         announcement.status = 'sent'
         announcement.sent_at = datetime.now()
+        _queue_announcement_emails(announcement)
         db.session.commit()
-
-        _send_announcement_emails(announcement)
 
         return jsonify({'message': 'Announcement sent successfully'}), 200
 

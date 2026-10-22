@@ -39,6 +39,7 @@ function AnnouncementsList() {
   const [showModal, setShowModal] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [showEmailInfoModal, setShowEmailInfoModal] = useState(false);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [editing, setEditing] = useState(null);
   const [formData, setFormData] = useState({
@@ -174,6 +175,16 @@ function AnnouncementsList() {
     }
   };
 
+  const handleEmailInfo = async (announcement) => {
+    try {
+      const response = await announcementsAPI.admin.getById(announcement.id);
+      setSelectedAnnouncement(response.data);
+      setShowEmailInfoModal(true);
+    } catch {
+      showError(t('admin.announcements.failedLoadDetails'));
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
@@ -203,6 +214,26 @@ function AnnouncementsList() {
       sent: 'badge-success'
     };
     return badges[status] || 'badge-primary';
+  };
+
+  const hasEmailInfo = (a) =>
+    a.emailStatus === 'failed' ||
+    a.emailFailureCount > 0 ||
+    (a.emailStatus === 'pending' && a.emailAttempts > 0) ||
+    a.emailPendingCount > 0;
+
+  const renderEmailBadge = (a) => {
+    if (!a.sendEmail || !a.emailStatus) return null;
+    const badges = {
+      pending: ['badge-warning', a.emailAttempts > 0
+        ? t('admin.announcements.emailRetrying', { count: a.emailAttempts })
+        : t('admin.announcements.emailPending')],
+      sent: ['badge-success', t('admin.announcements.emailSent')],
+      failed: ['badge-danger', t('admin.announcements.emailFailed')],
+      skipped: ['badge-secondary', t('admin.announcements.emailSkipped')]
+    };
+    const [cls, label] = badges[a.emailStatus] || ['badge-primary', a.emailStatus];
+    return <span className={`badge ${cls}`} style={{ fontSize: '0.75rem' }}>{label}</span>;
   };
 
   if (isLoading) return <div className="admin-page"><div className="loading-state">{t('common.loading')}</div></div>;
@@ -242,7 +273,17 @@ function AnnouncementsList() {
               {announcements.map(a => (
                 <tr key={a.id}>
                   <td><strong>{a.title}</strong></td>
-                  <td><span className={`badge ${getStatusBadge(a.status)}`}>{a.status}</span></td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span className={`badge ${getStatusBadge(a.status)}`}>{a.status}</span>
+                      {renderEmailBadge(a)}
+                      {hasEmailInfo(a) && (
+                        <button className="btn btn-sm btn-secondary" onClick={() => handleEmailInfo(a)}>
+                          {t('admin.announcements.emailInfo')}
+                        </button>
+                      )}
+                    </div>
+                  </td>
                   <td>
                     {a.targetType === 'all' && t('admin.announcements.allUsers')}
                     {a.targetType === 'roles' && (
@@ -510,7 +551,7 @@ function AnnouncementsList() {
             <div className="modal-body">
               <div style={{ marginBottom: '1rem', padding: '0.75rem', background: '#f8f9fa', borderRadius: '4px', fontSize: '0.9rem' }}>
                 <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-                  <span><strong>{t('common.status')}:</strong> <span className={`badge ${getStatusBadge(selectedAnnouncement.status)}`}>{selectedAnnouncement.status}</span></span>
+                  <span><strong>{t('common.status')}:</strong> <span className={`badge ${getStatusBadge(selectedAnnouncement.status)}`}>{selectedAnnouncement.status}</span> {renderEmailBadge(selectedAnnouncement)}</span>
                   <span><strong>{t('admin.announcements.target')}:</strong> {selectedAnnouncement.targetType === 'all' ? t('admin.announcements.allUsers') : selectedAnnouncement.targetType === 'roles' ? t('admin.announcements.specificRoles') : t('admin.announcements.specificUsers')}</span>
                   <span><strong>{t('admin.announcements.email')}:</strong> {selectedAnnouncement.sendEmail ? t('common.yes') : t('common.no')}</span>
                 </div>
@@ -550,6 +591,46 @@ function AnnouncementsList() {
                 </button>
               )}
               <button className="btn btn-primary" onClick={() => setShowPreviewModal(false)}>{t('common.close')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Email Delivery Info Modal */}
+      {showEmailInfoModal && selectedAnnouncement && (
+        <div className="modal-overlay">
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <h2>{t('admin.announcements.emailDeliveryTitle')}</h2>
+              <button className="modal-close" onClick={() => setShowEmailInfoModal(false)}>x</button>
+            </div>
+            <div className="modal-body">
+              <p><strong>{selectedAnnouncement.title}</strong> {renderEmailBadge(selectedAnnouncement)}</p>
+              <p><strong>{t('admin.announcements.emailAttempts')}:</strong> {selectedAnnouncement.emailAttempts}</p>
+              {selectedAnnouncement.emailNextAttemptAt && selectedAnnouncement.emailStatus === 'pending' && (
+                <p><strong>{t('admin.announcements.emailNextAttempt')}:</strong> {new Date(selectedAnnouncement.emailNextAttemptAt).toLocaleString()}</p>
+              )}
+              {selectedAnnouncement.emailLastError && (
+                <p><strong>{t('admin.announcements.emailLastError')}:</strong> {selectedAnnouncement.emailLastError}</p>
+              )}
+              <h4>{t('admin.announcements.emailPendingRecipients')}</h4>
+              {selectedAnnouncement.emailPending?.length ? (
+                <ul>
+                  {selectedAnnouncement.emailPending.map(r => (
+                    <li key={r.userId}>{r.username || t('admin.announcements.emailUnknownUser')}{r.email ? ` (${r.email})` : ''}</li>
+                  ))}
+                </ul>
+              ) : <p>{t('admin.announcements.emailNoRecipients')}</p>}
+              <h4>{t('admin.announcements.emailFailedRecipients')}</h4>
+              {selectedAnnouncement.emailFailures?.length ? (
+                <ul>
+                  {selectedAnnouncement.emailFailures.map(r => (
+                    <li key={r.userId}>{r.username || t('admin.announcements.emailUnknownUser')}{r.email ? ` (${r.email})` : ''}: {r.error}</li>
+                  ))}
+                </ul>
+              ) : <p>{t('admin.announcements.emailNoRecipients')}</p>}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-primary" onClick={() => setShowEmailInfoModal(false)}>{t('common.close')}</button>
             </div>
           </div>
         </div>
