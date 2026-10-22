@@ -1073,7 +1073,21 @@
       "email": "E-Mail",
       "nUsers": "{{count}} Benutzer",
       "sentSuccess": "Ankündigung erfolgreich gesendet",
-      "sent": "Gesendet"
+      "sent": "Gesendet",
+      "emailPending": "E-Mail in Warteschlange",
+      "emailRetrying": "Fehlgeschlagene Versuche {{count}}/6",
+      "emailSent": "E-Mails gesendet",
+      "emailFailed": "E-Mail fehlgeschlagen",
+      "emailSkipped": "E-Mail deaktiviert",
+      "emailInfo": "E-Mail-Info",
+      "emailDeliveryTitle": "E-Mail-Zustellung",
+      "emailAttempts": "Fehlgeschlagene Versuche",
+      "emailNextAttempt": "Nächster Versuch",
+      "emailLastError": "Letzter Fehler",
+      "emailPendingRecipients": "Noch ausstehende Empfänger",
+      "emailFailedRecipients": "Übersprungene Empfänger (Adresse abgelehnt)",
+      "emailNoRecipients": "Keine",
+      "emailUnknownUser": "(gelöschter Benutzer)"
     },
     "apiKeys": {
       "title": "API-Schlüssel",

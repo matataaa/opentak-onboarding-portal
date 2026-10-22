@@ -1721,6 +1721,17 @@ class AnnouncementModel(db.Model):
     # Email options
     send_email: Mapped[bool] = mapped_column(default=False, nullable=False)
 
+    # Email delivery tracking (NULL status when send_email is false).
+    # email_status values, validated in code only: pending | sent | failed | skipped
+    email_status = Column(String, nullable=True)
+    email_attempts = Column(Integer, nullable=False, default=0, server_default='0')
+    email_next_attempt_at = Column(DateTime, nullable=True)
+    email_last_error = Column(Text, nullable=True)
+    # JSON list of user ids still owed a mail
+    email_pending_user_ids = Column(Text, nullable=True)
+    # JSON list of {userId, error} for recipients dropped because their address was refused
+    email_failures = Column(Text, nullable=True)
+
     # Metadata
     created_by: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(default=db.func.current_timestamp(), nullable=False)
@@ -1758,6 +1769,15 @@ class AnnouncementModel(db.Model):
         return AnnouncementModel.query.filter(
             AnnouncementModel.status == 'scheduled',
             AnnouncementModel.scheduled_at <= now
+        ).all()
+
+    @staticmethod
+    def get_email_due():
+        """Get announcements whose email delivery is pending and due for (re)try"""
+        now = datetime.datetime.now()
+        return AnnouncementModel.query.filter(
+            AnnouncementModel.email_status == 'pending',
+            AnnouncementModel.email_next_attempt_at <= now
         ).all()
 
     @staticmethod

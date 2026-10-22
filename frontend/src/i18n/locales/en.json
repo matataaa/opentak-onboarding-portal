@@ -1074,7 +1074,21 @@
       "email": "Email",
       "nUsers": "{{count}} Users",
       "sentSuccess": "Announcement sent successfully",
-      "sent": "Sent"
+      "sent": "Sent",
+      "emailPending": "Email queued",
+      "emailRetrying": "Failed attempts {{count}}/6",
+      "emailSent": "Emails sent",
+      "emailFailed": "Email failed",
+      "emailSkipped": "Email disabled",
+      "emailInfo": "Email info",
+      "emailDeliveryTitle": "Email delivery",
+      "emailAttempts": "Failed attempts",
+      "emailNextAttempt": "Next attempt",
+      "emailLastError": "Last error",
+      "emailPendingRecipients": "Recipients still pending",
+      "emailFailedRecipients": "Recipients dropped (address refused)",
+      "emailNoRecipients": "None",
+      "emailUnknownUser": "(deleted user)"
     },
     "apiKeys": {
       "title": "API Keys",

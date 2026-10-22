@@ -3,9 +3,12 @@ from app.models import UserModel, AnnouncementModel, OneTimeTokenModel, EventSes
 from datetime import datetime, timedelta
 from flask import current_app
 from app.ots import otsClient
+from app.settings import MAIL_ENABLED
 from app.services.event_team_colors import sync_event_team_colors, remove_event_colors_for_username, read_profiles
+import json
 import os
 import shutil
+import smtplib
 import time
 
 # Give up on OTS cleanup of an expired event session after this long
@@ -45,29 +48,108 @@ def remove_expired_accounts():
     return
 
 
+# Minutes to wait after the 1st, 2nd, ... failed email run; the 6th failed run is terminal
+EMAIL_RETRY_MINUTES = [1, 5, 15, 60, 240]
+EMAIL_MAX_ATTEMPTS = len(EMAIL_RETRY_MINUTES) + 1
+
+
+def _is_recipient_error(e):
+    """True when a send error concerns only this recipient (drop it, go on) rather than the run"""
+    if isinstance(e, smtplib.SMTPSenderRefused):
+        return False
+    if isinstance(e, (smtplib.SMTPRecipientsRefused, smtplib.SMTPNotSupportedError, ValueError)):
+        return True
+    return isinstance(e, smtplib.SMTPResponseException) and 500 <= e.smtp_code < 600
+
+
+def _send_announcement_email_run(announcement):
+    """One delivery run for an announcement; sends only to the still-pending recipients.
+
+    Progress is committed after every recipient so a mail is never repeated.
+    """
+    from app.api_v1.announcements import _send_announcement_email_to_user, _load_id_list
+    from app.notifications import get_frontend_url_safe
+
+    frontend_url = get_frontend_url_safe()
+    # Lease: push the next attempt out before sending anything, so a crash or a failing
+    # progress commit mid-run cannot make the next run re-mail recipients.
+    attempts = announcement.email_attempts or 0
+    announcement.email_next_attempt_at = datetime.now() + timedelta(
+        minutes=EMAIL_RETRY_MINUTES[min(attempts, len(EMAIL_RETRY_MINUTES) - 1)])
+    db.session.commit()
+
+    pending = _load_id_list(announcement.email_pending_user_ids)
+    failures = _load_id_list(announcement.email_failures)
+
+    for user_id in list(pending):
+        user = UserModel.get_user_by_id(user_id)
+        if user is not None and user.email:
+            try:
+                _send_announcement_email_to_user(announcement, user, frontend_url)
+            except Exception as e:
+                if not _is_recipient_error(e):
+                    raise
+                failures.append({'userId': user_id, 'error': str(e)[:500]})
+                announcement.email_failures = json.dumps(failures)
+        # sent, refused, deleted or without an address: no longer pending
+        pending.remove(user_id)
+        announcement.email_pending_user_ids = json.dumps(pending)
+        db.session.commit()
+
+    announcement.email_status = 'sent'
+    announcement.email_last_error = None
+    announcement.email_next_attempt_at = None
+    db.session.commit()
+
+
 @scheduler.task(id="send_scheduled_announcements", trigger="interval", minutes=1, misfire_grace_time=60, max_instances=1)
 def send_scheduled_announcements():
-    """Check for and send scheduled announcements"""
-    print('Checking for scheduled announcements...')
+    """Publish due scheduled announcements, then deliver pending announcement emails"""
+    from app.api_v1.announcements import _queue_announcement_emails
     with scheduler.app.app_context():
-        due_announcements = AnnouncementModel.get_scheduled_due()
-
-        for announcement in due_announcements:
-            print(f"Sending scheduled announcement: {announcement.title}")
+        # Phase A: publish
+        for announcement in AnnouncementModel.get_scheduled_due():
+            announcement_id = announcement.id
             try:
+                print(f"Publishing scheduled announcement: {announcement.title}")
                 announcement.status = 'sent'
                 announcement.sent_at = datetime.now()
+                _queue_announcement_emails(announcement)
                 db.session.commit()
-
-                # Send emails if enabled
-                if announcement.send_email:
-                    from app.api_v1.announcements import _send_announcement_emails
-                    _send_announcement_emails(announcement)
-
-                print(f"Successfully sent announcement: {announcement.title}")
             except Exception as e:
-                print(f"Failed to send announcement {announcement.id}: {e}")
                 db.session.rollback()
+                print(f"Failed to publish announcement {announcement_id}: {e}")
+
+        # Phase B: email delivery
+        for announcement in AnnouncementModel.get_email_due():
+            announcement_id = announcement.id
+            try:
+                if not MAIL_ENABLED:
+                    announcement.email_status = 'skipped'
+                    announcement.email_pending_user_ids = json.dumps([])
+                    announcement.email_next_attempt_at = None
+                    db.session.commit()
+                    print(f"Announcement {announcement_id}: email disabled, skipping delivery")
+                    continue
+                print(f"Sending emails for announcement: {announcement.title}")
+                _send_announcement_email_run(announcement)
+            except Exception as e:
+                db.session.rollback()
+                try:
+                    announcement = AnnouncementModel.get_by_id(announcement_id)
+                    attempts = (announcement.email_attempts or 0) + 1
+                    announcement.email_attempts = attempts
+                    announcement.email_last_error = str(e)[:500]
+                    if attempts >= EMAIL_MAX_ATTEMPTS:
+                        announcement.email_status = 'failed'
+                        announcement.email_next_attempt_at = None
+                    else:
+                        announcement.email_next_attempt_at = datetime.now() + timedelta(minutes=EMAIL_RETRY_MINUTES[attempts - 1])
+                    db.session.commit()
+                    print(f"Announcement {announcement_id}: email run failed (attempt {attempts}): {e}")
+                except Exception as inner:
+                    db.session.rollback()
+                    print(f"Could not record email failure for announcement {announcement_id}: {inner}")
     return
 
 
