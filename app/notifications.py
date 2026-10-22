@@ -14,7 +14,7 @@ def get_frontend_url_safe():
     Get frontend URL, auto-detecting from request if available.
     Safe to call outside of request context.
     """
-    frontend_url = get_frontend_url_safe()
+    frontend_url = current_app.config.get('FRONTEND_URL', 'http://localhost:5000')
 
     # If explicitly set to a non-localhost value, use it
     if not (frontend_url.startswith('http://localhost') or frontend_url.startswith('http://127.0.0.1')):
