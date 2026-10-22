@@ -37,6 +37,9 @@ ARG GIT_DATE=unknown
 
 WORKDIR /app
 
+# Unbuffered output so scheduled job log lines show up in `docker logs` immediately
+ENV PYTHONUNBUFFERED=1
+
 # Copy Python requirements and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \

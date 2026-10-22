@@ -7,6 +7,7 @@ User=takportal
 Group=takportal
 Environment="VIRTUAL_ENV=/opt/takportal/venv"
 Environment="PATH=/opt/takportal/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
 ExecStart=/opt/takportal/venv/bin/gunicorn app:app \
 		      -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker \
                       --name takportal --workers 1 \

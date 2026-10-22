@@ -109,6 +109,7 @@ User=opentak-portal
 Group=opentak-portal
 WorkingDirectory=/opt/opentak-onboarding-portal
 Environment="PATH=/opt/opentak-onboarding-portal/venv/bin"
+Environment="PYTHONUNBUFFERED=1"
 ExecStart=/opt/opentak-onboarding-portal/venv/bin/gunicorn -w 1 -t 60 app:app -b 0.0.0.0:5000
 Restart=always
 RestartSec=5
