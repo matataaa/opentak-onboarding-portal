@@ -24,7 +24,7 @@ from app.rbac import require_role
 # until the event ends.
 LEADER_ACCESS_MAX_SECONDS = 12 * 3600
 
-OTS_USERNAME_RE = re.compile(r'^[a-z0-9_.]+$')
+OTS_USERNAME_RE = re.compile(r'^[a-z0-9]{3,32}$')
 LINK_ROLES = ('leader', 'player')
 
 
@@ -226,7 +226,7 @@ def create_event_team_leader(team_id):
     if len(password) < 8:
         return jsonify({'error': 'Password must be at least 8 characters'}), 400
     if not OTS_USERNAME_RE.match(username):
-        return jsonify({'error': 'Username can contain only letters, numbers, underscores and periods'}), 400
+        return jsonify({'error': 'Username must be 3-32 characters, letters and numbers only'}), 400
     if UserModel.get_user_by_username(username):
         return jsonify({'error': 'A user with this username already exists'}), 409
 
@@ -501,6 +501,7 @@ def _ensure_shared_player_account(event, team):
     if session and session.otsUsername:
         return session.otsUsername, False
 
+    # Deliberately outside the portal username namespace: never a local UserModel.
     username = 'evt%s_t%s' % (event.id, team.id)
     password = secrets.token_urlsafe(18)
     otsClient.create_user(username, password, roles=['user'])

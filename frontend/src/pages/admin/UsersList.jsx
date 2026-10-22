@@ -184,18 +184,23 @@ function UsersList() {
     e.preventDefault();
     setError('');
 
-    // Validate username format (only letters and numbers, no spaces, underscores, dashes, or special chars)
     const username = formData.username.toLowerCase().trim();
-    const usernamePattern = /^[a-z0-9]+$/;
-    if (!usernamePattern.test(username)) {
-      setError(t('auth.usernameOnlyLetters'));
-      return;
-    }
 
-    // Validate username length
-    if (username.length < 3 || username.length > 32) {
-      setError(t('auth.usernameLength'));
-      return;
+    // Only validate the username when creating; on edit the field is disabled
+    // and legacy names (e.g. created in OTS) must not block saving.
+    if (!editingUser) {
+      // Validate username format (only letters and numbers, no spaces, underscores, dashes, or special chars)
+      const usernamePattern = /^[a-z0-9]+$/;
+      if (!usernamePattern.test(username)) {
+        setError(t('auth.usernameOnlyLetters'));
+        return;
+      }
+
+      // Validate username length
+      if (username.length < 3 || username.length > 32) {
+        setError(t('auth.usernameLength'));
+        return;
+      }
     }
 
     // Validate password if provided

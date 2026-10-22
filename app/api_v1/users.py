@@ -10,6 +10,9 @@ from app.models import UserModel, UserRoleModel, OTSGroupModel, GroupUserAssocia
 from app.ots import OTSClient
 from app.settings import OTS_URL, OTS_USERNAME, OTS_PASSWORD, OTS_VERIFY_SSL
 from datetime import datetime
+import re
+
+
 def require_admin_role():
     """Check for user_admin or administrator role (write access)"""
     from app.rbac import has_any_role
@@ -185,8 +188,17 @@ def create_user():
         if not data.get(field):
             return jsonify({'error': f'{field} is required'}), 400
 
+    # Normalize and validate the username (same rules as self-registration)
+    if not isinstance(data['username'], str):
+        return jsonify({'error': 'Username must be a string'}), 400
+    username = data['username'].lower().strip()
+    if not re.match(r'^[a-z0-9]+$', username):
+        return jsonify({'error': 'Username can only contain letters and numbers (no spaces, underscores, or periods)'}), 400
+    if len(username) < 3 or len(username) > 32:
+        return jsonify({'error': 'Username must be between 3 and 32 characters'}), 400
+
     # Check if user already exists
-    existing_user = UserModel.get_user_by_username(data['username'])
+    existing_user = UserModel.get_user_by_username(username)
     if existing_user:
         return jsonify({'error': 'Username already exists'}), 409
 
@@ -203,7 +215,7 @@ def create_user():
                 ots_roles = ['administrator']
 
         # Create user in OTS with username, password, and roles
-        ots.create_user(data['username'], data['password'], ots_roles)
+        ots.create_user(username, data['password'], ots_roles)
 
         # Create user in local database
         expiry_date = None
@@ -211,7 +223,7 @@ def create_user():
             expiry_date = datetime.fromisoformat(data['expiryDate'].replace('Z', '+00:00'))
 
         user = UserModel.create_user(
-            username=data['username'],
+            username=username,
             email=data['email'],
             firstname=data['firstName'],
             lastname=data['lastName'],
@@ -236,9 +248,9 @@ def create_user():
                     directions = ['IN', 'OUT'] if assoc.direction == 'BOTH' else [assoc.direction]
                     for d in directions:
                         try:
-                            ots.add_user_to_group(data['username'], group.name, direction=d)
+                            ots.add_user_to_group(username, group.name, direction=d)
                         except Exception as e:
-                            current_app.logger.error(f"Failed to add {data['username']} to OTS group {group.name} {d}: {e}")
+                            current_app.logger.error(f"Failed to add {username} to OTS group {group.name} {d}: {e}")
         elif data.get('groupIds'):
             for gid in data['groupIds']:
                 group = OTSGroupModel.get_by_id(gid)
@@ -247,9 +259,9 @@ def create_user():
                     db.session.add(assoc)
                     for d in ('IN', 'OUT'):
                         try:
-                            ots.add_user_to_group(data['username'], group.name, direction=d)
+                            ots.add_user_to_group(username, group.name, direction=d)
                         except Exception as e:
-                            current_app.logger.error(f"Failed to add {data['username']} to OTS group {group.name} {d}: {e}")
+                            current_app.logger.error(f"Failed to add {username} to OTS group {group.name} {d}: {e}")
 
         db.session.commit()
 
