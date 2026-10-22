@@ -441,6 +441,10 @@ paths:
               properties:
                 username:
                   type: string
+                  pattern: '^[a-z0-9]{3,32}$'
+                  minLength: 3
+                  maxLength: 32
+                  description: Lowercase letters and numbers only. Input is lowercased and trimmed before validation.
                 password:
                   type: string
                 email:
@@ -461,6 +465,8 @@ paths:
       responses:
         '201':
           description: User created successfully
+        '400':
+          description: Missing field or invalid username
         '403':
           description: Administrator role required
         '409':

@@ -65,16 +65,16 @@ def _extract_claim(token_data, claim_path):
 
 
 def _sanitize_ots_username(raw):
-    """Make an OIDC-derived username valid for OTS.
+    """Make an OIDC-derived username follow the portal convention.
 
-    OTS 1.7.13 only accepts letters, numbers, underscores and periods, so any
-    other character (e.g. a hyphen in a preferred_username) is mapped to an
-    underscore. Without this, the account set-password step later fails to
-    create the OTS user.
+    Portal usernames are 3-32 lowercase letters and numbers only, a strict
+    subset of what OTS accepts. Every other character is dropped; names that
+    end up shorter than 3 characters are prefixed with 'user'.
     """
-    cleaned = re.sub(r'[^a-z0-9_.]', '_', (raw or '').lower().strip())
-    cleaned = cleaned.strip('_.')
-    return cleaned or 'user'
+    cleaned = re.sub(r'[^a-z0-9]', '', (raw or '').lower().strip())
+    if len(cleaned) < 3:
+        cleaned = 'user' + cleaned
+    return cleaned[:32]
 
 
 def _build_callback_url(provider_id):
@@ -295,7 +295,7 @@ def oidc_callback(provider_id):
             base_username = username
             counter = 1
             while UserModel.get_user_by_username(username):
-                username = f"{base_username}{counter}"
+                username = f"{base_username[:32 - len(str(counter))]}{counter}"
                 counter += 1
 
             # Parse first/last name
