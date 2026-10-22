@@ -668,7 +668,22 @@
       "failedDelete": "Gruppe konnte nicht gelöscht werden",
       "failedAddMember": "Mitglied konnte nicht hinzugefügt werden",
       "failedRemoveMember": "Mitglied konnte nicht entfernt werden",
-      "failedSync": "Gruppen konnten nicht von OTS synchronisiert werden"
+      "failedSync": "Gruppen konnten nicht von OTS synchronisiert werden",
+      "notFoundInOts": "In OTS nicht gefunden",
+      "notFoundInOtsHint": "Diese Gruppe wurde im OpenTAK Server entfernt und wird nicht mehr zugewiesen. Legen Sie sie neu an oder entfernen Sie sie aus dem Portal.",
+      "removeFromPortal": "Aus dem Portal entfernen",
+      "removeConfirm": "Gruppe \"{{name}}\" aus dem Portal entfernen? Sie existiert im OpenTAK Server nicht mehr.",
+      "affectedMembers": "Benutzer, die diese Gruppe verlieren: {{count}}",
+      "affectedCodes": "Onboarding-Codes, die diese Gruppe verlieren: {{names}}",
+      "affectedTeams": "Event-Teams, die diese Gruppe verlieren: {{names}}",
+      "syncResult": "{{synced}} Gruppen aus OTS synchronisiert ({{created}} neu, {{updated}} aktualisiert)",
+      "syncRestored": "{{count}} Gruppe(n) in OTS wieder gefunden: {{names}}",
+      "syncMissingWarning": "{{count}} Gruppe(n) in OTS nicht gefunden: {{names}}. Onboarding-Codes und Event-Teams, die sie verwenden, überspringen sie.",
+      "syncCheckSkipped": "Prüfung auf entfernte Gruppen übersprungen: {{reason}}",
+      "skipReason_incomplete": "OTS hat eine unvollständige Gruppenliste geliefert",
+      "skipReason_empty": "OTS hat keine Gruppen geliefert",
+      "skipReason_malformed": "OTS hat eine unerwartete Gruppenliste geliefert",
+      "skipReason_invalid": "OTS hat eine ungültige Gruppenliste geliefert"
     },
     "onboardingCodes": {
       "title": "Onboarding-Codes-Verwaltung",
@@ -719,7 +734,8 @@
       "failedUpdate": "Code konnte nicht aktualisiert werden",
       "failedDelete": "Code konnte nicht gelöscht werden",
       "failedLoad": "Code konnte nicht geladen werden",
-      "unlimited": "Unbegrenzt"
+      "unlimited": "Unbegrenzt",
+      "missingGroupsWarning": "Dieser Code verwendet Gruppen, die in OTS nicht gefunden wurden ({{names}}). Sie werden bei der Registrierung nicht zugewiesen."
     },
     "pendingRegistrations": {
       "title": "Ausstehende Registrierungen",

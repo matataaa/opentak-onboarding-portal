@@ -482,7 +482,7 @@ function UsersList() {
                   <label>{t('admin.users.otsGroups')}</label>
                   {groupsData?.groups?.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      {groupsData.groups.filter(g => g.active).map(group => {
+                      {groupsData.groups.filter(g => g.missingInOts ? formData.groups.some(fg => fg.id === g.id) : g.active).map(group => {
                         const groupEntry = formData.groups.find(fg => fg.id === group.id);
                         const isSelected = !!groupEntry;
                         return (
@@ -490,6 +490,7 @@ function UsersList() {
                             <input
                               type="checkbox"
                               checked={isSelected}
+                              disabled={group.missingInOts && !isSelected}
                               onChange={() => setFormData(prev => ({
                                 ...prev,
                                 groups: isSelected
@@ -498,9 +499,15 @@ function UsersList() {
                               }))}
                             />
                             <span style={{ minWidth: '120px' }}>{group.displayName || group.name}</span>
+                            {group.missingInOts && (
+                              <span className="badge badge-warning" title={t('admin.groups.notFoundInOtsHint')}>
+                                {t('admin.groups.notFoundInOts')}
+                              </span>
+                            )}
                             {isSelected && (
                               <select
                                 value={groupEntry.direction}
+                                disabled={group.missingInOts}
                                 onChange={(e) => setFormData(prev => ({
                                   ...prev,
                                   groups: prev.groups.map(fg =>

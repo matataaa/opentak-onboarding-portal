@@ -414,6 +414,12 @@
   color: var(--alert-info-text);
 }
 
+.alert-warning {
+  background-color: var(--badge-warning-bg);
+  border: 1px solid var(--badge-warning-text);
+  color: var(--badge-warning-text);
+}
+
 /* Quill Editor Styles */
 .form-group .quill {
   background: var(--bg-input);

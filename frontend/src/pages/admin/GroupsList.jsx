@@ -86,16 +86,23 @@ function GroupsList() {
     onError: (err) => setError(err.response?.data?.error || t('admin.groups.failedUpdate')),
   });
 
+  // Groups can be flagged/removed, which changes what users and onboarding codes show
+  const invalidateGroupDependents = () => {
+    queryClient.invalidateQueries(['groups']);
+    queryClient.invalidateQueries(['users']);
+    queryClient.invalidateQueries(['onboardingCodes']);
+  };
+
   const deleteMutation = useMutation({
     mutationFn: (id) => groupsAPI.delete(id),
-    onSuccess: () => queryClient.invalidateQueries(['groups']),
+    onSuccess: () => invalidateGroupDependents(),
     onError: (err) => showError(err.response?.data?.error || t('admin.groups.failedDelete')),
   });
 
   const syncMutation = useMutation({
     mutationFn: () => groupsAPI.syncFromOts(),
     onSuccess: () => {
-      queryClient.invalidateQueries(['groups']);
+      invalidateGroupDependents();
       setError('');
     },
     onError: (err) => showError(err.response?.data?.error || t('admin.groups.failedSync')),
@@ -209,6 +216,32 @@ function GroupsList() {
     return [...currentMembers, ...nonMembers.map(u => ({ ...u, isMember: false, direction: 'BOTH' }))];
   }, [allUsers, memberMap, memberSearch]);
 
+  const handleDelete = async (group) => {
+    if (!group.missingInOts) {
+      const confirmed = await confirm(t('admin.groups.deleteConfirm', { name: group.name }), t('admin.groups.deleteGroup'));
+      if (confirmed) deleteMutation.mutate(group.id);
+      return;
+    }
+    let details = null;
+    try {
+      details = (await groupsAPI.getById(group.id)).data;
+    } catch {
+      // Fall back to the plain confirmation without the affected list
+    }
+    const lines = [t('admin.groups.removeConfirm', { name: group.name })];
+    if (details) {
+      lines.push(t('admin.groups.affectedMembers', { count: details.users?.length || 0 }));
+      if (details.onboardingCodes?.length) {
+        lines.push(t('admin.groups.affectedCodes', { names: details.onboardingCodes.map(c => c.name).join(', ') }));
+      }
+      if (details.eventTeams?.length) {
+        lines.push(t('admin.groups.affectedTeams', { names: details.eventTeams.map(c => c.name).join(', ') }));
+      }
+    }
+    const confirmed = await confirm(lines.join('\n'), t('admin.groups.removeFromPortal'));
+    if (confirmed) deleteMutation.mutate(group.id);
+  };
+
   const handleToggleMember = (user) => {
     if (memberMap[user.username]) {
       removeMemberMutation.mutate({ username: user.username, direction: memberMap[user.username].direction });
@@ -255,11 +288,31 @@ function GroupsList() {
         </div>
       </div>
 
-      {syncMutation.isSuccess && (
-        <div className="alert alert-success" style={{ marginBottom: '1rem' }}>
-          {syncMutation.data?.data?.message || t('admin.groups.syncSuccess')}
-        </div>
-      )}
+      {syncMutation.isSuccess && (() => {
+        const r = syncMutation.data?.data || {};
+        return (
+          <>
+            <div className="alert alert-success" style={{ marginBottom: '1rem' }}>
+              {r.synced !== undefined
+                ? t('admin.groups.syncResult', { synced: r.synced, created: r.created, updated: r.updated })
+                : t('admin.groups.syncSuccess')}
+              {r.restored > 0 && (
+                <div>{t('admin.groups.syncRestored', { count: r.restored, names: r.restoredGroups?.join(', ') })}</div>
+              )}
+            </div>
+            {(r.markedMissing > 0 || r.missingCheckSkipped) && (
+              <div className="alert alert-warning" style={{ marginBottom: '1rem' }}>
+                {r.markedMissing > 0 && (
+                  <div>{t('admin.groups.syncMissingWarning', { count: r.markedMissing, names: r.markedMissingGroups?.join(', ') })}</div>
+                )}
+                {r.missingCheckSkipped && (
+                  <div>{t('admin.groups.syncCheckSkipped', { reason: t(`admin.groups.skipReason_${r.missingCheckSkipped}`, { defaultValue: r.missingCheckSkipped }) })}</div>
+                )}
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       <div className="admin-table-container">
         {groups.length === 0 ? (
@@ -281,7 +334,7 @@ function GroupsList() {
             </thead>
             <tbody>
               {groups.map(group => (
-                <tr key={group.id}>
+                <tr key={group.id} style={group.missingInOts ? { opacity: 0.55 } : undefined}>
                   <td>
                     <strong
                       style={{ cursor: 'pointer', color: 'var(--text-link, #2563eb)' }}
@@ -289,6 +342,11 @@ function GroupsList() {
                     >
                       {group.name}
                     </strong>
+                    {group.missingInOts && (
+                      <span className="badge badge-warning" style={{ marginLeft: '0.5rem' }} title={t('admin.groups.notFoundInOtsHint')}>
+                        {t('admin.groups.notFoundInOts')}
+                      </span>
+                    )}
                   </td>
                   <td>{group.displayName || '-'}</td>
                   <td>
@@ -305,11 +363,8 @@ function GroupsList() {
                         {t('common.edit')}
                       </button>
                       {canEdit && (
-                        <button className="btn btn-sm btn-danger" onClick={async () => {
-                          const confirmed = await confirm(t('admin.groups.deleteConfirm', { name: group.name }), t('admin.groups.deleteGroup'));
-                          if (confirmed) deleteMutation.mutate(group.id);
-                        }}>
-                          {t('common.delete')}
+                        <button className="btn btn-sm btn-danger" onClick={() => handleDelete(group)}>
+                          {group.missingInOts ? t('admin.groups.removeFromPortal') : t('common.delete')}
                         </button>
                       )}
                     </div>

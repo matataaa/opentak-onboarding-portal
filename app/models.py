@@ -540,6 +540,12 @@ class OTSGroupModel(db.Model):
     active: Mapped[bool] = mapped_column(default=True, nullable=False)
     synced_at: Mapped[datetime.datetime] = mapped_column(nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow, nullable=True)
+    # Set when the group is no longer found in OTS (value = when first seen missing).
+    ots_missing_since: Mapped[datetime.datetime] = mapped_column(nullable=True)
+
+    @property
+    def missing_in_ots(self):
+        return self.ots_missing_since is not None
 
     @property
     def onboarding_codes(self):
@@ -566,6 +572,31 @@ class OTSGroupModel(db.Model):
         except Exception as e:
             db.session.rollback()
             return {"error": str(e)}
+
+    @staticmethod
+    def remove_local(group):
+        """Delete a group locally (no commit). User and onboarding-code associations
+        go via ORM cascades; event teams are detached (EventTeamModel is defined
+        further down, resolved at call time)."""
+        EventTeamModel.query.filter_by(otsGroupId=group.id).update(
+            {'otsGroupId': None}, synchronize_session=False)
+        db.session.delete(group)
+
+    @staticmethod
+    def flagged_among(group_ids):
+        """Groups from group_ids that are flagged as missing in OTS."""
+        ids = []
+        for i in group_ids:
+            if isinstance(i, bool):
+                continue
+            try:
+                ids.append(int(i))
+            except (TypeError, ValueError):
+                continue
+        if not ids:
+            return []
+        return OTSGroupModel.query.filter(
+            OTSGroupModel.id.in_(ids), OTSGroupModel.ots_missing_since.isnot(None)).all()
 
     @staticmethod
     def get_by_id(group_id):

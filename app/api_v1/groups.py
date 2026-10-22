@@ -6,7 +6,7 @@ CRUD operations for OTS group management, syncing, and member management
 from flask import request, jsonify, current_app
 from flask_jwt_extended import jwt_required
 from app.api_v1 import api_v1
-from app.models import OTSGroupModel, UserModel, db
+from app.models import EventTeamModel, OTSGroupModel, UserModel, db
 from app.pagination import search_and_paginate
 import datetime
 
@@ -25,6 +25,24 @@ def require_view_role():
     if not has_any_role(['administrator', 'group_admin', 'group_readonly']):
         return jsonify({'error': 'Group admin or readonly access required'}), 403
     return None
+
+
+def _ots_status_code(exc):
+    """HTTP status of a failed OTSClient call (request_handler raises with the response dict as arg)."""
+    if exc.args and isinstance(exc.args[0], dict):
+        return exc.args[0].get('status_code')
+    return None
+
+
+def _event_teams_of(group):
+    return [{'id': t.id, 'name': t.name} for t in EventTeamModel.query.filter_by(otsGroupId=group.id).all()]
+
+
+def _missing_fields(group):
+    return {
+        'missingInOts': group.missing_in_ots,
+        'missingSince': group.ots_missing_since.isoformat() if group.ots_missing_since else None,
+    }
 
 
 @api_v1.route('/groups', methods=['GET'])
@@ -47,6 +65,7 @@ def get_groups():
             'description': g.description,
             'active': g.active,
             'syncedAt': g.synced_at.isoformat() if g.synced_at else None,
+            **_missing_fields(g),
             'userCount': len(g.users),
             'onboardingCodeCount': len(g.onboarding_codes)
         } for g in groups],
@@ -73,8 +92,10 @@ def get_group(group_id):
         'description': group.description,
         'active': group.active,
         'syncedAt': group.synced_at.isoformat() if group.synced_at else None,
+        **_missing_fields(group),
         'users': [{'id': u.id, 'username': u.username, 'callsign': u.callsign, 'email': u.email} for u in group.users],
-        'onboardingCodes': [{'id': c.id, 'name': c.name} for c in group.onboarding_codes]
+        'onboardingCodes': [{'id': c.id, 'name': c.name} for c in group.onboarding_codes],
+        'eventTeams': _event_teams_of(group)
     }), 200
 
 
@@ -91,8 +112,12 @@ def create_group():
     if not data.get('name'):
         return jsonify({'error': 'Name is required'}), 400
 
+    # OTS stores bleach.clean(name), so names with these characters would not match the portal's copy
+    if not isinstance(data['name'], str) or any(c in data['name'] for c in '<>&"\''):
+        return jsonify({'error': 'Group name contains characters that OpenTAK Server does not accept (< > & " \')'}), 400
+
     existing = OTSGroupModel.get_by_name(data['name'])
-    if existing:
+    if existing and not existing.missing_in_ots:
         return jsonify({'error': 'Group already exists'}), 409
 
     try:
@@ -107,6 +132,20 @@ def create_group():
         except Exception as e:
             current_app.logger.error(f"Failed to create group '{data['name']}' in OTS: {str(e)}")
             return jsonify({'error': f'Failed to create group in OTS: {str(e)}'}), 400
+
+        if existing:
+            # Restore path: the group was removed in OTS, it now exists there again
+            existing.ots_missing_since = None
+            existing.synced_at = datetime.datetime.utcnow()
+            db.session.commit()
+            return jsonify({
+                'message': 'Group restored in OpenTAK Server',
+                'group': {
+                    'id': existing.id,
+                    'name': existing.name,
+                    'displayName': existing.display_name
+                }
+            }), 200
 
         # Create locally
         group = OTSGroupModel.create_group(
@@ -178,7 +217,7 @@ def update_group(group_id):
 @api_v1.route('/groups/<int:group_id>', methods=['DELETE'])
 @jwt_required()
 def delete_group(group_id):
-    """Delete a group (locally and from OTS)"""
+    """Remove a group: from OTS first (unless it is already flagged as gone there), then locally"""
     error = require_admin_role()
     if error:
         return error
@@ -187,18 +226,38 @@ def delete_group(group_id):
     if not group:
         return jsonify({'error': 'Group not found'}), 404
 
-    try:
-        # Delete from OTS
+    affected = {
+        'memberCount': len(group.users),
+        'onboardingCodes': [{'id': c.id, 'name': c.name} for c in group.onboarding_codes],
+        'eventTeams': _event_teams_of(group),
+    }
+    removed_from_ots = False
+
+    if not group.missing_in_ots:
         from app.ots import otsClient
         try:
             otsClient.delete_group(group.name)
+            removed_from_ots = True
             current_app.logger.info(f"Deleted group '{group.name}' from OTS")
         except Exception as e:
-            current_app.logger.warning(f"Failed to delete group '{group.name}' from OTS (may not exist): {str(e)}")
+            if _ots_status_code(e) == 404:
+                current_app.logger.info(f"Group '{group.name}' already gone from OTS, removing locally")
+            else:
+                current_app.logger.error(f"Failed to delete group '{group.name}' from OTS: {str(e)}")
+                return jsonify({'error': f'Failed to delete group in OTS: {str(e)}'}), 502
 
-        OTSGroupModel.delete_by_id(group_id)
-        return jsonify({'message': 'Group deleted successfully'}), 200
+    try:
+        name = group.name
+        OTSGroupModel.remove_local(group)
+        db.session.commit()
+        current_app.logger.info(f"Removed group '{name}' from the portal")
+        return jsonify({
+            'message': 'Group removed',
+            'removedFromOts': removed_from_ots,
+            'affected': affected
+        }), 200
     except Exception as e:
+        db.session.rollback()
         return jsonify({'error': f'Failed to delete group: {str(e)}'}), 400
 
 
@@ -259,6 +318,9 @@ def add_group_member(group_id):
     group = OTSGroupModel.get_by_id(group_id)
     if not group:
         return jsonify({'error': 'Group not found'}), 404
+
+    if group.missing_in_ots:
+        return jsonify({'error': f"Group '{group.name}' was not found in OpenTAK Server"}), 409
 
     data = request.get_json()
     username = data.get('username')
@@ -388,31 +450,45 @@ def sync_groups_from_ots():
         from app.ots import otsClient
 
         current_app.logger.info("Starting OTS group sync")
-        ots_response = otsClient.get_all_pages(otsClient.get_groups)
+        ots_response = otsClient.get_all_pages(otsClient.get_groups, sort_by='id')
 
-        ots_groups = ots_response.get('response', {})
-        if isinstance(ots_groups, dict):
-            ots_groups = ots_groups.get('results', ots_groups.get('groups', ots_groups.get('response', [])))
-        if not isinstance(ots_groups, list):
-            ots_groups = []
+        body = ots_response.get('response', {})
+        ots_groups = []
+        skip_reason = None
+        results = body.get('results') if isinstance(body, dict) else None
+        total = body.get('total') if isinstance(body, dict) else None
+        if isinstance(results, list):
+            # Upserts only use well-formed entries; the missing-check below needs a fully valid list
+            ots_groups = [g for g in results if isinstance(g, dict) and isinstance(g.get('name'), str) and g['name']]
+        if not isinstance(results, list) or not all(isinstance(g, dict) for g in results):
+            skip_reason = 'malformed'
+        elif not isinstance(total, int) or isinstance(total, bool):
+            skip_reason = 'malformed'
+        elif not results:
+            skip_reason = 'empty'
+        elif len(results) != total:
+            skip_reason = 'incomplete'
+        else:
+            names = [g.get('name') for g in results]
+            if not all(isinstance(n, str) and n for n in names):
+                skip_reason = 'invalid'
+            elif len(set(names)) != total:
+                skip_reason = 'invalid'
 
         synced = 0
         created = 0
         updated = 0
+        seen_names = set()
 
         for ots_group in ots_groups:
-            group_name = ots_group.get('name') if isinstance(ots_group, dict) else str(ots_group)
-            if not group_name:
-                continue
-
-            description = ots_group.get('description', '') if isinstance(ots_group, dict) else ''
-            active = ots_group.get('active', True) if isinstance(ots_group, dict) else True
+            group_name = ots_group['name']
+            description = ots_group.get('description', '')
+            seen_names.add(group_name)
 
             existing = OTSGroupModel.get_by_name(group_name)
             if existing:
                 if description:
                     existing.description = description
-                existing.active = active
                 existing.synced_at = datetime.datetime.utcnow()
                 updated += 1
             else:
@@ -420,7 +496,6 @@ def sync_groups_from_ots():
                     name=group_name,
                     display_name=group_name.replace('_', ' ').title(),
                     description=description,
-                    active=active,
                     synced_at=datetime.datetime.utcnow()
                 )
                 db.session.add(group)
@@ -428,15 +503,39 @@ def sync_groups_from_ots():
 
             synced += 1
 
+        marked_missing = []
+        restored = []
+        if skip_reason:
+            current_app.logger.warning(f"OTS group sync: missing-group check skipped: {skip_reason}")
+        else:
+            now = datetime.datetime.utcnow()
+            for local in OTSGroupModel.get_all():
+                if local.name in seen_names:
+                    if local.missing_in_ots:
+                        local.ots_missing_since = None
+                        restored.append(local.name)
+                elif not local.missing_in_ots:
+                    local.ots_missing_since = now
+                    marked_missing.append(local.name)
+
         db.session.commit()
 
-        current_app.logger.info(f"OTS group sync complete: {synced} synced, {created} created, {updated} updated")
+        missing_total = OTSGroupModel.query.filter(OTSGroupModel.ots_missing_since.isnot(None)).count()
+        current_app.logger.info(
+            f"OTS group sync complete: {synced} synced, {created} created, {updated} updated, "
+            f"{len(marked_missing)} marked missing, {len(restored)} restored")
 
         return jsonify({
             'message': f'Synced {synced} groups from OTS ({created} new, {updated} updated)',
             'synced': synced,
             'created': created,
-            'updated': updated
+            'updated': updated,
+            'markedMissing': len(marked_missing),
+            'markedMissingGroups': marked_missing,
+            'restored': len(restored),
+            'restoredGroups': restored,
+            'missingTotal': missing_total,
+            'missingCheckSkipped': skip_reason
         }), 200
 
     except ConnectionError as e:

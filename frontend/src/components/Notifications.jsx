@@ -43,7 +43,7 @@ const Notifications = () => {
               <h3>{confirmDialog.title}</h3>
             </div>
             <div className="confirm-body">
-              <p>{confirmDialog.message}</p>
+              <p style={{ whiteSpace: 'pre-line' }}>{confirmDialog.message}</p>
             </div>
             <div className="confirm-actions">
               <button

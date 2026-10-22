@@ -27,6 +27,18 @@ def require_view_role():
     return None
 
 
+def _flagged_new_groups(data, existing_ids=()):
+    """Groups in the request that are flagged missing in OTS and not already associated."""
+    ids = [g.get('id') for g in data.get('groups') or [] if isinstance(g, dict)]
+    ids += list(data.get('groupIds') or [])
+    def as_int(value):
+        try:
+            return None if isinstance(value, bool) else int(value)
+        except (TypeError, ValueError):
+            return None
+    return OTSGroupModel.flagged_among([i for i in ids if as_int(i) not in existing_ids])
+
+
 @api_v1.route('/onboarding-codes', methods=['GET'])
 @jwt_required()
 def get_onboarding_codes():
@@ -155,6 +167,10 @@ def create_onboarding_code():
     if existing:
         return jsonify({'error': 'Onboarding code already exists'}), 409
 
+    flagged = _flagged_new_groups(data)
+    if flagged:
+        return jsonify({'error': 'Groups not found in OpenTAK Server: ' + ', '.join(g.name for g in flagged)}), 400
+
     try:
         # Parse dates
         valid_from = None
@@ -243,6 +259,12 @@ def update_onboarding_code(code_id):
         return jsonify({'error': 'Onboarding code not found'}), 404
 
     data = request.get_json()
+
+    if 'groups' in data or 'groupIds' in data:
+        flagged = _flagged_new_groups(
+            data, {a.group_id for a in GroupOnboardingCodeAssociation.query.filter_by(onboardingcode_id=code.id)})
+        if flagged:
+            return jsonify({'error': 'Groups not found in OpenTAK Server: ' + ', '.join(g.name for g in flagged)}), 400
 
     try:
         if data.get('name'):

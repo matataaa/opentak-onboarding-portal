@@ -158,6 +158,18 @@ def get_user(user_id):
     }), 200
 
 
+def _flagged_new_groups(data, existing_ids=()):
+    """Groups in the request that are flagged missing in OTS and not already associated."""
+    ids = [g.get('id') for g in data.get('groups') or [] if isinstance(g, dict)]
+    ids += list(data.get('groupIds') or [])
+    def as_int(value):
+        try:
+            return None if isinstance(value, bool) else int(value)
+        except (TypeError, ValueError):
+            return None
+    return OTSGroupModel.flagged_among([i for i in ids if as_int(i) not in existing_ids])
+
+
 @api_v1.route('/users', methods=['POST'])
 @jwt_required()
 def create_user():
@@ -201,6 +213,10 @@ def create_user():
     existing_user = UserModel.get_user_by_username(username)
     if existing_user:
         return jsonify({'error': 'Username already exists'}), 409
+
+    flagged = _flagged_new_groups(data)
+    if flagged:
+        return jsonify({'error': 'Groups not found in OpenTAK Server: ' + ', '.join(g.name for g in flagged)}), 400
 
     try:
         # Create user in OTS first
@@ -311,6 +327,11 @@ def update_user(user_id):
 
     data = request.get_json()
 
+    if is_admin and ('groups' in data or 'groupIds' in data):
+        flagged = _flagged_new_groups(data, {a.group_id for a in user.group_associations})
+        if flagged:
+            return jsonify({'error': 'Groups not found in OpenTAK Server: ' + ', '.join(g.name for g in flagged)}), 400
+
     # Update basic fields (allowed for own profile)
     if data.get('email'):
         user.email = data['email']
@@ -360,7 +381,7 @@ def update_user(user_id):
                 ots = OTSClient(OTS_URL, OTS_USERNAME, OTS_PASSWORD)
                 for gid in added | changed:
                     group = OTSGroupModel.get_by_id(gid)
-                    if group:
+                    if group and not group.missing_in_ots:
                         new_dir = new_assocs[gid]
                         directions = ['IN', 'OUT'] if new_dir == 'BOTH' else [new_dir]
                         old_dir = old_assocs.get(gid)
@@ -379,7 +400,7 @@ def update_user(user_id):
                                 current_app.logger.error(f"Failed to add {user.username} to OTS group {group.name} {d}: {e}")
                 for gid in removed:
                     group = OTSGroupModel.get_by_id(gid)
-                    if group:
+                    if group and not group.missing_in_ots:
                         old_dir = old_assocs[gid]
                         directions = ['IN', 'OUT'] if old_dir == 'BOTH' else [old_dir]
                         for d in directions:

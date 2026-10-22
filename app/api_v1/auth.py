@@ -44,6 +44,10 @@ def assign_ots_groups(username, onboarding_code, user=None):
             current_app.logger.info(f"assign_ots_groups: skipping inactive group {group.name}")
             continue
 
+        if group.missing_in_ots:
+            current_app.logger.warning(f"assign_ots_groups: skipping group '{group.name}' for {username}, it was not found in OTS")
+            continue
+
         directions = ['IN', 'OUT'] if assoc.direction == 'BOTH' else [assoc.direction]
 
         for direction in directions:
@@ -194,6 +198,9 @@ def login():
                     if isinstance(group, dict) and 'error' in group:
                         current_app.logger.error(f"Login: Failed to create group {group_name}: {group['error']}")
                         continue
+                if group.missing_in_ots:
+                    # OTS reports the group again, so it exists
+                    group.ots_missing_since = None
                 if group and group not in user.ots_groups:
                     from app.models import GroupUserAssociation
                     login_assoc = GroupUserAssociation(group_id=group.id, user_id=user.id, direction='BOTH')

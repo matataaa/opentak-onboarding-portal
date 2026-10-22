@@ -668,7 +668,22 @@
       "failedDelete": "Failed to delete group",
       "failedAddMember": "Failed to add member",
       "failedRemoveMember": "Failed to remove member",
-      "failedSync": "Failed to sync groups from OTS"
+      "failedSync": "Failed to sync groups from OTS",
+      "notFoundInOts": "Not found in OTS",
+      "notFoundInOtsHint": "This group was removed in OpenTAK Server and is no longer assigned. Re-create it or remove it from the portal.",
+      "removeFromPortal": "Remove from portal",
+      "removeConfirm": "Remove group \"{{name}}\" from the portal? It no longer exists in OpenTAK Server.",
+      "affectedMembers": "Users that lose this group: {{count}}",
+      "affectedCodes": "Onboarding codes that lose this group: {{names}}",
+      "affectedTeams": "Event teams that lose this group: {{names}}",
+      "syncResult": "Synced {{synced}} groups from OTS ({{created}} new, {{updated}} updated)",
+      "syncRestored": "{{count}} group(s) found in OTS again: {{names}}",
+      "syncMissingWarning": "{{count}} group(s) not found in OTS: {{names}}. Onboarding codes and event teams that use them skip them.",
+      "syncCheckSkipped": "Check for removed groups skipped: {{reason}}",
+      "skipReason_incomplete": "OTS returned an incomplete group list",
+      "skipReason_empty": "OTS returned no groups",
+      "skipReason_malformed": "OTS returned an unexpected group list",
+      "skipReason_invalid": "OTS returned an invalid group list"
     },
     "onboardingCodes": {
       "title": "Onboarding Codes Management",
@@ -719,7 +734,8 @@
       "failedUpdate": "Failed to update code",
       "failedDelete": "Failed to delete code",
       "failedLoad": "Failed to load code",
-      "unlimited": "Unlimited"
+      "unlimited": "Unlimited",
+      "missingGroupsWarning": "This code uses groups that were not found in OTS ({{names}}). They will not be assigned at registration."
     },
     "pendingRegistrations": {
       "title": "Pending Registrations",

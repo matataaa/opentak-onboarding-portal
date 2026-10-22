@@ -423,7 +423,7 @@ function OnboardingCodesList() {
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      {otsGroups.filter(g => g.active).map(group => {
+                      {otsGroups.filter(g => g.missingInOts ? formData.groups.some(fg => fg.id === g.id) : g.active).map(group => {
                         const groupEntry = formData.groups.find(fg => fg.id === group.id);
                         const isSelected = !!groupEntry;
                         return (
@@ -431,6 +431,7 @@ function OnboardingCodesList() {
                             <input
                               type="checkbox"
                               checked={isSelected}
+                              disabled={group.missingInOts && !isSelected}
                               onChange={() => setFormData(prev => ({
                                 ...prev,
                                 groups: isSelected
@@ -439,9 +440,15 @@ function OnboardingCodesList() {
                               }))}
                             />
                             <span style={{ minWidth: '120px' }}>{group.displayName || group.name}</span>
+                            {group.missingInOts && (
+                              <span className="badge badge-warning" title={t('admin.groups.notFoundInOtsHint')}>
+                                {t('admin.groups.notFoundInOts')}
+                              </span>
+                            )}
                             {isSelected && (
                               <select
                                 value={groupEntry.direction}
+                                disabled={group.missingInOts}
                                 onChange={(e) => setFormData(prev => ({
                                   ...prev,
                                   groups: prev.groups.map(fg =>
@@ -457,6 +464,13 @@ function OnboardingCodesList() {
                             )}
                           </div>
                         );
+                      })}
+                    </div>
+                  )}
+                  {otsGroups.some(g => g.missingInOts && formData.groups.some(fg => fg.id === g.id)) && (
+                    <div className="alert alert-warning" style={{ marginTop: '0.5rem' }}>
+                      {t('admin.onboardingCodes.missingGroupsWarning', {
+                        names: otsGroups.filter(g => g.missingInOts && formData.groups.some(fg => fg.id === g.id)).map(g => g.name).join(', ')
                       })}
                     </div>
                   )}

@@ -89,6 +89,7 @@ def _team_to_dict(team):
             'id': team.otsGroup.id,
             'name': team.otsGroup.name,
             'displayName': team.otsGroup.display_name,
+            'missingInOts': team.otsGroup.missing_in_ots,
         } if team.otsGroup else None,
         'leaderUserId': team.leaderUserId,
         'leaderUser': {
@@ -144,8 +145,12 @@ def create_event_team():
     if EventTeamModel.query.filter_by(name=data['name']).first():
         return jsonify({'error': 'A team with this name already exists'}), 409
 
-    if data.get('otsGroupId') and not OTSGroupModel.query.get(data['otsGroupId']):
-        return jsonify({'error': 'Unknown otsGroupId'}), 400
+    if data.get('otsGroupId'):
+        group = OTSGroupModel.query.get(data['otsGroupId'])
+        if not group:
+            return jsonify({'error': 'Unknown otsGroupId'}), 400
+        if group.missing_in_ots:
+            return jsonify({'error': f"Group '{group.name}' was not found in OpenTAK Server"}), 400
     if data.get('leaderUserId') and not UserModel.get_user_by_id(data['leaderUserId']):
         return jsonify({'error': 'Unknown leaderUserId'}), 400
     if data.get('color') and data['color'] not in TAK_TEAM_COLORS:
@@ -183,8 +188,12 @@ def update_event_team(team_id):
             return jsonify({'error': 'color must be a TAK team colour'}), 400
         team.color = data['color']
     if 'otsGroupId' in data:
-        if data['otsGroupId'] and not OTSGroupModel.query.get(data['otsGroupId']):
-            return jsonify({'error': 'Unknown otsGroupId'}), 400
+        if data['otsGroupId']:
+            group = OTSGroupModel.query.get(data['otsGroupId'])
+            if not group:
+                return jsonify({'error': 'Unknown otsGroupId'}), 400
+            if group.missing_in_ots and group.id != team.otsGroupId:
+                return jsonify({'error': f"Group '{group.name}' was not found in OpenTAK Server"}), 400
         team.otsGroupId = data['otsGroupId']
     if 'leaderUserId' in data:
         if data['leaderUserId'] and not UserModel.get_user_by_id(data['leaderUserId']):
@@ -534,7 +543,10 @@ def _ensure_shared_player_account(event, team):
     password = secrets.token_urlsafe(18)
     otsClient.create_user(username, password, roles=['user'])
     otsClient.activate_user(username)
-    if team.otsGroup:
+    if team.otsGroup and team.otsGroup.missing_in_ots:
+        current_app.logger.warning(
+            "Event join: skipping group '%s' for %s, it was not found in OTS", team.otsGroup.name, username)
+    elif team.otsGroup:
         for direction in ('IN', 'OUT'):
             try:
                 otsClient.add_user_to_group(username, team.otsGroup.name, direction)
