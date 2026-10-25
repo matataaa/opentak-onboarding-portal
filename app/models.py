@@ -2139,6 +2139,8 @@ class EventLinkModel(db.Model):
     role = Column(String(20), nullable=False)                     # leader | player
     tokenHash = Column(String(128), unique=True, nullable=False)
     tokenVersion = Column(Integer, nullable=False, default=1)
+    # Random per-link/per-regenerate salt for the derived token (NULL = legacy, not retrievable)
+    tokenNonce = Column(String(64), nullable=True)
     # For individual player mode: the onboarding code this link registers with.
     # Lives on the link (per event+team), so reusable teams get a per-event code.
     onboardingCodeId = Column(Integer, ForeignKey('onboardingcodes.id'), nullable=True)

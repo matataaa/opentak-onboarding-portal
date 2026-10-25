@@ -25,7 +25,7 @@ export default function EventsAdmin() {
   const [groups, setGroups] = useState([]);
   const [codes, setCodes] = useState([]);
   const [error, setError] = useState('');
-  const [newLink, setNewLink] = useState(null); // last generated link (shown once)
+  const [newLink, setNewLink] = useState(null); // last generated link (newLink.retrievable: can be re-shown later)
 
   const [teamForm, setTeamForm] = useState({ name: '', color: '', otsGroupId: '' });
   const [leaderForm, setLeaderForm] = useState({}); // teamId -> {username, password}
@@ -36,10 +36,11 @@ export default function EventsAdmin() {
   const [links, setLinks] = useState([]);
   const [linkForm, setLinkForm] = useState({ teamId: '', role: 'leader', onboardingCodeId: '' });
   const [printSheet, setPrintSheet] = useState([]);
+  const [qrLink, setQrLink] = useState(null); // {url, label} shown in the QR panel
 
   const addGenerated = (d) => {
     setNewLink(d);
-    setPrintSheet((prev) => [...prev, { url: d.url, label: `${d.team?.name || ''} · ${d.role}` }]);
+    setPrintSheet((p) => [...p.filter((x) => x.id !== d.id), { id: d.id, url: d.url, label: `${d.team?.name || ''} · ${d.role}` }]);
   };
 
   const reload = useCallback(async () => {
@@ -97,14 +98,51 @@ export default function EventsAdmin() {
     () => setEventForm({ name: '', validFrom: '', validUntil: '', playerAccessMode: 'individual', accountCleanup: 'deactivate' }),
   );
 
-  const openLinks = async (eventId) => {
-    setOpenLinksFor(eventId);
-    setNewLink(null);
-    setPrintSheet([]);
+  // Refetch only the link list (keeps newLink / printSheet).
+  const loadLinks = async (eventId) => {
     try {
       const r = await eventsAPI.listLinks(eventId);
       setLinks(r.data.links || []);
     } catch { setLinks([]); }
+  };
+
+  const openLinks = async (eventId) => {
+    setOpenLinksFor(eventId);
+    setNewLink(null);
+    setPrintSheet([]);
+    setQrLink(null);
+    await loadLinks(eventId);
+  };
+
+  const showQr = async (l) => {
+    setError('');
+    try {
+      const r = await eventsAPI.getLinkUrl(l.id);
+      setQrLink({ id: l.id, url: r.data.url, label: `${l.team?.name || ''} · ${l.role}` });
+    } catch (e) {
+      setError(e.response?.data?.error || t('events.actionFailed'));
+    }
+  };
+
+  const printAll = async () => {
+    setError('');
+    try {
+      const items = [];
+      for (const l of links.filter((x) => x.retrievable)) {
+        const r = await eventsAPI.getLinkUrl(l.id);
+        items.push({ id: l.id, url: r.data.url, label: `${l.team?.name || ''} · ${l.role}` });
+      }
+      setPrintSheet(items);
+      // Let the sheet render before opening the print dialog.
+      setTimeout(() => window.print(), 100);
+    } catch (e) {
+      setError(e.response?.data?.error || t('events.actionFailed'));
+    }
+  };
+
+  const regenerate = (l) => {
+    if (!window.confirm(t('events.regenerateConfirm'))) return;
+    call(() => eventsAPI.revokeLink(l.id), (res) => { setQrLink(null); addGenerated(res.data); }).then(() => loadLinks(openLinksFor));
   };
 
   const createLink = () => {
@@ -113,7 +151,7 @@ export default function EventsAdmin() {
     call(
       () => eventsAPI.createLink(openLinksFor, payload),
       (res) => addGenerated(res.data),
-    ).then(() => openLinks(openLinksFor));
+    ).then(() => loadLinks(openLinksFor));
   };
 
   return (
@@ -210,7 +248,7 @@ export default function EventsAdmin() {
           <h2>{t('events.linksFor')} #{openLinksFor}</h2>
           {newLink && (
             <div className="events-new-link">
-              <strong>{t('events.linkOnce')}</strong>
+              <strong>{newLink.retrievable ? t('events.linkCreated') : t('events.linkOnce')}</strong>
               <code>{newLink.url}</code>
             </div>
           )}
@@ -241,13 +279,31 @@ export default function EventsAdmin() {
                   <td>{l.onboardingCode?.name || l.onboardingCode?.onboardingCode || '-'}</td>
                   <td>v{l.tokenVersion}</td>
                   <td>
-                    <button onClick={() => call(() => eventsAPI.revokeLink(l.id), (res) => addGenerated(res.data)).then(() => openLinks(openLinksFor))}>{t('events.revoke')}</button>
-                    <button className="events-danger" onClick={() => call(() => eventsAPI.deleteLink(l.id)).then(() => openLinks(openLinksFor))}>{t('common.delete')}</button>
+                    <button onClick={() => showQr(l)} disabled={!l.retrievable} title={l.retrievable ? '' : t('events.regenerateToShowQr')}>{t('events.qrLink')}</button>
+                    <button onClick={() => regenerate(l)}>{t('events.regenerate')}</button>
+                    <button className="events-danger" onClick={() => call(() => eventsAPI.deleteLink(l.id), () => {
+                    setPrintSheet((p) => p.filter((x) => x.id !== l.id));
+                    setQrLink((q) => (q?.id === l.id ? null : q));
+                  }).then(() => loadLinks(openLinksFor))}>{t('common.delete')}</button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <div className="events-form-row">
+            <button onClick={printAll} disabled={!links.some((l) => l.retrievable)}>{t('events.printAllQrs')}</button>
+          </div>
+          {qrLink && (
+            <div className="events-new-link events-qr-panel">
+              <strong>{qrLink.label}</strong>
+              <QRCodeSVG value={qrLink.url} size={200} level="M" />
+              <code>{qrLink.url}</code>
+              <div>
+                <button onClick={() => navigator.clipboard?.writeText(qrLink.url)}>{t('events.copyLink')}</button>
+                <button onClick={() => setQrLink(null)}>{t('common.close')}</button>
+              </div>
+            </div>
+          )}
           {printSheet.length > 0 && (
             <div className="events-print-sheet">
               <div className="events-print-actions no-print">

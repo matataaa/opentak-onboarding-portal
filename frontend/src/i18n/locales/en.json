@@ -345,6 +345,7 @@
     "failedReject": "Failed to reject registration"
   },
   "layout": {
+    "myTeam": "My team",
     "homepage": "Homepage",
     "approvals": "Approvals",
     "admin": "Admin",
@@ -511,6 +512,7 @@
     "links": "Links",
     "linksFor": "Links for event",
     "linkOnce": "Copy this link now — it is shown only once:",
+    "linkCreated": "Link created:",
     "selectTeam": "Select team",
     "roleLeader": "Leader",
     "rolePlayer": "Player",
@@ -520,11 +522,37 @@
     "role": "Role",
     "code": "Code",
     "version": "Version",
-    "revoke": "Revoke",
+    "regenerate": "Regenerate",
+    "regenerateConfirm": "Regenerate this link? The old link and any printed QR code will stop working.",
+    "regenerateToShowQr": "Regenerate to show QR",
+    "qrLink": "QR / Link",
+    "copyLink": "Copy link",
+    "printAllQrs": "Print all QRs of this event",
     "loadFailed": "Could not load events",
     "actionFailed": "Action failed",
     "printSheet": "Print sheet",
     "clearSheet": "Clear"
+  },
+  "eventsMyTeam": {
+    "loading": "Loading…",
+    "loadFailed": "Could not load your team.",
+    "playerLink": "Player join link",
+    "copy": "Copy link",
+    "copied": "Copied!",
+    "missing": "No player link exists for this team. Ask an admin to create it.",
+    "notRetrievable": "This link can no longer be shown. Ask an admin to regenerate it.",
+    "atakEnrollment": "ATAK enrollment",
+    "showAtak": "Show ATAK enrollment QR",
+    "generating": "Generating…",
+    "scanAtak": "ATAK → enrollment → scan this QR code.",
+    "enrollmentFailed": "Could not generate the enrollment."
+  },
+  "eventsShared": {
+    "openInAtak": "Open in ATAK",
+    "copyEnrollment": "Copy enrollment link",
+    "copied": "Copied!",
+    "sameDeviceHint": "On this phone? Tap \"Open in ATAK\" or copy the link instead of scanning the QR.",
+    "linkLabel": "Enrollment link"
   },
   "eventsJoin": {
     "loading": "Loading…",
@@ -583,6 +611,7 @@
       "createUser": "Create User",
       "usernameLabel": "Username *",
       "usernameHelp": "Letters and numbers only (3-32 characters)",
+      "usernameImmutable": "The username cannot be changed after creation.",
       "emailLabel": "Email *",
       "firstNameLabel": "First Name *",
       "lastNameLabel": "Last Name *",

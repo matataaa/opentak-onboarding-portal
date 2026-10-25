@@ -345,6 +345,7 @@
     "failedReject": "Afwijzen van registratie mislukt"
   },
   "layout": {
+    "myTeam": "Mijn team",
     "homepage": "Startpagina",
     "approvals": "Goedkeuringen",
     "admin": "Beheer",
@@ -511,6 +512,7 @@
     "links": "Links",
     "linksFor": "Links voor event",
     "linkOnce": "Kopieer deze link nu — hij wordt maar één keer getoond:",
+    "linkCreated": "Link aangemaakt:",
     "selectTeam": "Kies team",
     "roleLeader": "Leider",
     "rolePlayer": "Speler",
@@ -520,11 +522,37 @@
     "role": "Rol",
     "code": "Code",
     "version": "Versie",
-    "revoke": "Intrekken",
+    "regenerate": "Opnieuw genereren",
+    "regenerateConfirm": "Deze link opnieuw genereren? De oude link en eventueel afgedrukte QR-code werken dan niet meer.",
+    "regenerateToShowQr": "Genereer opnieuw om de QR te tonen",
+    "qrLink": "QR / Link",
+    "copyLink": "Link kopiëren",
+    "printAllQrs": "Alle QR-codes van dit evenement afdrukken",
     "loadFailed": "Kon events niet laden",
     "actionFailed": "Actie mislukt",
     "printSheet": "Printvel",
     "clearSheet": "Wissen"
+  },
+  "eventsMyTeam": {
+    "loading": "Laden…",
+    "loadFailed": "Kon je team niet laden.",
+    "playerLink": "Deelnamelink voor spelers",
+    "copy": "Link kopiëren",
+    "copied": "Gekopieerd!",
+    "missing": "Er is geen spelerslink voor dit team. Vraag een beheerder om die aan te maken.",
+    "notRetrievable": "Deze link kan niet meer worden getoond. Vraag een beheerder om die opnieuw aan te maken.",
+    "atakEnrollment": "ATAK-inschrijving",
+    "showAtak": "ATAK-inschrijf-QR tonen",
+    "generating": "Genereren…",
+    "scanAtak": "ATAK → enrollment → scan deze QR-code.",
+    "enrollmentFailed": "Kon de inschrijving niet genereren."
+  },
+  "eventsShared": {
+    "openInAtak": "Openen in ATAK",
+    "copyEnrollment": "Inschrijflink kopiëren",
+    "copied": "Gekopieerd!",
+    "sameDeviceHint": "Op deze telefoon? Tik op \"Openen in ATAK\" of kopieer de link in plaats van de QR te scannen.",
+    "linkLabel": "Inschrijflink"
   },
   "eventsJoin": {
     "loading": "Laden…",
@@ -583,6 +611,7 @@
       "createUser": "Gebruiker aanmaken",
       "usernameLabel": "Gebruikersnaam *",
       "usernameHelp": "Alleen letters en cijfers (3-32 tekens)",
+      "usernameImmutable": "De gebruikersnaam kan na aanmaken niet meer worden gewijzigd.",
       "emailLabel": "E-mail *",
       "firstNameLabel": "Voornaam *",
       "lastNameLabel": "Achternaam *",

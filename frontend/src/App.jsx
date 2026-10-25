@@ -27,6 +27,7 @@ import RolesList from './pages/admin/RolesList';
 import OnboardingCodesList from './pages/admin/OnboardingCodesList';
 import EventsAdmin from './pages/admin/EventsAdmin';
 import EventsJoin from './pages/EventsJoin';
+import EventsMyTeam from './pages/EventsMyTeam';
 import PendingRegistrationsList from './pages/admin/PendingRegistrationsList';
 import TakProfilesList from './pages/admin/TakProfilesList';
 import MeshtasticList from './pages/admin/MeshtasticList';
@@ -126,7 +127,7 @@ const safeInternalPath = (value) =>
 
 // Protected Route component
 const ProtectedRoute = ({ children, adminOnly = false, allowIncomplete = false }) => {
-  const { user, loading, isAdmin, needsProfileCompletion, needsPasswordSet } = useAuth();
+  const { user, loading, isAdmin, isEventLeader, needsProfileCompletion, needsPasswordSet } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -136,6 +137,11 @@ const ProtectedRoute = ({ children, adminOnly = false, allowIncomplete = false }
   if (!user) {
     const next = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?next=${next}`} replace />;
+  }
+
+  // Event leaders share one account: they cannot edit its profile or password
+  if (allowIncomplete && isEventLeader) {
+    return <Navigate to="/events/my-team" replace />;
   }
 
   // Redirect to set password if needed (OIDC users without password)
@@ -256,6 +262,7 @@ function AppContent() {
               <Route path="announcements" element={<AnnouncementHistory />} />
               <Route path="approvals" element={<Approvals />} />
               <Route path="claim-radio/:nodeId" element={<ClaimRadio />} />
+              <Route path="events/my-team" element={<EventsMyTeam />} />
 
               {/* Admin routes */}
               <Route

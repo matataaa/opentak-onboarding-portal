@@ -354,6 +354,8 @@ export const AuthProvider = ({ children }) => {
     return permissions.isAdmin || permissions.modules.length > 0;
   };
 
+  const isEventLeader = (permissions.roles || []).includes('event_leader');
+
   const value = {
     user,
     loading,
@@ -369,8 +371,11 @@ export const AuthProvider = ({ children }) => {
     permissions,
     approverStatus,
     refreshApproverStatus,
-    needsProfileCompletion,
-    needsPasswordSet,
+    // Shared event-leader accounts have no email/callsign/password of their own
+    // and must never be sent to the profile/password completion pages.
+    isEventLeader,
+    needsProfileCompletion: needsProfileCompletion && !isEventLeader,
+    needsPasswordSet: needsPasswordSet && !isEventLeader,
     impersonating,
     startImpersonation,
     stopImpersonation,

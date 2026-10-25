@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { QRCodeSVG } from 'qrcode.react';
 import { eventsAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import EnrollmentLink from '../components/EnrollmentLink';
 import './EventsJoin.css';
 
 export default function EventsJoin() {
@@ -23,7 +24,7 @@ export default function EventsJoin() {
         const d = res.data;
         if (d.role === 'leader') {
           await oidcLogin(d.access_token, d.refresh_token);
-          navigate('/dashboard');
+          navigate('/events/my-team');
           return;
         }
         if (d.role === 'player' && d.mode === 'individual') {
@@ -60,6 +61,7 @@ export default function EventsJoin() {
         <div className="events-join-qr">
           <QRCodeSVG value={data.atak.qrString} size={240} level="M" />
           <p>{t('eventsJoin.scanAtak')}</p>
+          <EnrollmentLink value={data.atak.qrString} />
         </div>
       ) : (
         <p className="events-join-error">{t('eventsJoin.noEnrollment')}</p>
