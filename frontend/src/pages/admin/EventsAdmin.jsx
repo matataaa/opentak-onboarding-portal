@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { QRCodeSVG } from 'qrcode.react';
 import { eventsAPI, groupsAPI, onboardingCodesAPI } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import './EventsAdmin.css';
 
 // The fixed set of TAK team colours ATAK accepts.
@@ -18,8 +19,19 @@ function toLocalInput(iso) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// The API sends naive UTC timestamps; add the missing zone so the browser shows local time.
+function formatUtc(iso) {
+  if (!iso) return '-';
+  const hasZone = /(Z|[+-]\d{2}:?\d{2})$/.test(iso);
+  const d = new Date(hasZone ? iso : `${iso}Z`);
+  if (Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleString();
+}
+
 export default function EventsAdmin() {
   const { t } = useTranslation();
+  const { hasRole } = useAuth();
+  const canEdit = hasRole('events_admin') || hasRole('administrator');
   const [teams, setTeams] = useState([]);
   const [events, setEvents] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -37,6 +49,10 @@ export default function EventsAdmin() {
   const [linkForm, setLinkForm] = useState({ teamId: '', role: 'leader', onboardingCodeId: '' });
   const [printSheet, setPrintSheet] = useState([]);
   const [qrLink, setQrLink] = useState(null); // {url, label} shown in the QR panel
+  const [accounts, setAccounts] = useState([]);
+  const [eudsAvailable, setEudsAvailable] = useState(true);
+  const [notice, setNotice] = useState('');
+  const [linkRemaining, setLinkRemaining] = useState({}); // linkId -> open accounts left after a close
 
   const addGenerated = (d) => {
     setNewLink(d);
@@ -106,8 +122,53 @@ export default function EventsAdmin() {
     } catch { setLinks([]); }
   };
 
+  const loadAccounts = async (eventId) => {
+    try {
+      const r = await eventsAPI.listAccounts(eventId);
+      setAccounts(r.data.accounts || []);
+      setEudsAvailable(r.data.eudsAvailable !== false);
+    } catch (e) {
+      setAccounts([]);
+      setError(e.response?.data?.error || t('events.loadFailed'));
+    }
+  };
+
+  const moveAccount = (a, value) => {
+    if (value === '' && !window.confirm(t('events.parkConfirm'))) return;
+    call(() => eventsAPI.moveAccount(openLinksFor, a.id, value === '' ? null : Number(value)))
+      .then(() => loadAccounts(openLinksFor));
+  };
+
+  const closeAccount = (a) => {
+    if (!window.confirm(t('events.closeAccountConfirm'))) return;
+    call(() => eventsAPI.closeAccount(openLinksFor, a.id)).then(() => loadAccounts(openLinksFor));
+  };
+
+  const closeLinkAccounts = async (l) => {
+    if (!window.confirm(t('events.closeLinkAccountsConfirm'))) return;
+    setError('');
+    let data;
+    try {
+      data = (await eventsAPI.closeLinkSessions(l.id)).data;
+    } catch (e) {
+      data = e.response?.data;
+      setError(data?.error || t('events.actionFailed'));
+    }
+    if (data && typeof data.closed === 'number') {
+      setNotice(data.remaining > 0
+        ? t('events.closedAccountsRemaining', { closed: data.closed, remaining: data.remaining })
+        : t('events.closedAccounts', { closed: data.closed }));
+      setLinkRemaining((p) => ({ ...p, [l.id]: data.remaining }));
+    }
+    loadAccounts(openLinksFor);
+  };
+
   const openLinks = async (eventId) => {
     setOpenLinksFor(eventId);
+    setNotice('');
+    setLinkRemaining({});
+    setAccounts([]);
+    loadAccounts(eventId);
     setNewLink(null);
     setPrintSheet([]);
     setQrLink(null);
@@ -284,6 +345,9 @@ export default function EventsAdmin() {
                   <td>
                     <button onClick={() => showQr(l)} disabled={!l.retrievable} title={l.retrievable ? '' : t('events.regenerateToShowQr')}>{t('events.qrLink')}</button>
                     <button onClick={() => regenerate(l)}>{t('events.regenerate')}</button>
+                    {canEdit && (
+                      <button className="events-danger" onClick={() => closeLinkAccounts(l)}>{linkRemaining[l.id] > 0 ? t('events.closeLinkAccountsMore', { remaining: linkRemaining[l.id] }) : t('events.closeLinkAccounts')}</button>
+                    )}
                     <button className="events-danger" onClick={() => call(() => eventsAPI.deleteLink(l.id), () => {
                     setPrintSheet((p) => p.filter((x) => x.id !== l.id));
                     setQrLink((q) => (q?.id === l.id ? null : q));
@@ -296,6 +360,54 @@ export default function EventsAdmin() {
           <div className="events-form-row">
             <button onClick={printAll} disabled={!links.some((l) => l.retrievable)}>{t('events.printAllQrs')}</button>
           </div>
+
+          {/* Device accounts of the selected event */}
+          <h3>{t('events.accounts')}</h3>
+          <p className="events-hint">{t('events.accountsNotice')}</p>
+          {notice && <p className="events-hint">{notice}</p>}
+          {!eudsAvailable && <p className="events-hint">{t('events.eudsUnavailable')}</p>}
+          <div className="events-form-row">
+            <button onClick={() => loadAccounts(openLinksFor)}>{t('events.refresh')}</button>
+          </div>
+          <div className="events-table-wrap">
+            <table className="events-table">
+              <thead><tr><th>{t('events.accountCallsign')} / {t('events.accountUsername')}</th><th>{t('events.team')}</th><th>{t('events.accountStatus')}</th><th>{t('events.accountCreated')}</th>{canEdit && <th></th>}</tr></thead>
+              <tbody>
+                {accounts.length === 0 && <tr><td colSpan={canEdit ? 5 : 4}>{t('events.accountsEmpty')}</td></tr>}
+                {accounts.map((a) => (
+                  <tr key={a.id}>
+                    <td>
+                      {(a.euds || []).map((e) => e.callsign).filter(Boolean).join(', ') || '-'}
+                      <div className="events-hint">{a.otsUsername}</div>
+                    </td>
+                    <td>{a.team?.name || '-'}</td>
+                    <td>
+                      {a.legacy ? t('events.accountLegacy') : (a.parked ? t('events.accountParked') : t('events.accountActive'))}
+                    </td>
+                    <td>{formatUtc(a.createdAt)}</td>
+                    {canEdit && (
+                      <td>
+                        {!a.legacy && (
+                          <>
+                            <select
+                              aria-label={t('events.moveTo')}
+                              value={a.parked ? '' : (a.team?.id ?? '')}
+                              onChange={(e) => moveAccount(a, e.target.value)}
+                            >
+                              <option value="">{t('events.parkNoTeam')}</option>
+                              {teams.map((tm) => <option key={tm.id} value={tm.id}>{tm.name}</option>)}
+                            </select>
+                            <button className="events-danger" onClick={() => closeAccount(a)}>{t('events.closeAccount')}</button>
+                          </>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
           {qrLink && (
             <div className="events-new-link events-qr-panel">
               <strong>{qrLink.label}</strong>

@@ -29,7 +29,7 @@ class FakeOTS:
         self.fail_euds = False
         self.fail_profile_delete = False
 
-    def get_euds(self, page=None, per_page=None, username=None):
+    def get_euds(self, page=None, per_page=None, username=None, sort_by=None):
         if self.fail_euds:
             raise Exception('euds down')
         euds = [e for e in self.euds if username is None or e['username'] == username]

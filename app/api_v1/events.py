@@ -1068,3 +1068,354 @@ def record_event_registration(username, onboarding_code):
                     return
     except Exception:
         current_app.logger.exception('Failed to record event registration for %s', username)
+
+
+# ----------------------------------------------------------------------------
+# Admin: device accounts of an event (list, move between teams, park, close)
+# ----------------------------------------------------------------------------
+# Per-event OTS groups for parked devices. OTS publishes a user's CoT to
+# `<group>.OUT` for each IN membership (and to __ANON__.OUT when the user has no
+# IN membership at all), and a device only receives from groups where it has OUT.
+# So a parked device holds OUT on `evt<E>_parked` (receive-only: nobody writes
+# there) and IN on `evt<E>_parked_in` (nobody has OUT there, so what the device
+# sends reaches no one). Names matching EVENT_GROUP_RE are managed by the portal
+# and skipped by the OTS group sync, so they have no local OTSGroupModel row.
+EVENT_GROUP_RE = re.compile(r'^evt\d+_parked(_in)?$')
+
+
+def _parked_group_name(event_id):
+    return 'evt%d_parked' % event_id
+
+
+def _parked_in_group_name(event_id):
+    return 'evt%d_parked_in' % event_id
+
+
+def _parked_memberships(event_id):
+    return {(_parked_group_name(event_id), 'OUT'), (_parked_in_group_name(event_id), 'IN')}
+
+
+def session_group_memberships(session):
+    """The (group name, direction) pairs a device session currently holds in OTS."""
+    if session.parkedAt:
+        return _parked_memberships(session.eventId)
+    return _team_memberships(session.team)
+
+
+def _team_memberships(team):
+    group = team.otsGroup if team else None
+    if group and not group.missing_in_ots:
+        return {(group.name, 'IN'), (group.name, 'OUT')}
+    return set()
+
+
+def _ensure_group(name, description):
+    try:
+        otsClient.create_group(name, description)
+        current_app.logger.info("Created parked group '%s' in OTS", name)
+    except Exception:
+        # Most likely it exists already; anything else fails the lookup too
+        body = otsClient.get_groups(name=name)
+        results = body.get('response', {}).get('results', []) if isinstance(body, dict) else []
+        if not any(isinstance(g, dict) and g.get('name') == name for g in results):
+            raise
+
+
+def _ensure_parked_groups(event_id):
+    """Create the event's two parked groups in OTS if missing (raises on failure)."""
+    _ensure_group(_parked_group_name(event_id),
+                  'Parked devices of event %d (managed by the portal)' % event_id)
+    _ensure_group(_parked_in_group_name(event_id),
+                  'Parked devices of event %d, send side (managed by the portal)' % event_id)
+    return _parked_memberships(event_id)
+
+
+def cleanup_parked_group(event_id):
+    """Delete the event's parked OTS groups once no open device session is left (best-effort)."""
+    if EventSessionModel.query.filter_by(eventId=event_id, mode='device', closedAt=None).count():
+        return False
+    from app.api_v1.groups import _ots_status_code
+    deleted = False
+    for name in (_parked_group_name(event_id), _parked_in_group_name(event_id)):
+        try:
+            otsClient.delete_group(name)
+            current_app.logger.info("Deleted parked group '%s' from OTS", name)
+            deleted = True
+        except Exception as e:
+            if _ots_status_code(e) == 404:
+                continue  # never created, or already gone
+            current_app.logger.warning("Could not delete parked group '%s' from OTS: %s", name, e)
+    return deleted
+
+
+def _apply_group_change(username, source, target):
+    """Move an account from the source to the target memberships in OTS.
+
+    Adds first, then removes, so the device always keeps an IN and an OUT
+    membership (without IN, OTS would publish its CoT to __ANON__). If any call
+    fails, every step that may have taken effect (including the one that raised:
+    OTS can change state and still return an error) is reverted best-effort and
+    False is returned. Calls are idempotent. Reverts re-add removed memberships
+    first; added ones are only removed once all re-adds worked, so a failed
+    revert leaves the device in both groups rather than in none.
+    """
+    pending = []
+    try:
+        for pair in sorted(target - source):
+            pending.append(('add', pair))
+            otsClient.add_user_to_group(username, pair[0], pair[1])
+        for pair in sorted(source - target):
+            pending.append(('remove', pair))
+            otsClient.remove_user_from_group(username, pair[0], pair[1])
+        return True
+    except Exception:
+        current_app.logger.exception('Group change for %s failed, reverting', username)
+    readded = True
+    for action, pair in pending:
+        if action == 'remove':
+            try:
+                otsClient.add_user_to_group(username, pair[0], pair[1])
+            except Exception:
+                readded = False
+                current_app.logger.exception(
+                    'Could not restore %s of %s in group %s', pair[1], username, pair[0])
+    if not readded:
+        current_app.logger.error(
+            'Not removing the added groups of %s: restoring the old ones failed', username)
+        return False
+    for action, pair in pending:
+        if action == 'add':
+            try:
+                otsClient.remove_user_from_group(username, pair[0], pair[1])
+            except Exception:
+                current_app.logger.exception(
+                    'Could not revert add of %s in group %s (%s)', username, pair[0], pair[1])
+    return False
+
+
+def _read_eud_index(usernames):
+    """{username: [eud, ...]} from ONE EUD listing; None if OTS could not be read."""
+    try:
+        results = otsClient.get_all_pages(otsClient.get_euds, sort_by='id').get('response', {}).get('results', [])
+    except Exception:
+        current_app.logger.exception('Could not read EUDs from OTS')
+        return None
+    index = {}
+    for eud in results:
+        name = eud.get('username')
+        if name in usernames:
+            index.setdefault(name, []).append({
+                'callsign': eud.get('callsign'),
+                'uid': eud.get('uid'),
+                'lastSeen': eud.get('last_event_time'),
+            })
+    return index
+
+
+def _account_to_dict(session, euds=None):
+    data = {
+        'id': session.id,
+        'otsUsername': session.otsUsername,
+        'legacy': session.mode != 'device',
+        'team': {'id': session.team.id, 'name': session.team.name, 'color': session.team.color}
+        if session.team else None,
+        'parked': session.parkedAt is not None,
+        'createdAt': session.createdAt.isoformat() if session.createdAt else None,
+        'expiresAt': session.expiresAt.isoformat() if session.expiresAt else None,
+        'eventLinkId': session.eventLinkId,
+    }
+    if euds is not None:
+        data['euds'] = euds
+    return data
+
+
+@api_v1.route('/events/<int:event_id>/accounts', methods=['GET'])
+@jwt_required()
+@require_role('events_admin', 'events_readonly')
+def list_event_accounts(event_id):
+    if not EventModel.query.get(event_id):
+        return jsonify({'error': 'Event not found'}), 404
+    sessions = EventSessionModel.query.filter(
+        EventSessionModel.eventId == event_id,
+        EventSessionModel.mode.in_(['device', 'shared']),
+        EventSessionModel.closedAt.is_(None),
+    ).order_by(EventSessionModel.id).all()
+    index = _read_eud_index({s.otsUsername for s in sessions if s.otsUsername}) if sessions else {}
+    return jsonify({
+        'accounts': [_account_to_dict(s, (index or {}).get(s.otsUsername, [])) for s in sessions],
+        'eudsAvailable': index is not None,
+    }), 200
+
+
+def _open_device_session(event_id, session_id):
+    """The open device session of this event, or an error response."""
+    session = EventSessionModel.query.filter_by(id=session_id, eventId=event_id).first()
+    if not session:
+        return None, (jsonify({'error': 'Account not found'}), 404)
+    if session.mode != 'device':
+        return None, (jsonify({'error': 'Legacy shared accounts cannot be managed here'}), 409)
+    if session.closedAt:
+        return None, (jsonify({'error': 'Account is already closed'}), 409)
+    return session, None
+
+
+@api_v1.route('/events/<int:event_id>/accounts/<int:session_id>/move', methods=['POST'])
+@jwt_required()
+@require_role('events_admin')
+def move_event_account(event_id, session_id):
+    """Move a device account to another team's OTS group, or park it (teamId null).
+
+    The device only picks the change up when it reconnects.
+    """
+    session, error = _open_device_session(event_id, session_id)
+    if error:
+        return error
+    data = request.get_json(silent=True) or {}
+    if 'teamId' not in data:
+        return jsonify({'error': 'teamId is required (a team id, or null to park)'}), 400
+    team_id = data['teamId']
+    if team_id is not None and (isinstance(team_id, bool) or not isinstance(team_id, int)):
+        return jsonify({'error': 'teamId must be an integer or null'}), 400
+
+    target_team = None
+    if team_id is not None:
+        target_team = EventTeamModel.query.get(team_id)
+        if not target_team:
+            return jsonify({'error': 'Unknown teamId'}), 400
+        if not target_team.otsGroup or target_team.otsGroup.missing_in_ots:
+            return jsonify({'error': 'This team has no usable OTS group'}), 400
+
+    was_parked = session.parkedAt is not None
+    if (target_team is None and was_parked) or (
+            target_team is not None and not was_parked and target_team.id == session.eventTeamId):
+        return jsonify({'account': _account_to_dict(session)}), 200
+    if session.expiresAt and session.expiresAt < datetime.now():
+        return jsonify({'error': 'This account has expired'}), 409
+
+    username = session.otsUsername
+    source = session_group_memberships(session)
+    if target_team is None:
+        try:
+            target = _ensure_parked_groups(event_id)
+        except Exception:
+            current_app.logger.exception('Could not prepare parked group for event %s', event_id)
+            return jsonify({'error': 'Could not create the parked groups in OpenTAK Server'}), 502
+    else:
+        target = _team_memberships(target_team)
+
+    from_name = 'parked' if was_parked else (session.team.name if session.team else None)
+    if not _apply_group_change(username, source, target):
+        return jsonify({'error': 'OpenTAK Server group update failed; nothing was changed'}), 502
+
+    try:
+        if target_team is None:
+            session.parkedAt = datetime.now()
+        else:
+            session.parkedAt = None
+            session.eventTeamId = target_team.id
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed to save move of %s, reverting OTS groups', username)
+        _apply_group_change(username, target, source)
+        return jsonify({'error': 'Could not save the change'}), 500
+
+    current_app.logger.info(
+        'Event account move: actor=%s event=%s account=%s from=%s to=%s',
+        get_jwt_identity(), event_id, username, from_name,
+        'parked' if target_team is None else target_team.name)
+    return jsonify({'account': _account_to_dict(session)}), 200
+
+
+CLOSE_BATCH_SIZE = 25  # sessions closed per close-by-link call (each costs several OTS calls)
+
+
+def _close_device_sessions(sessions, reason='closed by admin'):
+    """Close open device sessions right away (admin action). Returns (closed, failed, pending).
+
+    A session is only marked closed once its OTS account is deactivated/deleted
+    AND colour and group cleanup worked. failed: the account is still usable.
+    pending: the account is disabled but cleanup is incomplete; the session stays
+    open and its expiry is moved to now so the close job retries it.
+    """
+    from app.jobs import cleanup_event_session
+    from app.services.event_team_colors import read_profiles
+    existing = None
+    if sessions:
+        try:
+            existing = read_profiles()
+        except Exception:
+            current_app.logger.exception('Could not read OTS profiles for account close')
+    closed, failed, pending = 0, 0, 0
+    event_ids = set()
+    for session in sessions:
+        try:
+            event_id, username = session.eventId, session.otsUsername
+            account_ok, colour_ok, groups_ok = cleanup_event_session(session, existing)
+            if not account_ok:
+                failed += 1
+                current_app.logger.error('Admin close of %s failed: OTS account still usable', username)
+                continue
+            if not (colour_ok and groups_ok):
+                pending += 1
+                now = datetime.now()
+                if not session.expiresAt or session.expiresAt > now:
+                    session.expiresAt = now
+                db.session.commit()
+                current_app.logger.warning(
+                    'Admin close of %s: account disabled, OTS cleanup incomplete; the close job retries',
+                    username)
+                continue
+            session.closeReason = reason
+            session.closedAt = datetime.now()
+            db.session.commit()
+            closed += 1
+            event_ids.add(event_id)
+            current_app.logger.info('Event account closed: actor=%s event=%s account=%s',
+                                    get_jwt_identity(), event_id, username)
+        except Exception:
+            db.session.rollback()
+            failed += 1
+            current_app.logger.exception('Admin close of session %s failed', session.id)
+    for event_id in event_ids:
+        cleanup_parked_group(event_id)
+    return closed, failed, pending
+
+
+@api_v1.route('/events/<int:event_id>/accounts/<int:session_id>/close', methods=['POST'])
+@jwt_required()
+@require_role('events_admin')
+def close_event_account(event_id, session_id):
+    session, error = _open_device_session(event_id, session_id)
+    if error:
+        return error
+    closed, _failed, pending = _close_device_sessions([session])
+    if pending:
+        return jsonify({
+            'error': 'The account is disabled but its OpenTAK Server cleanup is incomplete; it stays open and is retried automatically',
+            'accountDisabled': True, 'cleanupPending': True}), 502
+    if not closed:
+        return jsonify({'error': 'Could not close the account in OpenTAK Server; it is still open'}), 502
+    return jsonify({'message': 'Account closed', 'account': _account_to_dict(session)}), 200
+
+
+@api_v1.route('/events/links/<int:link_id>/close-sessions', methods=['POST'])
+@jwt_required()
+@require_role('events_admin')
+def close_event_link_sessions(link_id):
+    """Close the open device accounts created through this link, at most CLOSE_BATCH_SIZE per call.
+
+    `remaining` is the number of this link's accounts still open afterwards; call again while > 0.
+    """
+    if not EventLinkModel.query.get(link_id):
+        return jsonify({'error': 'Link not found'}), 404
+    query = EventSessionModel.query.filter_by(
+        eventLinkId=link_id, mode='device', closedAt=None).order_by(EventSessionModel.id)
+    closed, failed, pending = _close_device_sessions(query.limit(CLOSE_BATCH_SIZE).all())
+    body = {'closed': closed, 'failed': failed + pending, 'remaining': query.count()}
+    if pending:
+        body['cleanupPending'] = pending
+    if failed or pending:
+        body['error'] = 'Some accounts could not be fully closed in OpenTAK Server and are still open'
+        return jsonify(body), 502
+    return jsonify(body), 200

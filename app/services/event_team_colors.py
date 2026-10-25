@@ -131,7 +131,7 @@ def sync_event_team_colors():
         if t.leaderUser and t.color
     }
 
-    euds = otsClient.get_all_pages(otsClient.get_euds).get('response', {}).get('results', [])
+    euds = otsClient.get_all_pages(otsClient.get_euds, sort_by='id').get('response', {}).get('results', [])
     existing = read_profiles()
 
     for eud in euds:
@@ -163,7 +163,7 @@ def remove_event_colors_for_username(username, color, existing=None):
     Pass existing (from read_profiles) to avoid re-reading profiles per call.
     Returns True only if every delete succeeded.
     """
-    euds = otsClient.get_all_pages(otsClient.get_euds, username=username).get('response', {}).get('results', [])
+    euds = otsClient.get_all_pages(otsClient.get_euds, username=username, sort_by='id').get('response', {}).get('results', [])
     if existing is None:
         existing = read_profiles()
     ok = True

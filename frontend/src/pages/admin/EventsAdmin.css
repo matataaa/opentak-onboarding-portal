@@ -32,3 +32,5 @@
   .events-print-card { break-inside: avoid; page-break-inside: avoid; }
 }
 .events-hint { font-size: 0.85rem; color: var(--text-muted, #666); margin: 0.25rem 0 0; }
+.events-table-wrap { overflow-x: auto; }
+.events-table select { padding: 0.35rem 0.5rem; border: 1px solid var(--border-color, #ccc); border-radius: 6px; margin-right: 0.3rem; max-width: 100%; }

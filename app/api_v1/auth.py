@@ -185,13 +185,14 @@ def login():
 
         # Sync groups from OTS
         from app.models import OTSGroupModel
+        from app.api_v1.events import EVENT_GROUP_RE
         ots_groups_data = ots_data.get('groups', [])
         if ots_groups_data:
             current_app.logger.info(f"Login: User {username} - OTS groups: {ots_groups_data}")
             for group_data in ots_groups_data:
                 group_name = group_data.get('name') if isinstance(group_data, dict) else str(group_data)
-                if not group_name:
-                    continue
+                if not group_name or EVENT_GROUP_RE.match(group_name):
+                    continue  # portal-managed per-event groups stay out of the portal
                 group = OTSGroupModel.get_by_name(group_name)
                 if not group:
                     group = OTSGroupModel.create_group(name=group_name, description="Auto-created from OTS")
