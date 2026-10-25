@@ -199,7 +199,8 @@ def close_expired_event_sessions():
     """Close event-player sessions whose event has ended.
 
     The team colour profiles on the session account's devices are removed first.
-    Shared sessions own a temporary OTS account; clean it up per the event's
+    Shared and device sessions own a temporary OTS account (device accounts are
+    also removed from their team's OTS group first); clean it up per the event's
     accountCleanup policy (deactivate by default, or delete). Individual
     sessions belong to a normal self-registered account, which is left alone;
     only the session is closed. Leader accounts are persistent shared logins,
@@ -227,7 +228,21 @@ def close_expired_event_sessions():
                 cleanup = event.accountCleanup if event else 'deactivate'
                 username = session.otsUsername
 
-                # Colours first; the account is only touched once they are gone
+                owns_account = bool(username) and session.mode in ('shared', 'device')
+                delete_mode = cleanup == 'delete'
+                account_ok = True
+
+                # Security-critical step first: in deactivate mode the account is
+                # deactivated before anything else, so a colour failure can never
+                # keep it usable.
+                if owns_account and not delete_mode:
+                    try:
+                        otsClient.deactivate_user(username)
+                        print(f"Event session cleanup: deactivate {username}")
+                    except Exception as e:
+                        account_ok = False
+                        print(f"Event session cleanup failed for {username}: {e}")
+
                 colour_ok = True
                 if username and session.team and session.team.color:
                     if existing is None:
@@ -239,19 +254,38 @@ def close_expired_event_sessions():
                             colour_ok = False
                             print(f"Event colour removal failed for {username}: {e}")
 
-                account_ok = True
-                if username and session.mode == 'shared' and colour_ok:
-                    try:
-                        if cleanup == 'delete':
+                if owns_account and delete_mode:
+                    # The account is only deleted once the colours are gone; until
+                    # then (or if the delete fails) it is deactivated so it is
+                    # never left usable while the job retries.
+                    deleted = False
+                    if colour_ok:
+                        try:
                             otsClient.delete_user(username)
-                        else:
-                            otsClient.deactivate_user(username)
-                        print(f"Event session cleanup: {cleanup} {username}")
-                    except Exception as e:
+                            deleted = True
+                            print(f"Event session cleanup: delete {username}")
+                        except Exception as e:
+                            print(f"Event session cleanup failed for {username}: {e}")
+                    if not deleted:
                         account_ok = False
-                        print(f"Event session cleanup failed for {username}: {e}")
-                elif username and session.mode == 'shared':
-                    account_ok = False
+                        try:
+                            otsClient.deactivate_user(username)
+                            print(f"Event session cleanup: deactivate {username} (delete pending)")
+                        except Exception as e:
+                            print(f"Event session deactivation failed for {username}: {e}")
+
+                # Group membership is best-effort and only needed when the account
+                # is kept (teams are reused across events); a failure here is
+                # retried but never blocks or undoes the steps above.
+                if owns_account and account_ok and session.mode == 'device' and not delete_mode:
+                    group = session.team.otsGroup if session.team else None
+                    if group and not group.missing_in_ots:
+                        try:
+                            for direction in ('IN', 'OUT'):
+                                otsClient.remove_user_from_group(username, group.name, direction)
+                        except Exception as e:
+                            account_ok = False
+                            print(f"Event session group removal failed for {username}: {e}")
 
                 if colour_ok and account_ok:
                     session.closeReason = 'expired'

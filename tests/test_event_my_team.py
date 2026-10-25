@@ -29,6 +29,9 @@ class FakeOTS:
     def add_user_to_group(self, *a, **k):
         return {}
 
+    def delete_user(self, *a, **k):
+        return {}
+
     def create_atak_qr_string(self, username=None, exp=None, nbf=None, max_uses=None):
         if self.fail_atak:
             raise RuntimeError('https://ots.internal/secret boom')
@@ -239,12 +242,12 @@ def test_shared_enrollment(client, strong_key, world, ots):
     assert d['atak']['qrString'] == 'tak://enroll?x=1'
     assert 'password' not in r.get_data(as_text=True).lower()
     call = ots.atak_calls[0]
-    assert call['username'] == 'evt%d_t%d' % (w['event'].id, w['ta'].id)
-    assert call['max_uses'] == 500
+    # one new account per press (details in test_event_device_accounts.py)
+    assert call['username'].startswith('evt%d_' % w['event'].id)
+    assert call['max_uses'] == events_mod.DEVICE_ENROLLMENT_MAX_USES
     assert call['exp'] == d['atak']['expiresAt']
-    remaining = (w['event'].validUntil - datetime.datetime.now()).total_seconds()
     import time
-    assert abs((call['exp'] - time.time()) - remaining) < 5
+    assert abs((call['exp'] - time.time()) - events_mod.DEVICE_ENROLLMENT_TTL_SECONDS) < 5
 
 
 def test_enrollment_ots_failure(client, db, strong_key, world, ots):
@@ -373,8 +376,12 @@ def test_shared_join_error_contract(client, db, strong_key, world, ots, monkeypa
 
     # event ended between window check and enrollment -> 403 'This event has ended'
     monkeypatch.setattr(events_mod, '_event_window_error', lambda ev: None)
-    monkeypatch.setattr(events_mod, '_ensure_shared_player_account',
-                        lambda ev, tm: ('evt_x', False))
+    persisted = EventSessionModel(eventId=w['event'].id, eventTeamId=w['ta'].id,
+                                  otsUsername='evt_x', mode='device')
+    db.session.add(persisted)
+    db.session.commit()
+    monkeypatch.setattr(events_mod, '_create_device_account',
+                        lambda ev, tm, link=None, client_key=None: (persisted, None))
     w['event'].validUntil = datetime.datetime.now() - datetime.timedelta(minutes=1)
     db.session.commit()
     r = _join_shared(client, w)

@@ -221,8 +221,11 @@ export default function EventsAdmin() {
             <option value="deactivate">{t('events.cleanupDeactivate')}</option>
             <option value="delete">{t('events.cleanupDelete')}</option>
           </select>
-          <button onClick={createEvent} disabled={!eventForm.name}>{t('events.addEvent')}</button>
+          <button onClick={createEvent} disabled={!eventForm.name || (eventForm.playerAccessMode === 'shared' && !eventForm.validUntil)}>{t('events.addEvent')}</button>
         </div>
+        {eventForm.playerAccessMode === 'shared' && !eventForm.validUntil && (
+          <p className="events-hint">{t('events.sharedNeedsEnd')}</p>
+        )}
         <table className="events-table">
           <thead><tr><th>{t('events.eventName')}</th><th>{t('events.validUntil')}</th><th>{t('events.playerMode')}</th><th>{t('events.cleanup')}</th><th></th></tr></thead>
           <tbody>

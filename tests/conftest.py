@@ -43,6 +43,14 @@ from app import create_app
 from app.models import db as _db
 
 
+@pytest.fixture(autouse=True)
+def _reset_device_throttle():
+    """The device-account throttle is in-process state; keep tests independent."""
+    from app.api_v1 import events as events_mod
+    events_mod._device_attempts.clear()
+    yield
+
+
 @pytest.fixture(scope='session')
 def app():
     """Create application for testing"""

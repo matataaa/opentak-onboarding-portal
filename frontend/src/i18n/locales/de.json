@@ -503,7 +503,8 @@
     "validFrom": "Aktiv ab",
     "validUntil": "Endet um",
     "modeIndividual": "Spieler: individuelle Konten",
-    "modeShared": "Spieler: gemeinsames Teamkonto",
+    "modeShared": "Spieler: ein Konto pro Gerät",
+    "sharedNeedsEnd": "Der gemeinsame Modus braucht eine Endzeit (gültig bis), damit Gerätekonten ablaufen können.",
     "cleanupDeactivate": "Aufräumen: deaktivieren",
     "cleanupDelete": "Aufräumen: löschen",
     "addEvent": "Event hinzufügen",
@@ -542,7 +543,7 @@
     "missing": "Für dieses Team gibt es keinen Spielerlink. Bitte einen Admin, ihn zu erstellen.",
     "notRetrievable": "Dieser Link kann nicht mehr angezeigt werden. Bitte einen Admin, ihn neu zu erzeugen.",
     "atakEnrollment": "ATAK-Enrollment",
-    "showAtak": "ATAK-Enrollment-QR anzeigen",
+    "showAtak": "Enrollment für ein neues Gerät erstellen",
     "generating": "Wird erzeugt…",
     "scanAtak": "ATAK → Enrollment → diesen QR-Code scannen.",
     "enrollmentFailed": "Das Enrollment konnte nicht erzeugt werden."
@@ -552,7 +553,8 @@
     "copyEnrollment": "Registrierungslink kopieren",
     "copied": "Kopiert!",
     "sameDeviceHint": "Auf diesem Handy? Tippe auf \"In ATAK öffnen\" oder kopiere den Link, statt den QR-Code zu scannen.",
-    "linkLabel": "Registrierungslink"
+    "linkLabel": "Registrierungslink",
+    "singleUseHint": "Dieser Code gilt für ein Gerät und ist etwa 15 Minuten gültig. Laden Sie die Seite neu, um einen neuen Code zu erhalten."
   },
   "eventsJoin": {
     "loading": "Wird geladen…",

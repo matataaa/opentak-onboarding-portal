@@ -420,13 +420,13 @@ def test_close_job_retries_after_deactivate_failure(data, ots, app, monkeypatch)
     assert ots.deactivated == ['zz_acc']
 
 
-def test_close_job_profile_read_failure_leaves_account_alone(data, ots, app, monkeypatch):
+def test_close_job_profile_read_failure_deactivates_and_retries(data, ots, app, monkeypatch):
     session = _expiring(data, ots, app, monkeypatch)
     ots.fail_euds = True
     jobs.close_expired_event_sessions()
     data.session.expire_all()
     assert EventSessionModel.query.get(session.id).closedAt is None
-    assert getattr(ots, 'deactivated', []) == []
+    assert ots.deactivated == ['zz_acc']
 
 
 def test_close_job_individual_with_colours_ok_closes_without_account_call(data, ots, app, monkeypatch):
@@ -448,21 +448,21 @@ def test_close_job_gives_up_after_seven_days(data, ots, app, monkeypatch):
     assert closed.closeReason == 'expired (OTS cleanup failed)'
 
 
-def test_close_job_profile_delete_failure_keeps_session_and_account(data, ots, app, monkeypatch):
+def test_close_job_profile_delete_failure_deactivates_and_keeps_session(data, ots, app, monkeypatch):
     session = _expiring(data, ots, app, monkeypatch)
     ots.fail_profile_delete = True
     jobs.close_expired_event_sessions()
     data.session.expire_all()
     assert EventSessionModel.query.get(session.id).closedAt is None
-    assert getattr(ots, 'deactivated', []) == []
+    assert ots.deactivated == ['zz_acc']
     ots.fail_profile_delete = False
     jobs.close_expired_event_sessions()
     data.session.expire_all()
     assert EventSessionModel.query.get(session.id).closedAt is not None
-    assert ots.deactivated == ['zz_acc']
+    assert 'zz_acc' in ots.deactivated
 
 
-def test_close_job_colour_removal_raising_keeps_session_and_account(data, ots, app, monkeypatch):
+def test_close_job_colour_removal_raising_deactivates_and_keeps_session(data, ots, app, monkeypatch):
     session = _expiring(data, ots, app, monkeypatch)
 
     def boom(*args, **kwargs):
@@ -472,7 +472,7 @@ def test_close_job_colour_removal_raising_keeps_session_and_account(data, ots, a
     jobs.close_expired_event_sessions()
     data.session.expire_all()
     assert EventSessionModel.query.get(session.id).closedAt is None
-    assert getattr(ots, 'deactivated', []) == [] and getattr(ots, 'removed_users', []) == []
+    assert ots.deactivated == ['zz_acc'] and getattr(ots, 'removed_users', []) == []
 
 
 def test_close_job_delete_policy_deletes_once(data, ots, app, monkeypatch):

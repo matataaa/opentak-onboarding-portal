@@ -12,6 +12,8 @@ import base64
 import hashlib
 import hmac
 import secrets
+import threading
+from collections import deque
 
 from flask import request, jsonify, current_app
 from flask_jwt_extended import (jwt_required, create_access_token, create_refresh_token,
@@ -21,11 +23,25 @@ from datetime import datetime, timedelta
 from app.api_v1 import api_v1
 from app.models import db, EventTeamModel, EventModel, EventLinkModel, EventSessionModel, OTSGroupModel, UserModel, OnboardingCodeModel, SystemSettingsModel
 from app.ots import otsClient
+from app.exceptions import BadRequestError
 from app.rbac import require_role
 
 # Access tokens stay short even when the leader session lives (via refresh)
 # until the event ends.
 LEADER_ACCESS_MAX_SECONDS = 12 * 3600
+
+# One OTS account per device (shared player mode)
+# OTS counts every signClient call as a use, so one retry must not brick the account
+DEVICE_ENROLLMENT_MAX_USES = 3
+DEVICE_ENROLLMENT_TTL_SECONDS = 15 * 60
+DEVICE_MAX_PER_TEAM = 100
+EVENT_MAX_DEVICE_ACCOUNTS = 500
+# Per link per window: a whole team scanning at a briefing must not hit 429;
+# the per-team and per-event caps bound the total anyway
+DEVICE_THROTTLE_MAX = 30
+DEVICE_THROTTLE_WINDOW_SECONDS = 60
+DEVICE_USERNAME_ATTEMPTS = 3
+DEVICE_COOKIE_NAME = 'event_device_key'
 
 OTS_USERNAME_RE = re.compile(r'^[a-z0-9]{3,32}$')
 LINK_ROLES = ('leader', 'player')
@@ -246,6 +262,13 @@ def _delete_closed_sessions(**filters):
     base.delete(synchronize_session=False)
 
 
+def _detach_sessions_from_links(link_criterion):
+    """Null eventLinkId of any remaining session pointing at links about to be bulk-deleted."""
+    link_ids = db.session.query(EventLinkModel.id).filter(link_criterion)
+    EventSessionModel.query.filter(EventSessionModel.eventLinkId.in_(link_ids)).update(
+        {'eventLinkId': None}, synchronize_session=False)
+
+
 @api_v1.route('/events/teams/<int:team_id>', methods=['DELETE'])
 @jwt_required()
 @require_role('events_admin')
@@ -258,6 +281,7 @@ def delete_event_team(team_id):
         return jsonify({'error': 'Team has open sessions; end the event(s) first (set the end time to now or earlier), wait for the session cleanup to run, then delete the team'}), 409
     # FKs do not cascade: remove children explicitly, in one transaction.
     _delete_closed_sessions(eventTeamId=team_id)
+    _detach_sessions_from_links(EventLinkModel.eventTeamId == team_id)
     EventLinkModel.query.filter_by(eventTeamId=team_id).delete(synchronize_session=False)
     db.session.delete(team)
     db.session.commit()
@@ -344,6 +368,9 @@ def create_event():
     if cleanup not in ACCOUNT_CLEANUP_MODES:
         return jsonify({'error': 'accountCleanup must be one of %s' % (ACCOUNT_CLEANUP_MODES,)}), 400
 
+    if player_mode == 'shared' and not data.get('validUntil'):
+        return jsonify({'error': 'validUntil is required when playerAccessMode is shared'}), 400
+
     try:
         event = EventModel(
             name=data['name'],
@@ -370,6 +397,17 @@ def update_event(event_id):
     if not event:
         return jsonify({'error': 'Event not found'}), 404
     data = request.get_json() or {}
+
+    # Shared mode needs an end time (device accounts expire with the event). Only
+    # checked when mode or end time is being changed, so other edits stay possible.
+    if 'playerAccessMode' in data or 'validUntil' in data:
+        try:
+            new_until = _parse_dt(data['validUntil']) if 'validUntil' in data else event.validUntil
+        except ValueError:
+            return jsonify({'error': 'Invalid date format'}), 400
+        new_mode = data.get('playerAccessMode', event.playerAccessMode)
+        if new_mode == 'shared' and new_until is None:
+            return jsonify({'error': 'validUntil is required when playerAccessMode is shared'}), 400
 
     try:
         if 'name' in data:
@@ -417,6 +455,7 @@ def delete_event(event_id):
         return jsonify({'error': 'Event has open sessions; end the event first (set its end time to now or earlier), wait for the session cleanup to run, then delete it'}), 409
     # FKs do not cascade: remove children explicitly, in one transaction.
     _delete_closed_sessions(eventId=event_id)
+    _detach_sessions_from_links(EventLinkModel.eventId == event_id)
     EventLinkModel.query.filter_by(eventId=event_id).delete(synchronize_session=False)
     db.session.delete(event)
     db.session.commit()
@@ -519,6 +558,9 @@ def delete_event_link(link_id):
     link = EventLinkModel.query.get(link_id)
     if not link:
         return jsonify({'error': 'Link not found'}), 404
+    # Device sessions outlive their link (they are the OTS cleanup ledger)
+    EventSessionModel.query.filter_by(eventLinkId=link.id).update(
+        {'eventLinkId': None}, synchronize_session=False)
     db.session.delete(link)
     db.session.commit()
     return jsonify({'message': 'Link deleted'}), 200
@@ -560,7 +602,7 @@ def join_event(token):
 
     if link.role == 'player':
         if event.playerAccessMode == 'shared':
-            return _join_as_player_shared(event, team)
+            return _join_as_player_shared(event, team, link)
         return _join_as_player_individual(event, team, link)
 
     return jsonify({'error': 'Unsupported link role'}), 400
@@ -588,76 +630,234 @@ def _event_remaining_seconds(event, default_seconds):
     return default_seconds
 
 
-def _ensure_shared_player_account(event, team):
-    """Return (username, created) for the one shared OTS account of this team/event."""
-    session = EventSessionModel.query.filter_by(
-        eventId=event.id, eventTeamId=team.id, mode='shared', closedAt=None
-    ).first()
-    if session and session.otsUsername:
-        return session.otsUsername, False
-
+def _new_device_username(event):
+    alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789'
     # Deliberately outside the portal username namespace: never a local UserModel.
-    username = 'evt%s_t%s' % (event.id, team.id)
-    password = secrets.token_urlsafe(18)
-    otsClient.create_user(username, password, roles=['user'])
-    otsClient.activate_user(username)
-    if team.otsGroup and team.otsGroup.missing_in_ots:
-        current_app.logger.warning(
-            "Event join: skipping group '%s' for %s, it was not found in OTS", team.otsGroup.name, username)
-    elif team.otsGroup:
-        for direction in ('IN', 'OUT'):
-            try:
-                otsClient.add_user_to_group(username, team.otsGroup.name, direction)
-            except Exception:
-                current_app.logger.exception(
-                    'Failed to add shared account %s to group %s (%s)',
-                    username, team.otsGroup.name, direction
-                )
-
-    new_session = EventSessionModel(
-        eventId=event.id,
-        eventTeamId=team.id,
-        otsUsername=username,
-        mode='shared',
-        expiresAt=event.validUntil,
-    )
-    db.session.add(new_session)
-    db.session.commit()
-    return username, True
+    return 'evt%s_%s' % (event.id, ''.join(secrets.choice(alphabet) for _ in range(8)))
 
 
-def _provision_shared_atak(event, team):
-    """Ensure the team's shared account and create its ATAK enrollment string.
+# Creation attempts (including failed ones) per throttle key within the sliding
+# window. In-process only: this relies on the single gunicorn worker (-w 1) the
+# portal already requires for APScheduler; with several workers the effective
+# limit would be per worker, and it resets on restart.
+_device_attempts = {}
+_device_attempts_lock = threading.Lock()
 
-    Returns (username, atak_info, None) on success or (None, None, error_response).
+
+def _throttle_hit(key):
+    """Record an attempt for key; return True if the window is already full."""
+    now = time.monotonic()
+    with _device_attempts_lock:
+        attempts = _device_attempts.setdefault(key, deque())
+        while attempts and now - attempts[0] > DEVICE_THROTTLE_WINDOW_SECONDS:
+            attempts.popleft()
+        if len(attempts) >= DEVICE_THROTTLE_MAX:
+            return True
+        attempts.append(now)
+        return False
+
+
+def _device_limit_error(event, team, link, leader=False):
+    """Return a 429 response if a cap or the creation throttle is hit, else None.
+
+    Caps count open device sessions: per team within the event, plus an overall
+    per-event safety cap. The throttle counts attempts per link; leader presses
+    use their own key so they never eat the player link budget.
+    """
+    open_sessions = EventSessionModel.query.filter_by(eventId=event.id, mode='device', closedAt=None)
+    if (open_sessions.count() >= EVENT_MAX_DEVICE_ACCOUNTS
+            or open_sessions.filter_by(eventTeamId=team.id).count() >= DEVICE_MAX_PER_TEAM):
+        current_app.logger.warning('Event %s team %s reached the device account cap', event.id, team.id)
+        return jsonify({'error': 'Too many requests, try again later'}), 429
+    if leader:
+        key = ('leader', event.id, team.id)
+    elif link is not None:
+        key = ('link', link.id)
+    else:
+        key = ('team', event.id, team.id)
+    if _throttle_hit(key):
+        current_app.logger.warning('Device account throttle hit for event %s team %s', event.id, team.id)
+        return jsonify({'error': 'Too many requests, try again later'}), 429
+    return None
+
+
+def _ots_username_exists(username):
+    """True/False if OTS knows the username, None if that could not be determined."""
+    try:
+        body = otsClient.get_users(username=username)
+        results = body.get('response', {}).get('results', []) if isinstance(body, dict) else []
+        return any(u.get('username') == username for u in results)
+    except Exception:
+        current_app.logger.exception('Could not look up OTS user %s', username)
+        return None
+
+
+def _drop_device_row(candidate, candidate_session):
+    try:
+        db.session.delete(candidate_session)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed to drop session of %s', candidate)
+
+
+def _create_device_account(event, team, link=None, client_key=None, leader=False):
+    """Create one OTS account (plus its session row) for a single device.
+
+    The session row is written first so the DB is always the cleanup ledger for
+    the OTS account. Returns (session, None) or (None, error_response). The
+    password is random and never leaves this function.
+    """
+    limit_error = _device_limit_error(event, team, link, leader=leader)
+    if limit_error:
+        return None, limit_error
+
+    session = None
+    last_exc = None
+    for _attempt in range(DEVICE_USERNAME_ATTEMPTS):
+        candidate = _new_device_username(event)
+        if EventSessionModel.query.filter_by(otsUsername=candidate).first():
+            continue
+        candidate_session = EventSessionModel(
+            eventId=event.id,
+            eventTeamId=team.id,
+            otsUsername=candidate,
+            mode='device',
+            expiresAt=event.validUntil,
+            clientKeyHash=_hash_token(client_key) if client_key else None,
+            eventLinkId=link.id if link else None,
+        )
+        try:
+            db.session.add(candidate_session)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception('Failed to record device session for event %s', event.id)
+            return None, (jsonify({'error': 'Could not provision team access'}), 500)
+        try:
+            otsClient.create_user(candidate, secrets.token_urlsafe(18), roles=['user'])
+            session = candidate_session
+            break
+        except Exception as e:
+            last_exc = e
+            if isinstance(e, BadRequestError):
+                # HTTP 400: OTS did not create the user, so there is nothing to delete
+                # (and delete_user must never run: the name may belong to someone else).
+                # Only our own ledger row is dropped.
+                _drop_device_row(candidate, candidate_session)
+                if _ots_username_exists(candidate):
+                    continue  # name taken by someone else: retry with a new one
+                current_app.logger.error('Failed to create device account for event %s: %s', event.id, e)
+                return None, (jsonify({'error': 'Could not provision team access'}), 500)
+            # Unknown outcome: the account may or may not exist in OTS
+            current_app.logger.error('Failed to create device account for event %s: %s', event.id, e)
+            _discard_device_account(candidate, candidate_session)
+            return None, (jsonify({'error': 'Could not provision team access'}), 500)
+    if not session:
+        current_app.logger.error('Failed to create device account for event %s: %s', event.id, last_exc)
+        return None, (jsonify({'error': 'Could not provision team access'}), 500)
+
+    username = session.otsUsername
+    try:
+        otsClient.activate_user(username)
+        if team.otsGroup and team.otsGroup.missing_in_ots:
+            current_app.logger.warning(
+                "Event join: skipping group '%s' for %s, it was not found in OTS", team.otsGroup.name, username)
+        elif team.otsGroup:
+            for direction in ('IN', 'OUT'):
+                try:
+                    otsClient.add_user_to_group(username, team.otsGroup.name, direction)
+                except Exception:
+                    current_app.logger.exception(
+                        'Failed to add device account %s to group %s (%s)',
+                        username, team.otsGroup.name, direction)
+        return session, None
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed to finish device account %s, removing it', username)
+        _discard_device_account(username, session)
+        return None, (jsonify({'error': 'Could not provision team access'}), 500)
+
+
+def _discard_device_account(username, session=None):
+    """Remove a half-provisioned device account.
+
+    The OTS account is deleted first; the session row (the cleanup ledger) is
+    only dropped if that worked. Otherwise it stays and the close job
+    deactivates the account when the event ends.
     """
     try:
-        username, _created = _ensure_shared_player_account(event, team)
+        otsClient.delete_user(username)
     except Exception:
-        current_app.logger.exception('Failed to provision shared player account')
-        return None, None, (jsonify({'error': 'Could not provision team access'}), 500)
+        current_app.logger.exception(
+            'Failed to remove OTS account %s; keeping its session for the close job', username)
+        return
+    if session is None:
+        return
+    try:
+        db.session.delete(session)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed to drop session of %s', username)
 
-    remaining = _event_remaining_seconds(event, 24 * 3600)
+
+def _issue_device_enrollment(event, username, reissue=False):
+    """Create a short-lived, single-use ATAK enrollment string for a device account.
+
+    OTS keeps one token row per username and never resets its use counter when the
+    token is recreated, so a re-issue deletes the old token first.
+    Returns (atak_info, None) or (None, error_response).
+    """
+    remaining = _event_remaining_seconds(event, DEVICE_ENROLLMENT_TTL_SECONDS)
     if remaining <= 0:
-        return None, None, (jsonify({'error': 'This event has ended'}), 403)
-    exp = int(time.time() + remaining)
+        return None, (jsonify({'error': 'This event has ended'}), 403)
+    exp = int(time.time() + min(DEVICE_ENROLLMENT_TTL_SECONDS, remaining))
 
     try:
-        atak = otsClient.create_atak_qr_string(username=username, exp=exp, max_uses=500)
+        if reissue:
+            # OTS answers 200 when there is no token to delete, so an exception means the
+            # old row may still exist: creating now would not reset its use counter.
+            otsClient.delete_atak_qr_string(username)
+        atak = otsClient.create_atak_qr_string(
+            username=username, exp=exp, max_uses=DEVICE_ENROLLMENT_MAX_USES)
         atak_payload = atak.get('response', atak) if isinstance(atak, dict) else {}
     except Exception:
         current_app.logger.exception('Failed to generate ATAK enrollment for %s', username)
-        return None, None, (jsonify({'error': 'Could not generate TAK enrollment'}), 500)
+        return None, (jsonify({'error': 'Could not generate TAK enrollment'}), 500)
 
-    return username, {
+    return {
         'qrString': atak_payload.get('qr_string') if isinstance(atak_payload, dict) else None,
         'expiresAt': exp,
     }, None
 
 
-def _join_as_player_shared(event, team):
-    username, atak_info, error = _provision_shared_atak(event, team)
+def _join_as_player_shared(event, team, link):
+    if not event.validUntil:
+        return jsonify({'error': 'This event has no end time configured'}), 409
+
+    cookie_key = request.cookies.get(DEVICE_COOKIE_NAME)
+    session = None
+    if cookie_key:
+        session = EventSessionModel.query.filter_by(
+            eventId=event.id, eventLinkId=link.id, mode='device', closedAt=None,
+            clientKeyHash=_hash_token(cookie_key)).first()
+        if session and not session.otsUsername:
+            session = None
+
+    new_key = None
+    reissue = session is not None
+    if session is None:
+        new_key = secrets.token_urlsafe(32)
+        session, error = _create_device_account(event, team, link, client_key=new_key)
+        if error:
+            return error
+    username = session.otsUsername
+
+    atak_info, error = _issue_device_enrollment(event, username, reissue=reissue)
     if error:
+        if not reissue:
+            _discard_device_account(username, session)
         return error
 
     # iTAK enrollment is best-effort for shared mode (the OTS endpoint returns
@@ -669,7 +869,7 @@ def _join_as_player_shared(event, team):
     except Exception:
         current_app.logger.info('iTAK enrollment not available for %s', username)
 
-    return jsonify({
+    response = jsonify({
         'role': 'player',
         'mode': 'shared',
         'team': {'id': team.id, 'name': team.name, 'color': team.color},
@@ -677,7 +877,14 @@ def _join_as_player_shared(event, team):
         'expiresAt': event.validUntil.isoformat() if event.validUntil else None,
         'atak': atak_info,
         'itak': itak_payload,
-    }), 200
+    })
+    if new_key:
+        secure = request.is_secure or request.headers.get('X-Forwarded-Proto', '').lower() == 'https'
+        response.set_cookie(
+            DEVICE_COOKIE_NAME, new_key,
+            max_age=max(1, int(_event_remaining_seconds(event, DEVICE_ENROLLMENT_TTL_SECONDS))),
+            path=request.path, httponly=True, samesite='Lax', secure=secure)
+    return response, 200
 
 
 def _join_as_leader(event, team, link):
@@ -822,8 +1029,17 @@ def create_my_team_enrollment():
     if event.playerAccessMode != 'shared':
         return jsonify({'error': 'ATAK enrollment is only available in shared mode'}), 409
 
-    _username, atak_info, error = _provision_shared_atak(event, team)
+    if not event.validUntil:
+        return jsonify({'error': 'This event has no end time configured'}), 409
+
+    link = EventLinkModel.query.filter_by(
+        eventId=event.id, eventTeamId=team.id, role='player').first()
+    session, error = _create_device_account(event, team, link, leader=True)
     if error:
+        return error
+    atak_info, error = _issue_device_enrollment(event, session.otsUsername)
+    if error:
+        _discard_device_account(session.otsUsername, session)
         return error
     current_app.logger.info('Leader enrollment issued: team %s event %s', team.id, event.id)
     return jsonify({'atak': atak_info}), 200

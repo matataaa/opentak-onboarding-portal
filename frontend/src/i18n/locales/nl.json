@@ -503,7 +503,8 @@
     "validFrom": "Actief vanaf",
     "validUntil": "Eindigt om",
     "modeIndividual": "Spelers: individuele accounts",
-    "modeShared": "Spelers: gedeeld teamaccount",
+    "modeShared": "Spelers: één account per apparaat",
+    "sharedNeedsEnd": "Gedeelde modus vereist een eindtijd (geldig tot) zodat apparaataccounts kunnen verlopen.",
     "cleanupDeactivate": "Opruimen: deactiveren",
     "cleanupDelete": "Opruimen: verwijderen",
     "addEvent": "Event toevoegen",
@@ -542,7 +543,7 @@
     "missing": "Er is geen spelerslink voor dit team. Vraag een beheerder om die aan te maken.",
     "notRetrievable": "Deze link kan niet meer worden getoond. Vraag een beheerder om die opnieuw aan te maken.",
     "atakEnrollment": "ATAK-inschrijving",
-    "showAtak": "ATAK-inschrijf-QR tonen",
+    "showAtak": "Inschrijving voor een nieuw apparaat maken",
     "generating": "Genereren…",
     "scanAtak": "ATAK → enrollment → scan deze QR-code.",
     "enrollmentFailed": "Kon de inschrijving niet genereren."
@@ -552,7 +553,8 @@
     "copyEnrollment": "Inschrijflink kopiëren",
     "copied": "Gekopieerd!",
     "sameDeviceHint": "Op deze telefoon? Tik op \"Openen in ATAK\" of kopieer de link in plaats van de QR te scannen.",
-    "linkLabel": "Inschrijflink"
+    "linkLabel": "Inschrijflink",
+    "singleUseHint": "Deze code is voor één toestel en is ongeveer 15 minuten geldig. Laad deze pagina opnieuw voor een nieuwe code."
   },
   "eventsJoin": {
     "loading": "Laden…",
