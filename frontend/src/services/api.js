@@ -613,6 +613,11 @@ export const eventsAPI = {
   getLinkUrl: (linkId) => api.get(`/events/links/${linkId}/url`),
   revokeLink: (linkId) => api.post(`/events/links/${linkId}/revoke`),
   deleteLink: (linkId) => api.delete(`/events/links/${linkId}`),
+  closeLinkSessions: (linkId) => api.post(`/events/links/${linkId}/close-sessions`),
+
+  listAccounts: (eventId) => api.get(`/events/${eventId}/accounts`),
+  moveAccount: (eventId, sessionId, teamId) => api.post(`/events/${eventId}/accounts/${sessionId}/move`, { teamId }),
+  closeAccount: (eventId, sessionId) => api.post(`/events/${eventId}/accounts/${sessionId}/close`),
 
   join: (token) => axios.post(`${API_BASE_URL}/api/v1/events/join/${token}`),
 

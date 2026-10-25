@@ -194,6 +194,82 @@ def apply_event_team_colors():
     return
 
 
+def cleanup_event_session(session, existing):
+    """OTS cleanup of one event session account per the event's accountCleanup policy.
+
+    Shared by the close job and the admin close endpoints. Returns
+    (account_ok, colour_ok, groups_ok): account_ok means the account is deactivated
+    (or deleted); colour and group removal are best-effort follow-ups.
+    existing is the result of read_profiles() or None when that failed.
+    """
+    event = session.event
+    cleanup = event.accountCleanup if event else 'deactivate'
+    username = session.otsUsername
+
+    owns_account = bool(username) and session.mode in ('shared', 'device')
+    delete_mode = cleanup == 'delete'
+    account_ok = True
+
+    # Security-critical step first: in deactivate mode the account is
+    # deactivated before anything else, so a colour failure can never
+    # keep it usable.
+    if owns_account and not delete_mode:
+        try:
+            otsClient.deactivate_user(username)
+            print(f"Event session cleanup: deactivate {username}")
+        except Exception as e:
+            account_ok = False
+            print(f"Event session cleanup failed for {username}: {e}")
+
+    colour_ok = True
+    if username and session.team and session.team.color:
+        if existing is None:
+            colour_ok = False
+        else:
+            try:
+                colour_ok = remove_event_colors_for_username(username, session.team.color, existing)
+            except Exception as e:
+                colour_ok = False
+                print(f"Event colour removal failed for {username}: {e}")
+
+    if owns_account and delete_mode:
+        # The account is only deleted once the colours are gone; until
+        # then (or if the delete fails) it is deactivated so it is
+        # never left usable while the job retries.
+        deleted = False
+        if colour_ok:
+            try:
+                otsClient.delete_user(username)
+                deleted = True
+                print(f"Event session cleanup: delete {username}")
+            except Exception as e:
+                print(f"Event session cleanup failed for {username}: {e}")
+        if not deleted:
+            account_ok = False
+            try:
+                otsClient.deactivate_user(username)
+                print(f"Event session cleanup: deactivate {username} (delete pending)")
+            except Exception as e:
+                print(f"Event session deactivation failed for {username}: {e}")
+
+    # Group membership is best-effort and only needed when the account
+    # is kept (teams are reused across events); a failure here is
+    # retried but never blocks or undoes the steps above.
+    groups_ok = True
+    if owns_account and account_ok and session.mode == 'device' and not delete_mode:
+        from app.api_v1.events import session_group_memberships  # lazy: avoids a circular import
+        from app.api_v1.groups import _ots_status_code
+        for group_name, direction in sorted(session_group_memberships(session)):
+            try:
+                otsClient.remove_user_from_group(username, group_name, direction)
+            except Exception as e:
+                if _ots_status_code(e) == 404:
+                    continue  # group is gone, so is the membership
+                groups_ok = False
+                print(f"Event session group removal failed for {username}: {e}")
+    return account_ok, colour_ok, groups_ok
+
+
 @scheduler.task(id="close_expired_event_sessions", trigger="interval", minutes=15, misfire_grace_time=300, max_instances=1)
 def close_expired_event_sessions():
     """Close event-player sessions whose event has ended.
@@ -205,6 +281,8 @@ def close_expired_event_sessions():
     sessions belong to a normal self-registered account, which is left alone;
     only the session is closed. Leader accounts are persistent shared logins,
     not EventSessions, so they are untouched here.
+    Afterwards the per-event parked OTS group is removed for events that have no
+    open device session left (best-effort).
     """
     print('Closing expired event sessions...')
     with scheduler.app.app_context():
@@ -221,71 +299,14 @@ def close_expired_event_sessions():
                 existing = read_profiles()
             except Exception as e:
                 print(f"Event colour removal skipped, could not read OTS profiles: {e}")
+        closed_event_ids = set()
         for session in sessions:
             session_id = session.id
             try:
-                event = session.event
-                cleanup = event.accountCleanup if event else 'deactivate'
                 username = session.otsUsername
-
-                owns_account = bool(username) and session.mode in ('shared', 'device')
-                delete_mode = cleanup == 'delete'
-                account_ok = True
-
-                # Security-critical step first: in deactivate mode the account is
-                # deactivated before anything else, so a colour failure can never
-                # keep it usable.
-                if owns_account and not delete_mode:
-                    try:
-                        otsClient.deactivate_user(username)
-                        print(f"Event session cleanup: deactivate {username}")
-                    except Exception as e:
-                        account_ok = False
-                        print(f"Event session cleanup failed for {username}: {e}")
-
-                colour_ok = True
-                if username and session.team and session.team.color:
-                    if existing is None:
-                        colour_ok = False
-                    else:
-                        try:
-                            colour_ok = remove_event_colors_for_username(username, session.team.color, existing)
-                        except Exception as e:
-                            colour_ok = False
-                            print(f"Event colour removal failed for {username}: {e}")
-
-                if owns_account and delete_mode:
-                    # The account is only deleted once the colours are gone; until
-                    # then (or if the delete fails) it is deactivated so it is
-                    # never left usable while the job retries.
-                    deleted = False
-                    if colour_ok:
-                        try:
-                            otsClient.delete_user(username)
-                            deleted = True
-                            print(f"Event session cleanup: delete {username}")
-                        except Exception as e:
-                            print(f"Event session cleanup failed for {username}: {e}")
-                    if not deleted:
-                        account_ok = False
-                        try:
-                            otsClient.deactivate_user(username)
-                            print(f"Event session cleanup: deactivate {username} (delete pending)")
-                        except Exception as e:
-                            print(f"Event session deactivation failed for {username}: {e}")
-
-                # Group membership is best-effort and only needed when the account
-                # is kept (teams are reused across events); a failure here is
-                # retried but never blocks or undoes the steps above.
-                if owns_account and account_ok and session.mode == 'device' and not delete_mode:
-                    group = session.team.otsGroup if session.team else None
-                    if group and not group.missing_in_ots:
-                        try:
-                            for direction in ('IN', 'OUT'):
-                                otsClient.remove_user_from_group(username, group.name, direction)
-                        except Exception as e:
-                            account_ok = False
-                            print(f"Event session group removal failed for {username}: {e}")
+                event_id = session.eventId
+                account_ok, colour_ok, groups_ok = cleanup_event_session(session, existing)
+                account_ok = account_ok and groups_ok
 
                 if colour_ok and account_ok:
                     session.closeReason = 'expired'
@@ -299,7 +320,12 @@ def close_expired_event_sessions():
                     continue
                 session.closedAt = now
                 db.session.commit()
+                closed_event_ids.add(event_id)
             except Exception as e:
                 db.session.rollback()
                 print(f"Closing event session {session_id} failed: {e}")
+        if closed_event_ids:
+            from app.api_v1.events import cleanup_parked_group  # lazy: avoids a circular import
+            for event_id in closed_event_ids:
+                cleanup_parked_group(event_id)
     return

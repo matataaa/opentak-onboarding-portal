@@ -206,8 +206,10 @@ class OTSClient:
             print(f"Error: {e}")
             return False
 
-    def get_euds(self, page=None, per_page=None, username=None):
+    def get_euds(self, page=None, per_page=None, username=None, sort_by=None):
         params = {}
+        if sort_by is not None:
+            params["sort_by"] = sort_by
         if username is not None:
             params["username"] = username
         if page is not None:

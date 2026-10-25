@@ -665,6 +665,134 @@ paths:
         '409':
           description: Link is not retrievable; regenerate it
 
+  /events/{id}/accounts:
+    get:
+      tags:
+        - Events
+      summary: List the open device accounts of an event (events_admin or events_readonly) 🔒
+      description: >
+        Open `device` accounts plus legacy `shared` accounts (`legacy: true`, read-only).
+        Each account has id (session id), otsUsername, team {id, name, color}, parked,
+        createdAt, expiresAt and its euds [{callsign, uid, lastSeen}] from one OTS EUD
+        listing (`eudsAvailable` is false when OTS could not be read). Never contains
+        passwords or enrollment tokens.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Accounts of the event
+        '404':
+          description: Event not found
+
+  /events/{id}/accounts/{sessionId}/move:
+    post:
+      tags:
+        - Events
+      summary: Move a device account to another team, or park it (events_admin only) 🔒
+      description: >
+        Body `{teamId: int|null}`. A team id puts the account IN+OUT in that team's OTS
+        group; null parks it (OUT member of the event's `evt<id>_parked` group, which nobody
+        writes into, plus IN member of `evt<id>_parked_in`, which nobody receives from; no
+        team colour). Parked devices see no one and nobody sees them. The new groups are
+        always joined before the old ones are left, so the device always keeps an IN and an
+        OUT membership; if OTS fails the calls made (including the failing one) are reverted
+        and nothing changes locally (502). Moving to the current team (or parking a parked
+        account) is a 200 no-op. Sending switches to the new team immediately; receiving
+        from the new team starts after the device reconnects (restart ATAK or toggle its
+        connection).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The updated account
+        '400':
+          description: Invalid or unknown teamId, or the team has no usable OTS group
+        '404':
+          description: Account not found in this event
+        '409':
+          description: Account is closed, expired or a legacy shared account
+        '502':
+          description: OpenTAK Server group update failed; nothing was changed
+
+  /events/{id}/accounts/{sessionId}/close:
+    post:
+      tags:
+        - Events
+      summary: Close a device account now (events_admin only) 🔒
+      description: >
+        Applies the event's accountCleanup policy (deactivate or delete), removes the
+        account from its OTS groups (best-effort) and closes the session with reason
+        `closed by admin`. A device that is connected stays connected until it
+        reconnects. 502 when the OTS account could not be deactivated; it stays open.
+        If the account was deactivated/deleted but colour or group cleanup failed, the
+        session also stays open (the close job retries it) and the 502 body has
+        `accountDisabled: true, cleanupPending: true`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Account closed
+        '404':
+          description: Account not found in this event
+        '409':
+          description: Account is already closed or a legacy shared account
+        '502':
+          description: OpenTAK Server cleanup failed; the account is still open
+
+  /events/links/{id}/close-sessions:
+    post:
+      tags:
+        - Events
+      summary: Close all open device accounts created through a link (events_admin only) 🔒
+      description: >
+        Same cleanup as closing a single account, for at most 25 accounts per call.
+        Returns `{closed, failed, remaining}`; `remaining` is the number of this link's
+        accounts still open, so call again while it is above 0. `failed` also counts
+        accounts that are disabled but whose cleanup is pending (`cleanupPending`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Batch processed without failures (check `remaining`)
+        '404':
+          description: Link not found
+        '502':
+          description: Some accounts could not be closed and are still open
+
   /events/my-team:
     get:
       tags:

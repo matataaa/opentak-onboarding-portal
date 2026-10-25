@@ -116,6 +116,10 @@ def create_group():
     if not isinstance(data['name'], str) or any(c in data['name'] for c in '<>&"\''):
         return jsonify({'error': 'Group name contains characters that OpenTAK Server does not accept (< > & " \')'}), 400
 
+    from app.api_v1.events import EVENT_GROUP_RE
+    if EVENT_GROUP_RE.match(data['name']):
+        return jsonify({'error': 'This group name is reserved for groups managed by the Events module'}), 400
+
     existing = OTSGroupModel.get_by_name(data['name'])
     if existing and not existing.missing_in_ots:
         return jsonify({'error': 'Group already exists'}), 409
@@ -448,6 +452,7 @@ def sync_groups_from_ots():
 
     try:
         from app.ots import otsClient
+        from app.api_v1.events import EVENT_GROUP_RE
 
         current_app.logger.info("Starting OTS group sync")
         ots_response = otsClient.get_all_pages(otsClient.get_groups, sort_by='id')
@@ -483,6 +488,8 @@ def sync_groups_from_ots():
         for ots_group in ots_groups:
             group_name = ots_group['name']
             description = ots_group.get('description', '')
+            if EVENT_GROUP_RE.match(group_name):
+                continue  # portal-managed per-event groups (e.g. evt3_parked) stay out of the portal
             seen_names.add(group_name)
 
             existing = OTSGroupModel.get_by_name(group_name)
@@ -510,6 +517,8 @@ def sync_groups_from_ots():
         else:
             now = datetime.datetime.utcnow()
             for local in OTSGroupModel.get_all():
+                if EVENT_GROUP_RE.match(local.name):
+                    continue
                 if local.name in seen_names:
                     if local.missing_in_ots:
                         local.ots_missing_since = None
