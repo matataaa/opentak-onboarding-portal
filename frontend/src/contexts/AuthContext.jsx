@@ -4,6 +4,16 @@ import i18n from '../i18n';
 
 const AuthContext = createContext(null);
 
+const NO_APPROVER = { data: { is_approver: false, pending_count: 0 } };
+
+// Event leader sessions (only role event_leader) are denied by /approvals/check.
+const isLeaderOnly = (roles) => roles?.length === 1 && roles[0] === 'event_leader';
+
+const fetchApproverStatus = (perms) =>
+  isLeaderOnly(perms?.roles)
+    ? Promise.resolve(NO_APPROVER)
+    : approvalsAPI.checkApproverStatus().catch(() => NO_APPROVER);
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -43,12 +53,9 @@ export const AuthProvider = ({ children }) => {
       }, 10000); // 10 second timeout
 
       // Verify token is still valid and fetch permissions
-      Promise.all([
-        authAPI.getCurrentUser(),
-        authAPI.getPermissions(),
-        approvalsAPI.checkApproverStatus().catch(() => ({ data: { is_approver: false, pending_count: 0 } }))
-      ])
-        .then(([userResponse, permissionsResponse, approverResponse]) => {
+      Promise.all([authAPI.getCurrentUser(), authAPI.getPermissions()])
+        .then(async ([userResponse, permissionsResponse]) => {
+          const approverResponse = await fetchApproverStatus(permissionsResponse.data);
           clearTimeout(timeoutId);
           const userData = userResponse.data;
           setUser(userData);
@@ -108,10 +115,8 @@ export const AuthProvider = ({ children }) => {
 
       // Fetch permissions and approver status from database after login
       try {
-        const [permResponse, approverResponse] = await Promise.all([
-          authAPI.getPermissions(),
-          approvalsAPI.checkApproverStatus().catch(() => ({ data: { is_approver: false, pending_count: 0 } }))
-        ]);
+        const permResponse = await authAPI.getPermissions();
+        const approverResponse = await fetchApproverStatus(permResponse.data);
         setPermissions(permResponse.data);
         setApproverStatus({
           isApprover: approverResponse.data.is_approver,
@@ -140,11 +145,11 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('refresh_token', refreshToken);
 
       // Fetch user info using the new token
-      const [userResponse, permResponse, approverResponse] = await Promise.all([
+      const [userResponse, permResponse] = await Promise.all([
         authAPI.getCurrentUser(),
-        authAPI.getPermissions(),
-        approvalsAPI.checkApproverStatus().catch(() => ({ data: { is_approver: false, pending_count: 0 } }))
+        authAPI.getPermissions()
       ]);
+      const approverResponse = await fetchApproverStatus(permResponse.data);
 
       const userData = userResponse.data;
       localStorage.setItem('user', JSON.stringify(userData));
@@ -281,11 +286,11 @@ export const AuthProvider = ({ children }) => {
 
   const updateUser = async () => {
     try {
-      const [userResponse, permResponse, approverResponse] = await Promise.all([
+      const [userResponse, permResponse] = await Promise.all([
         authAPI.getCurrentUser(),
-        authAPI.getPermissions(),
-        approvalsAPI.checkApproverStatus().catch(() => ({ data: { is_approver: false, pending_count: 0 } }))
+        authAPI.getPermissions()
       ]);
+      const approverResponse = await fetchApproverStatus(permResponse.data);
       const userData = userResponse.data;
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
@@ -312,6 +317,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const refreshApproverStatus = async () => {
+    if (isLeaderOnly(permissions.roles)) return;
     try {
       const response = await approvalsAPI.checkApproverStatus();
       setApproverStatus({
@@ -325,14 +331,15 @@ export const AuthProvider = ({ children }) => {
 
   // Poll approver status every 30 seconds when user is logged in
   useEffect(() => {
-    if (!user) return;
+    if (!user || isLeaderOnly(permissions.roles)) return;
 
     const pollInterval = setInterval(() => {
       refreshApproverStatus();
     }, 30000); // 30 seconds
 
     return () => clearInterval(pollInterval);
-  }, [user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, permissions.roles]);
 
   const isAdmin = () => {
     // Check from database permissions (RBAC)
@@ -354,6 +361,7 @@ export const AuthProvider = ({ children }) => {
     return permissions.isAdmin || permissions.modules.length > 0;
   };
 
+  const isLeaderSession = isLeaderOnly(permissions.roles);
   const isEventLeader = (permissions.roles || []).includes('event_leader');
 
   const value = {
@@ -374,6 +382,7 @@ export const AuthProvider = ({ children }) => {
     // Shared event-leader accounts have no email/callsign/password of their own
     // and must never be sent to the profile/password completion pages.
     isEventLeader,
+    isLeaderSession,
     needsProfileCompletion: needsProfileCompletion && !isEventLeader,
     needsPasswordSet: needsPasswordSet && !isEventLeader,
     impersonating,

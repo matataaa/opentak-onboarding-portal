@@ -12,6 +12,10 @@ info:
     Authorization: Bearer <access_token>
     ```
 
+    Event leader sessions (tokens issued by `/events/join/{token}` for a leader link) are
+    deny-by-default: they may only call the `/events/my-team*` endpoints, `/auth/refresh`,
+    `/auth/me` and `/auth/permissions`. Every other endpoint returns 403.
+
     ## Admin Endpoints
     Endpoints marked with 🔒 require the 'administrator' role.
   version: 1.0.0

@@ -277,13 +277,15 @@ def refresh():
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
+    jwt_data = get_jwt()
+    is_leader_session = jwt_data.get('event_leader_team') is not None
     claims = {
         'username': user.username,
-        'roles': [role.name for role in user.roles]
+        # Leader sessions never carry the shared account's real DB roles.
+        'roles': [] if is_leader_session else [role.name for role in user.roles]
     }
 
     # Propagate impersonation claims through token refresh
-    jwt_data = get_jwt()
     if jwt_data.get('impersonated_by'):
         claims['impersonated_by'] = jwt_data['impersonated_by']
         claims['impersonated_by_username'] = jwt_data.get('impersonated_by_username', '')
@@ -481,6 +483,17 @@ def get_current_user():
 
     if not user:
         return jsonify({'error': 'User not found'}), 404
+
+    # Event-leader sessions share one real account: expose only what the SPA
+    # header needs, never the account's profile data or real roles.
+    if get_jwt().get('event_leader_team') is not None:
+        return jsonify({
+            'id': user.id,
+            'username': user.username,
+            'roles': [],
+            'has_password': True,
+            'language': user.language or 'en'
+        }), 200
 
     response = {
         'id': user.id,
