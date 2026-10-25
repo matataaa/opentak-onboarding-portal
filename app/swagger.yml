@@ -899,6 +899,141 @@ paths:
         '500':
           description: Could not provision or generate the enrollment
 
+  /events/my-team/accounts:
+    get:
+      tags:
+        - Events
+      summary: List all open device accounts of the leader's event (leader session) 🔒
+      description: >
+        Every open account of the event: all teams, parked, and legacy shared
+        sessions (read-only, legacy=true). Event and team come from the leader
+        token only. Never contains passwords or tokens. EUDs (callsign, uid) come
+        from one OpenTAK Server listing; eudsAvailable is false when it could not
+        be read. inMyTeam is true for active accounts of the leader's own team.
+        For active accounts of other teams only the EUD callsign is returned
+        (no uid, no lastSeen). teams lists the event's teams that can be moved to.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Accounts of the event
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accounts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: {type: integer}
+                        otsUsername: {type: string}
+                        legacy: {type: boolean}
+                        team:
+                          type: object
+                          nullable: true
+                          properties:
+                            id: {type: integer}
+                            name: {type: string}
+                            color: {type: string, nullable: true}
+                        parked: {type: boolean}
+                        inMyTeam: {type: boolean}
+                        createdAt: {type: string, nullable: true}
+                        expiresAt: {type: string, nullable: true}
+                        euds:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              callsign: {type: string, nullable: true}
+                              uid: {type: string, nullable: true}
+                              lastSeen: {type: string, nullable: true}
+                  eudsAvailable: {type: boolean}
+                  myTeamId: {type: integer}
+                  teams:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: {type: integer}
+                        name: {type: string}
+                        color: {type: string, nullable: true}
+        '403':
+          description: Not a valid leader session for an open event
+        '401':
+          description: Missing or invalid token
+
+  /events/my-team/accounts/{sessionId}/move:
+    post:
+      tags:
+        - Events
+      summary: Park, move or pull a device account (leader session) 🔒
+      description: >
+        A leader may take an account of the own team out (teamId null parks it, or
+        a teamId of another team of the event moves it) and may add a PARKED
+        account to the own team (teamId = own team). Accounts active in another
+        team cannot be pulled; that team must park or move them first. Anything
+        else is 403 (other team to own team, other to other, other to park,
+        parked to another team, parked to park). Rules use the account's current state and the team in the leader
+        token. Groups are added before removed and reverted on failure. Sending
+        switches immediately; receiving after the device reconnects.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [teamId]
+              properties:
+                teamId:
+                  type: integer
+                  nullable: true
+      responses:
+        '200':
+          description: Moved (or already in the requested state)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  account:
+                    type: object
+                    properties:
+                      id: {type: integer}
+                      otsUsername: {type: string}
+                      legacy: {type: boolean}
+                      team:
+                        type: object
+                        nullable: true
+                        properties:
+                          id: {type: integer}
+                          name: {type: string}
+                          color: {type: string, nullable: true}
+                      parked: {type: boolean}
+                      createdAt: {type: string, nullable: true}
+                      expiresAt: {type: string, nullable: true}
+        '400':
+          description: Invalid or unknown teamId
+        '403':
+          description: Not a valid leader session, or the move is not allowed for a leader
+        '404':
+          description: Account not found in this event
+        '409':
+          description: Legacy shared account, closed account, or expired account
+        '502':
+          description: OpenTAK Server group update failed; nothing was changed
+        '500':
+          description: Could not save the change
+
   /users:
     get:
       tags:

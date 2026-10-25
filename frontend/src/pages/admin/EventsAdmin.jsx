@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { QRCodeSVG } from 'qrcode.react';
 import { eventsAPI, groupsAPI, onboardingCodesAPI } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatUtc } from '../../utils/formatUtc';
 import './EventsAdmin.css';
 
 // The fixed set of TAK team colours ATAK accepts.
@@ -17,15 +18,6 @@ function toLocalInput(iso) {
   const d = new Date(iso);
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-// The API sends naive UTC timestamps; add the missing zone so the browser shows local time.
-function formatUtc(iso) {
-  if (!iso) return '-';
-  const hasZone = /(Z|[+-]\d{2}:?\d{2})$/.test(iso);
-  const d = new Date(hasZone ? iso : `${iso}Z`);
-  if (Number.isNaN(d.getTime())) return '-';
-  return d.toLocaleString();
 }
 
 export default function EventsAdmin() {

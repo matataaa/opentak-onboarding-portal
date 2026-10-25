@@ -1259,6 +1259,54 @@ def _open_device_session(event_id, session_id):
     return session, None
 
 
+def _perform_account_move(session, target_team, log_extra=''):
+    """Move an open device session to target_team (None = park) in OTS and the DB.
+
+    Shared by the admin and leader endpoints; the caller has already authorised
+    the move and validated the target. Returns a Flask response.
+    """
+    was_parked = session.parkedAt is not None
+    if (target_team is None and was_parked) or (
+            target_team is not None and not was_parked and target_team.id == session.eventTeamId):
+        return jsonify({'account': _account_to_dict(session)}), 200
+    if session.expiresAt and session.expiresAt < datetime.now():
+        return jsonify({'error': 'This account has expired'}), 409
+
+    username = session.otsUsername
+    source = session_group_memberships(session)
+    if target_team is None:
+        try:
+            target = _ensure_parked_groups(session.eventId)
+        except Exception:
+            current_app.logger.exception('Could not prepare parked group for event %s', session.eventId)
+            return jsonify({'error': 'Could not create the parked groups in OpenTAK Server'}), 502
+    else:
+        target = _team_memberships(target_team)
+
+    from_name = 'parked' if was_parked else (session.team.name if session.team else None)
+    if not _apply_group_change(username, source, target):
+        return jsonify({'error': 'OpenTAK Server group update failed; nothing was changed'}), 502
+
+    try:
+        if target_team is None:
+            session.parkedAt = datetime.now()
+        else:
+            session.parkedAt = None
+            session.eventTeamId = target_team.id
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Failed to save move of %s, reverting OTS groups', username)
+        _apply_group_change(username, target, source)
+        return jsonify({'error': 'Could not save the change'}), 500
+
+    current_app.logger.info(
+        'Event account move: actor=%s%s event=%s account=%s from=%s to=%s',
+        get_jwt_identity(), log_extra, session.eventId, username, from_name,
+        'parked' if target_team is None else target_team.name)
+    return jsonify({'account': _account_to_dict(session)}), 200
+
+
 @api_v1.route('/events/<int:event_id>/accounts/<int:session_id>/move', methods=['POST'])
 @jwt_required()
 @require_role('events_admin')
@@ -1285,46 +1333,7 @@ def move_event_account(event_id, session_id):
         if not target_team.otsGroup or target_team.otsGroup.missing_in_ots:
             return jsonify({'error': 'This team has no usable OTS group'}), 400
 
-    was_parked = session.parkedAt is not None
-    if (target_team is None and was_parked) or (
-            target_team is not None and not was_parked and target_team.id == session.eventTeamId):
-        return jsonify({'account': _account_to_dict(session)}), 200
-    if session.expiresAt and session.expiresAt < datetime.now():
-        return jsonify({'error': 'This account has expired'}), 409
-
-    username = session.otsUsername
-    source = session_group_memberships(session)
-    if target_team is None:
-        try:
-            target = _ensure_parked_groups(event_id)
-        except Exception:
-            current_app.logger.exception('Could not prepare parked group for event %s', event_id)
-            return jsonify({'error': 'Could not create the parked groups in OpenTAK Server'}), 502
-    else:
-        target = _team_memberships(target_team)
-
-    from_name = 'parked' if was_parked else (session.team.name if session.team else None)
-    if not _apply_group_change(username, source, target):
-        return jsonify({'error': 'OpenTAK Server group update failed; nothing was changed'}), 502
-
-    try:
-        if target_team is None:
-            session.parkedAt = datetime.now()
-        else:
-            session.parkedAt = None
-            session.eventTeamId = target_team.id
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-        current_app.logger.exception('Failed to save move of %s, reverting OTS groups', username)
-        _apply_group_change(username, target, source)
-        return jsonify({'error': 'Could not save the change'}), 500
-
-    current_app.logger.info(
-        'Event account move: actor=%s event=%s account=%s from=%s to=%s',
-        get_jwt_identity(), event_id, username, from_name,
-        'parked' if target_team is None else target_team.name)
-    return jsonify({'account': _account_to_dict(session)}), 200
+    return _perform_account_move(session, target_team)
 
 
 CLOSE_BATCH_SIZE = 25  # sessions closed per close-by-link call (each costs several OTS calls)
@@ -1419,3 +1428,86 @@ def close_event_link_sessions(link_id):
         body['error'] = 'Some accounts could not be fully closed in OpenTAK Server and are still open'
         return jsonify(body), 502
     return jsonify(body), 200
+
+
+# ----------------------------------------------------------------------------
+# Leader: all device accounts of the event; pull into / take out of the own team
+# ----------------------------------------------------------------------------
+def _event_team_options(event):
+    """Teams of this event (those with a link) that have a usable OTS group."""
+    ids = {row[0] for row in db.session.query(EventLinkModel.eventTeamId).filter(
+        EventLinkModel.eventId == event.id, EventLinkModel.eventTeamId.isnot(None)).all()}
+    teams = EventTeamModel.query.filter(EventTeamModel.id.in_(ids)).order_by(EventTeamModel.name).all() if ids else []
+    return [t for t in teams if t.otsGroup and not t.otsGroup.missing_in_ots]
+
+
+@api_v1.route('/events/my-team/accounts', methods=['GET'])
+@jwt_required()
+def list_my_team_accounts():
+    """All open accounts of the leader's event (every team, parked, legacy shared read-only)."""
+    event, team, error = _leader_scope()
+    if error:
+        return error
+    sessions = EventSessionModel.query.filter(
+        EventSessionModel.eventId == event.id,
+        EventSessionModel.mode.in_(['device', 'shared']),
+        EventSessionModel.closedAt.is_(None),
+    ).order_by(EventSessionModel.id).all()
+    index = _read_eud_index({s.otsUsername for s in sessions if s.otsUsername}) if sessions else {}
+    accounts = []
+    for s in sessions:
+        row = _account_to_dict(s, (index or {}).get(s.otsUsername, []))
+        row.pop('eventLinkId', None)
+        row['inMyTeam'] = (not row['legacy'] and not row['parked'] and s.eventTeamId == team.id)
+        if not row['inMyTeam'] and not row['parked']:
+            # other teams' active accounts: callsign/team/status only
+            row['euds'] = [{'callsign': e.get('callsign')} for e in row.get('euds', [])]
+        accounts.append(row)
+    return jsonify({
+        'accounts': accounts,
+        'eudsAvailable': index is not None,
+        'myTeamId': team.id,
+        'teams': [{'id': t.id, 'name': t.name, 'color': t.color} for t in _event_team_options(event)],
+    }), 200
+
+
+@api_v1.route('/events/my-team/accounts/<int:session_id>/move', methods=['POST'])
+@jwt_required()
+def move_my_team_account(session_id):
+    """Leader: take an own-team account out (park, or to another team) or pull a parked one in.
+
+    Allowed is derived from the session's current state and the leader's claimed
+    team only: own -> park, own -> another team, parked -> own team. Accounts that
+    are active in another team cannot be touched.
+    """
+    event, team, error = _leader_scope()
+    if error:
+        return error
+    session, error = _open_device_session(event.id, session_id)
+    if error:
+        return error
+    data = request.get_json(silent=True) or {}
+    if 'teamId' not in data:
+        return jsonify({'error': 'teamId is required (a team id, or null to park)'}), 400
+    team_id = data['teamId']
+    if team_id is not None and (isinstance(team_id, bool) or not isinstance(team_id, int)):
+        return jsonify({'error': 'teamId must be an integer or null'}), 400
+
+    in_my_team = session.parkedAt is None and session.eventTeamId == team.id
+    pulling = session.parkedAt is not None and team_id == team.id
+    if not (in_my_team or pulling):
+        if team_id == team.id:
+            return jsonify({'error': 'Only parked accounts can be added to your team; ask the other team to remove it first'}), 403
+        return jsonify({'error': 'You can only move accounts of your own team or add parked accounts to it'}), 403
+
+    target_team = None
+    if team_id is not None:
+        target_team = next((t for t in _event_team_options(event) if t.id == team_id), None)
+        if not target_team:
+            return jsonify({'error': 'Unknown teamId'}), 400
+    response = _perform_account_move(session, target_team, log_extra=' leaderTeam=%s' % team.name)
+    body = response[0].get_json(silent=True) if isinstance(response, tuple) else None
+    if body and 'account' in body:
+        body['account'].pop('eventLinkId', None)
+        return jsonify(body), response[1]
+    return response
