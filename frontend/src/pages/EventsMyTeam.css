@@ -6,3 +6,13 @@
 .events-my-team-qr { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; }
 .events-my-team-qr svg { background: #fff; padding: 12px; border-radius: 8px; }
 .events-my-team-qr input { width: 100%; max-width: 420px; }
+
+.events-my-team:has(.events-my-team-accounts) { max-width: 900px; }
+.events-my-team-accounts { text-align: left; }
+.events-my-team-accounts > button { margin-bottom: 0.75rem; }
+.events-my-team-table-wrap { overflow-x: auto; }
+.events-my-team-table { width: 100%; border-collapse: collapse; }
+.events-my-team-table th, .events-my-team-table td { padding: 0.5rem; text-align: left; vertical-align: top; border-bottom: 1px solid rgba(128, 128, 128, 0.3); }
+.events-my-team-own { background: rgba(128, 128, 128, 0.08); }
+.events-my-team-hint { font-size: 0.8rem; opacity: 0.7; word-break: break-all; }
+.events-my-team-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }

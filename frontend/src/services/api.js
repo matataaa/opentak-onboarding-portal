@@ -623,6 +623,8 @@ export const eventsAPI = {
 
   myTeam: () => api.get('/events/my-team'),
   myTeamEnrollment: () => api.post('/events/my-team/enrollment'),
+  myTeamAccounts: () => api.get('/events/my-team/accounts'),
+  myTeamMoveAccount: (sessionId, teamId) => api.post(`/events/my-team/accounts/${sessionId}/move`, { teamId }),
 };
 
 export default api;
