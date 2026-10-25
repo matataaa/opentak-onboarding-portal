@@ -943,17 +943,17 @@ def _join_as_leader(event, team, link):
 # ----------------------------------------------------------------------------
 # Leader own-team view (bounded leader session only)
 # ----------------------------------------------------------------------------
-def _leader_scope():
-    """Resolve (event, team, None) for a leader session, else (None, None, error).
+def leader_session_error(claims, identity):
+    """Central revocation check for a leader session (access or refresh token).
 
-    Event and team come only from the JWT claims set at join time. The feature
+    Returns None while the session is valid, else (message, 403). The feature
     switch, the event window, the team's current leader and the leader link the
     session came from are re-checked on every call, so deactivation, reassignment
-    and regenerating/deleting the leader link end access immediately.
+    and regenerating/deleting the leader link end access immediately. Used by
+    `_leader_scope` and by the leader-scope before_request hook.
     """
     if not SystemSettingsModel.get_setting('events_enabled', False):
-        return None, None, (jsonify({'error': 'Events are not enabled'}), 403)
-    claims = get_jwt()
+        return 'Events are not enabled', 403
     team_id = claims.get('event_leader_team')
     event_id = claims.get('event_leader_event')
     link_id = claims.get('event_leader_link')
@@ -961,28 +961,42 @@ def _leader_scope():
     link_nonce = claims.get('event_leader_link_nonce')
     if (team_id is None or event_id is None or link_id is None or link_version is None
             or not link_nonce):
-        return None, None, (jsonify({'error': 'Forbidden'}), 403)
+        return 'Forbidden', 403
 
     link = EventLinkModel.query.get(link_id)
     if (not link or link.role != 'leader' or link.eventId != event_id
             or link.eventTeamId != team_id or link.tokenVersion != link_version
-            or not hmac.compare_digest((link.tokenNonce or '').encode(), str(link_nonce).encode())
-            or not link.tokenNonce):
-        return None, None, (jsonify({'error': 'Forbidden'}), 403)
+            or not link.tokenNonce
+            or not hmac.compare_digest(link.tokenNonce.encode(), str(link_nonce).encode())):
+        return 'Forbidden', 403
 
     event = EventModel.query.get(event_id)
     team = EventTeamModel.query.get(team_id)
     if not event or not team:
-        return None, None, (jsonify({'error': 'Forbidden'}), 403)
+        return 'Forbidden', 403
     if _event_window_error(event):
-        return None, None, (jsonify({'error': 'This event is not open'}), 403)
+        return 'This event is not open', 403
     try:
-        is_leader = team.leaderUserId is not None and team.leaderUserId == int(get_jwt_identity())
+        is_leader = team.leaderUserId is not None and team.leaderUserId == int(identity)
     except (TypeError, ValueError):
         is_leader = False
     if not is_leader:
-        return None, None, (jsonify({'error': 'Forbidden'}), 403)
-    return event, team, None
+        return 'Forbidden', 403
+    return None
+
+
+def _leader_scope():
+    """Resolve (event, team, None) for a leader session, else (None, None, error).
+
+    Event and team come only from the JWT claims set at join time; validity is
+    decided by `leader_session_error`.
+    """
+    claims = get_jwt()
+    problem = leader_session_error(claims, get_jwt_identity())
+    if problem:
+        return None, None, (jsonify({'error': problem[0]}), problem[1])
+    return (EventModel.query.get(claims['event_leader_event']),
+            EventTeamModel.query.get(claims['event_leader_team']), None)
 
 
 @api_v1.route('/events/my-team', methods=['GET'])

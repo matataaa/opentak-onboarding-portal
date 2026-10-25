@@ -11,7 +11,7 @@ import './Layout.css';
 
 function Layout() {
   const { t } = useTranslation();
-  const { user, logout, hasAnyAdminRole, hasModuleAccess, permissions, approverStatus, impersonating, stopImpersonation } = useAuth();
+  const { user, logout, hasAnyAdminRole, hasModuleAccess, permissions, approverStatus, impersonating, stopImpersonation, isLeaderSession } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -149,7 +149,7 @@ function Layout() {
             </div>
           )}
 
-          <AnnouncementsBadge />
+          {!isLeaderSession && <AnnouncementsBadge />}
 
           <div className={`nav-dropdown nav-user ${userDropdownOpen ? 'open' : ''}`}>
             <span className="nav-link" onClick={toggleUserDropdown}>
