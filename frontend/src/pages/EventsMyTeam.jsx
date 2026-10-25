@@ -45,7 +45,8 @@ export default function EventsMyTeam() {
     );
   }
 
-  const atak = enrollment.data?.atak;
+  // Only show a QR from the latest successful press; never one from an earlier press
+  const atak = enrollment.isSuccess ? enrollment.data?.atak : null;
 
   return (
     <div className="events-my-team">
@@ -72,28 +73,25 @@ export default function EventsMyTeam() {
       {data.atakAvailable && (
         <section className="events-my-team-card">
           <h2>{t('eventsMyTeam.atakEnrollment')}</h2>
-          {atak?.qrString ? (
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => { enrollment.reset(); enrollment.mutate(); }}
+            disabled={enrollment.isPending}
+          >
+            {enrollment.isPending ? t('eventsMyTeam.generating') : t('eventsMyTeam.showAtak')}
+          </button>
+          {enrollment.isError && (
+            <p className="events-my-team-error">
+              {enrollment.error?.response?.data?.error || t('eventsMyTeam.enrollmentFailed')}
+            </p>
+          )}
+          {atak?.qrString && (
             <div className="events-my-team-qr">
               <QRCodeSVG value={atak.qrString} size={240} level="M" />
               <p>{t('eventsMyTeam.scanAtak')}</p>
               <EnrollmentLink value={atak.qrString} />
             </div>
-          ) : (
-            <>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => enrollment.mutate()}
-                disabled={enrollment.isPending}
-              >
-                {enrollment.isPending ? t('eventsMyTeam.generating') : t('eventsMyTeam.showAtak')}
-              </button>
-              {enrollment.isError && (
-                <p className="events-my-team-error">
-                  {enrollment.error?.response?.data?.error || t('eventsMyTeam.enrollmentFailed')}
-                </p>
-              )}
-            </>
           )}
         </section>
       )}

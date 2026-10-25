@@ -2159,11 +2159,16 @@ class EventSessionModel(db.Model):
     eventId = Column(Integer, ForeignKey('events.id'), nullable=False)
     eventTeamId = Column(Integer, ForeignKey('event_teams.id'), nullable=False)
     otsUsername = Column(String(200), nullable=True)
-    mode = Column(String(20), nullable=True)                      # shared | individual
+    mode = Column(String(20), nullable=True)                      # device | shared (legacy) | individual
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
     expiresAt = Column(DateTime, nullable=True)
     closedAt = Column(DateTime, nullable=True)
     closeReason = Column(String(200), nullable=True)
+    # Device accounts (mode='device'): parked = no team colour, sha256 of the
+    # browser's idempotency cookie, and the player link the device joined through.
+    parkedAt = Column(DateTime, nullable=True)
+    clientKeyHash = Column(String(128), nullable=True)
+    eventLinkId = Column(Integer, ForeignKey('event_links.id'), nullable=True)
 
     event = relationship("EventModel")
     team = relationship("EventTeamModel")

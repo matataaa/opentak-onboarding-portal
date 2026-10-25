@@ -503,7 +503,8 @@
     "validFrom": "Active from",
     "validUntil": "Ends at",
     "modeIndividual": "Players: individual accounts",
-    "modeShared": "Players: shared team account",
+    "modeShared": "Players: one account per device",
+    "sharedNeedsEnd": "Shared mode needs an end time (valid until) so device accounts can expire.",
     "cleanupDeactivate": "Cleanup: deactivate",
     "cleanupDelete": "Cleanup: delete",
     "addEvent": "Add event",
@@ -542,7 +543,7 @@
     "missing": "No player link exists for this team. Ask an admin to create it.",
     "notRetrievable": "This link can no longer be shown. Ask an admin to regenerate it.",
     "atakEnrollment": "ATAK enrollment",
-    "showAtak": "Show ATAK enrollment QR",
+    "showAtak": "Create enrollment for a new device",
     "generating": "Generating…",
     "scanAtak": "ATAK → enrollment → scan this QR code.",
     "enrollmentFailed": "Could not generate the enrollment."
@@ -552,7 +553,8 @@
     "copyEnrollment": "Copy enrollment link",
     "copied": "Copied!",
     "sameDeviceHint": "On this phone? Tap \"Open in ATAK\" or copy the link instead of scanning the QR.",
-    "linkLabel": "Enrollment link"
+    "linkLabel": "Enrollment link",
+    "singleUseHint": "This code is for one device and is valid for about 15 minutes. Reload this page for a new code."
   },
   "eventsJoin": {
     "loading": "Loading…",

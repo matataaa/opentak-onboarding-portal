@@ -418,14 +418,14 @@ def test_add_member_to_flagged_group_is_409(client, db, admin, ots):
 
 
 def test_event_join_skips_flagged_team_group(db, app, ots):
-    from app.api_v1.events import _ensure_shared_player_account
+    from app.api_v1.events import _create_device_account
     g = _group(db, 'gs_jfl', missing=True)
     team = EventTeamModel(name='gs_jteam', otsGroupId=g.id)
     event = EventModel(name='gs_jevent')
     db.session.add_all([team, event])
     db.session.commit()
-    username, created = _ensure_shared_player_account(event, team)
-    assert created
+    session, error = _create_device_account(event, team)
+    assert error is None and session.mode == 'device'
     ots.create_user.assert_called_once()
     ots.add_user_to_group.assert_not_called()
 

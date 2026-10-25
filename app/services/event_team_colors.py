@@ -43,8 +43,9 @@ def _build_desired_state(events):
 
     sessions = EventSessionModel.query.filter(
         EventSessionModel.eventId.in_(event_ids),
-        EventSessionModel.mode.in_(['shared', 'individual']),
+        EventSessionModel.mode.in_(['shared', 'device', 'individual']),
         EventSessionModel.closedAt.is_(None),
+        EventSessionModel.parkedAt.is_(None),
     ).all()
     for session in sessions:
         if session.otsUsername and session.team and session.team.color in TAK_TEAM_COLORS:
@@ -57,6 +58,32 @@ def _build_desired_state(events):
         if team.leaderUser and team.color in TAK_TEAM_COLORS:
             desired.setdefault(team.leaderUser.username, (team.color, ROLE_VALUE))
     return desired
+
+
+def _unwanted_device_usernames(events, desired):
+    """Usernames of open device sessions that must not carry a team colour
+    (parked, or their team has no valid colour)."""
+    sessions = EventSessionModel.query.filter(
+        EventSessionModel.eventId.in_([e.id for e in events]),
+        EventSessionModel.mode == 'device',
+        EventSessionModel.closedAt.is_(None),
+    ).all()
+    return {s.otsUsername for s in sessions if s.otsUsername and s.otsUsername not in desired}
+
+
+def _delete_unwanted_device_profiles(uid, existing):
+    """Remove colour/role profiles of a device EUD that no longer gets a colour.
+
+    The old team colour is not known (the team may have lost its colour), so only
+    values this service can have written are deleted: a TAK team colour and the role.
+    """
+    from app.api_v1.events import TAK_TEAM_COLORS  # lazy: avoids a circular import
+    if existing[COLOR_KEY].get(uid) in TAK_TEAM_COLORS:
+        otsClient.delete_device_profile(COLOR_KEY, uid)
+        del existing[COLOR_KEY][uid]
+    if existing[ROLE_KEY].get(uid) == ROLE_VALUE:
+        otsClient.delete_device_profile(ROLE_KEY, uid)
+        del existing[ROLE_KEY][uid]
 
 
 def read_profiles():
@@ -95,6 +122,7 @@ def sync_event_team_colors():
             return
 
     desired = _build_desired_state(events)
+    unwanted_devices = _unwanted_device_usernames(events, desired) if events else set()
 
     # Leader accounts that are not (or no longer) wanted: only their own colour is removed.
     leader_colors = {
@@ -120,6 +148,8 @@ def sync_event_team_colors():
                         otsClient.create_device_profile(
                             key, value, VALUE_CLASS,
                             enrollment=False, connection=True, active=True, eud_uid=uid)
+            elif username in unwanted_devices:
+                _delete_unwanted_device_profiles(uid, existing)
             elif leader_colors.get(username):
                 _delete_profiles(uid, existing, leader_colors[username])
         except Exception as e:

@@ -557,6 +557,81 @@ paths:
         '401':
           description: Current password is incorrect
 
+  /events:
+    post:
+      tags:
+        - Events
+      summary: Create an event (events_admin only) 🔒
+      description: >
+        An event with playerAccessMode `shared` requires `validUntil`; the device
+        accounts it creates expire with the event.
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Event created
+        '400':
+          description: Invalid input, or playerAccessMode `shared` without validUntil
+
+  /events/{id}:
+    put:
+      tags:
+        - Events
+      summary: Update an event (events_admin only) 🔒
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Event updated
+        '400':
+          description: Invalid input, or the result would be a shared event without validUntil
+        '404':
+          description: Event not found
+
+  /events/join/{token}:
+    post:
+      tags:
+        - Events
+      summary: Join an event through a link token (public)
+      description: >
+        The link token is the credential. Leader links return a bounded leader session
+        (access_token/refresh_token). Player links in individual mode return the
+        onboarding code to register with. Player links in shared mode provision one OTS
+        account per device and return a single-use ATAK enrollment string valid about
+        15 minutes (or until the event ends). On the first call the server sets an
+        HttpOnly, SameSite=Lax cookie `event_device_key` (Secure over HTTPS, Path = this
+        endpoint) that identifies the device; a reload with that cookie keeps the same
+        account and returns a fresh enrollment string instead of creating a new account.
+        A cookie issued for another link is ignored. The response never contains a
+        password.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: >
+            Shared player - role, mode, team, event, expiresAt, atak ({qrString, expiresAt})
+            and itak (best effort, may be null)
+        '403':
+          description: Events disabled, event inactive, not started or ended
+        '404':
+          description: Invalid or revoked link
+        '409':
+          description: Misconfigured link (no leader account, no registration code, or shared event without end time)
+        '429':
+          description: Per-team/per-event device account cap or per-link creation throttle reached
+        '500':
+          description: Could not provision team access or generate the enrollment
+
   /events/links/{id}/url:
     get:
       tags:
@@ -660,13 +735,14 @@ paths:
     post:
       tags:
         - Events
-      summary: Create the ATAK enrollment QR of the team's shared account (leader session) 🔒
+      summary: Create a new device account and its ATAK enrollment QR in the leader's team (leader session) 🔒
       description: >
-        Shared mode only. Creates (and provisions if needed) the team's shared player
-        account enrollment string, valid until the event ends, max 500 uses. Every call
-        creates a NEW 500-use enrollment token in OTS (nothing is cached); access is
-        limited to genuine leader sessions. The response never contains a password
-        (the qrString is a bearer enrollment token).
+        Shared mode only. Every call creates a NEW OTS account for one device in the
+        leader's team (evt<eventId>_<random>) and a single-use enrollment string valid
+        15 minutes (or until the event ends). Limited to 100 open device accounts per
+        team (500 per event) and throttled to 10 attempts per minute for leader presses
+        (separate from the player link throttle); both return 429. The response
+        never contains a password (the qrString is a bearer enrollment token).
       security:
         - bearerAuth: []
       responses:
@@ -689,7 +765,9 @@ paths:
         '403':
           description: Not a valid leader session for an open event
         '409':
-          description: Event is in individual mode
+          description: Event is in individual mode or has no end time
+        '429':
+          description: Device account cap or creation throttle reached
         '500':
           description: Could not provision or generate the enrollment
 
