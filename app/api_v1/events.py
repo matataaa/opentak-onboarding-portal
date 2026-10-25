@@ -8,11 +8,14 @@ elsewhere.
 
 import re
 import time
+import base64
 import hashlib
+import hmac
 import secrets
 
 from flask import request, jsonify, current_app
-from flask_jwt_extended import jwt_required, create_access_token, create_refresh_token
+from flask_jwt_extended import (jwt_required, create_access_token, create_refresh_token,
+                                get_jwt, get_jwt_identity)
 from datetime import datetime, timedelta
 
 from app.api_v1 import api_v1
@@ -37,6 +40,34 @@ def _generate_link_token():
     return raw, _hash_token(raw)
 
 
+def _link_secret():
+    key = current_app.config.get('SECRET_KEY')
+    if not key or str(key) in ('None', 'dev') or len(str(key)) < 16:
+        return None
+    return str(key).encode('utf-8')
+
+
+def _key_is_strong():
+    return _link_secret() is not None
+
+
+def _derive_link_token(link):
+    """Deterministic token for a link, so an admin can re-show its QR later.
+
+    Only valid while SECRET_KEY is unchanged; the join flow still just looks up
+    the sha256 of the presented token.
+    """
+    msg = b"event-link:v2:%d:%d:%s" % (link.id, link.tokenVersion, link.tokenNonce.encode('ascii'))
+    digest = hmac.new(_link_secret(), msg, hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b'=').decode('ascii')
+
+
+def _link_retrievable(link):
+    if not _key_is_strong() or not link.tokenNonce:
+        return False
+    return hmac.compare_digest(link.tokenHash or '', _hash_token(_derive_link_token(link)))
+
+
 def _link_url(token):
     base = (current_app.config.get('FRONTEND_URL') or '').rstrip('/')
     return "%s/events/join/%s" % (base, token)
@@ -50,6 +81,7 @@ def _link_to_dict(link, raw_token=None):
         'team': {'id': link.team.id, 'name': link.team.name} if link.team else None,
         'role': link.role,
         'tokenVersion': link.tokenVersion,
+        'retrievable': _link_retrievable(link),
         'onboardingCodeId': link.onboardingCodeId,
         'onboardingCode': {
             'id': link.onboardingCode.id,
@@ -419,12 +451,13 @@ def create_event_link(event_id):
     if not EventTeamModel.query.get(team_id):
         return jsonify({'error': 'Unknown teamId'}), 400
     if EventLinkModel.query.filter_by(eventId=event_id, eventTeamId=team_id, role=role).first():
-        return jsonify({'error': 'A link for this team and role already exists; revoke it to get a new one'}), 409
+        return jsonify({'error': 'A link for this team and role already exists; regenerate it to get a new one'}), 409
 
     onboarding_code_id = data.get('onboardingCodeId')
     if onboarding_code_id and not OnboardingCodeModel.get_onboarding_code_by_id(onboarding_code_id):
         return jsonify({'error': 'Unknown onboardingCodeId'}), 400
 
+    # Placeholder hash (unique, random) until the id is known and the token can be derived.
     raw, token_hash = _generate_link_token()
     link = EventLinkModel(
         eventId=event_id,
@@ -432,9 +465,16 @@ def create_event_link(event_id):
         role=role,
         tokenHash=token_hash,
         tokenVersion=1,
+        tokenNonce=secrets.token_urlsafe(16),
         onboardingCodeId=onboarding_code_id,
     )
     db.session.add(link)
+    if _key_is_strong():
+        db.session.flush()
+        raw = _derive_link_token(link)
+        link.tokenHash = _hash_token(raw)
+    else:
+        current_app.logger.warning('SECRET_KEY is weak or unset: event link QR codes cannot be re-shown later')
     db.session.commit()
     return jsonify(_link_to_dict(link, raw_token=raw)), 201
 
@@ -447,11 +487,29 @@ def revoke_event_link(link_id):
     link = EventLinkModel.query.get(link_id)
     if not link:
         return jsonify({'error': 'Link not found'}), 404
-    raw, token_hash = _generate_link_token()
-    link.tokenHash = token_hash
     link.tokenVersion = (link.tokenVersion or 0) + 1
+    link.tokenNonce = secrets.token_urlsafe(16)
+    if _key_is_strong():
+        raw = _derive_link_token(link)
+        link.tokenHash = _hash_token(raw)
+    else:
+        current_app.logger.warning('SECRET_KEY is weak or unset: event link QR codes cannot be re-shown later')
+        raw, link.tokenHash = _generate_link_token()
     db.session.commit()
     return jsonify(_link_to_dict(link, raw_token=raw)), 200
+
+
+@api_v1.route('/events/links/<int:link_id>/url', methods=['GET'])
+@jwt_required()
+@require_role('events_admin')
+def get_event_link_url(link_id):
+    """Re-derive the join URL of a link (only for links created with a strong SECRET_KEY)."""
+    link = EventLinkModel.query.get(link_id)
+    if not link:
+        return jsonify({'error': 'Link not found'}), 404
+    if not _link_retrievable(link):
+        return jsonify({'error': 'This link cannot be shown again; regenerate it to get a retrievable link'}), 409
+    return jsonify({'url': _link_url(_derive_link_token(link))}), 200
 
 
 @api_v1.route('/events/links/<int:link_id>', methods=['DELETE'])
@@ -498,7 +556,7 @@ def join_event(token):
         return window_error
 
     if link.role == 'leader':
-        return _join_as_leader(event, team)
+        return _join_as_leader(event, team, link)
 
     if link.role == 'player':
         if event.playerAccessMode == 'shared':
@@ -568,16 +626,20 @@ def _ensure_shared_player_account(event, team):
     return username, True
 
 
-def _join_as_player_shared(event, team):
+def _provision_shared_atak(event, team):
+    """Ensure the team's shared account and create its ATAK enrollment string.
+
+    Returns (username, atak_info, None) on success or (None, None, error_response).
+    """
     try:
         username, _created = _ensure_shared_player_account(event, team)
     except Exception:
         current_app.logger.exception('Failed to provision shared player account')
-        return jsonify({'error': 'Could not provision team access'}), 500
+        return None, None, (jsonify({'error': 'Could not provision team access'}), 500)
 
     remaining = _event_remaining_seconds(event, 24 * 3600)
     if remaining <= 0:
-        return jsonify({'error': 'This event has ended'}), 403
+        return None, None, (jsonify({'error': 'This event has ended'}), 403)
     exp = int(time.time() + remaining)
 
     try:
@@ -585,7 +647,18 @@ def _join_as_player_shared(event, team):
         atak_payload = atak.get('response', atak) if isinstance(atak, dict) else {}
     except Exception:
         current_app.logger.exception('Failed to generate ATAK enrollment for %s', username)
-        return jsonify({'error': 'Could not generate TAK enrollment'}), 500
+        return None, None, (jsonify({'error': 'Could not generate TAK enrollment'}), 500)
+
+    return username, {
+        'qrString': atak_payload.get('qr_string') if isinstance(atak_payload, dict) else None,
+        'expiresAt': exp,
+    }, None
+
+
+def _join_as_player_shared(event, team):
+    username, atak_info, error = _provision_shared_atak(event, team)
+    if error:
+        return error
 
     # iTAK enrollment is best-effort for shared mode (the OTS endpoint returns
     # plain text the client does not yet handle); never fail the join over it.
@@ -602,15 +675,12 @@ def _join_as_player_shared(event, team):
         'team': {'id': team.id, 'name': team.name, 'color': team.color},
         'event': {'id': event.id, 'name': event.name},
         'expiresAt': event.validUntil.isoformat() if event.validUntil else None,
-        'atak': {
-            'qrString': atak_payload.get('qr_string') if isinstance(atak_payload, dict) else None,
-            'expiresAt': exp,
-        },
+        'atak': atak_info,
         'itak': itak_payload,
     }), 200
 
 
-def _join_as_leader(event, team):
+def _join_as_leader(event, team, link):
     leader = team.leaderUser if team else None
     if not leader:
         return jsonify({'error': 'No leader account is configured for this team'}), 409
@@ -622,12 +692,21 @@ def _join_as_leader(event, team):
     if hard_seconds <= 0:
         return jsonify({'error': 'This event has ended'}), 403
 
+    if not link.tokenNonce:
+        # Legacy link: give it a nonce so sessions can be bound to it. tokenHash is
+        # untouched, so the join URL keeps working (and stays non-retrievable).
+        link.tokenNonce = secrets.token_urlsafe(16)
+        db.session.commit()
+
     until_epoch = int(time.time() + hard_seconds)
     claims = {
         'username': leader.username,
         'event_leader_team': team.id,
         'event_leader_event': event.id,
         'event_leader_until': until_epoch,
+        'event_leader_link': link.id,
+        'event_leader_link_version': link.tokenVersion,
+        'event_leader_link_nonce': link.tokenNonce,
     }
     access_token = create_access_token(
         identity=str(leader.id),
@@ -652,6 +731,102 @@ def _join_as_leader(event, team):
         'event': {'id': event.id, 'name': event.name},
         'user': {'id': leader.id, 'username': leader.username},
     }), 200
+
+
+# ----------------------------------------------------------------------------
+# Leader own-team view (bounded leader session only)
+# ----------------------------------------------------------------------------
+def _leader_scope():
+    """Resolve (event, team, None) for a leader session, else (None, None, error).
+
+    Event and team come only from the JWT claims set at join time. The feature
+    switch, the event window, the team's current leader and the leader link the
+    session came from are re-checked on every call, so deactivation, reassignment
+    and regenerating/deleting the leader link end access immediately.
+    """
+    if not SystemSettingsModel.get_setting('events_enabled', False):
+        return None, None, (jsonify({'error': 'Events are not enabled'}), 403)
+    claims = get_jwt()
+    team_id = claims.get('event_leader_team')
+    event_id = claims.get('event_leader_event')
+    link_id = claims.get('event_leader_link')
+    link_version = claims.get('event_leader_link_version')
+    link_nonce = claims.get('event_leader_link_nonce')
+    if (team_id is None or event_id is None or link_id is None or link_version is None
+            or not link_nonce):
+        return None, None, (jsonify({'error': 'Forbidden'}), 403)
+
+    link = EventLinkModel.query.get(link_id)
+    if (not link or link.role != 'leader' or link.eventId != event_id
+            or link.eventTeamId != team_id or link.tokenVersion != link_version
+            or not hmac.compare_digest((link.tokenNonce or '').encode(), str(link_nonce).encode())
+            or not link.tokenNonce):
+        return None, None, (jsonify({'error': 'Forbidden'}), 403)
+
+    event = EventModel.query.get(event_id)
+    team = EventTeamModel.query.get(team_id)
+    if not event or not team:
+        return None, None, (jsonify({'error': 'Forbidden'}), 403)
+    if _event_window_error(event):
+        return None, None, (jsonify({'error': 'This event is not open'}), 403)
+    try:
+        is_leader = team.leaderUserId is not None and team.leaderUserId == int(get_jwt_identity())
+    except (TypeError, ValueError):
+        is_leader = False
+    if not is_leader:
+        return None, None, (jsonify({'error': 'Forbidden'}), 403)
+    return event, team, None
+
+
+@api_v1.route('/events/my-team', methods=['GET'])
+@jwt_required()
+def get_my_team():
+    event, team, error = _leader_scope()
+    if error:
+        return error
+
+    link = EventLinkModel.query.filter_by(
+        eventId=event.id, eventTeamId=team.id, role='player').first()
+    player_link = None
+    reason = None
+    if not link:
+        reason = 'missing'
+    elif not _link_retrievable(link):
+        reason = 'notRetrievable'
+    else:
+        player_link = {'url': _link_url(_derive_link_token(link))}
+
+    data = {
+        'event': {
+            'id': event.id,
+            'name': event.name,
+            'validUntil': event.validUntil.isoformat() if event.validUntil else None,
+        },
+        'team': {'id': team.id, 'name': team.name, 'color': team.color},
+        'mode': event.playerAccessMode,
+        'expiresAt': event.validUntil.isoformat() if event.validUntil else None,
+        'playerLink': player_link,
+        'atakAvailable': event.playerAccessMode == 'shared',
+    }
+    if reason:
+        data['reason'] = reason
+    return jsonify(data), 200
+
+
+@api_v1.route('/events/my-team/enrollment', methods=['POST'])
+@jwt_required()
+def create_my_team_enrollment():
+    event, team, error = _leader_scope()
+    if error:
+        return error
+    if event.playerAccessMode != 'shared':
+        return jsonify({'error': 'ATAK enrollment is only available in shared mode'}), 409
+
+    _username, atak_info, error = _provision_shared_atak(event, team)
+    if error:
+        return error
+    current_app.logger.info('Leader enrollment issued: team %s event %s', team.id, event.id)
+    return jsonify({'atak': atak_info}), 200
 
 
 def record_event_registration(username, onboarding_code):

@@ -47,6 +47,8 @@ tags:
     description: System settings management (admin only)
   - name: Announcements
     description: Announcement management (admin or announcement_admin / announcement_readonly)
+  - name: Events
+    description: Events module (events_admin / events_readonly)
 
 components:
   securitySchemes:
@@ -554,6 +556,142 @@ paths:
           description: Password changed successfully
         '401':
           description: Current password is incorrect
+
+  /events/links/{id}/url:
+    get:
+      tags:
+        - Events
+      summary: Re-show the join URL of an event link (events_admin only) 🔒
+      description: >
+        Re-derives the join URL for links whose token is derived from SECRET_KEY
+        (field `retrievable` in the link list). Legacy links with a random token,
+        or any link when SECRET_KEY is weak, return 409; regenerate the link first.
+        Rotating SECRET_KEY makes derived links non-retrievable (printed QRs keep working).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The join URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+        '404':
+          description: Link not found
+        '409':
+          description: Link is not retrievable; regenerate it
+
+  /events/my-team:
+    get:
+      tags:
+        - Events
+      summary: Own-team view for an event leader session 🔒
+      description: >
+        Only for a bounded leader session (JWT issued by joining a leader link).
+        Event and team are taken from the token, never from the request. Returns 403
+        for any other token, when events are disabled, when the event is not open, when
+        the user is no longer the team's leader, or when the leader link the session
+        came from was regenerated or deleted. `playerLink` is null when the link is missing
+        (an admin has to create it) or not retrievable (an admin has to regenerate it); see
+        `reason`: `missing` or `notRetrievable`.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Own-team data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  event:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                      validUntil:
+                        type: string
+                        format: date-time
+                        nullable: true
+                  team:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                      color:
+                        type: string
+                        nullable: true
+                  mode:
+                    type: string
+                    enum: [shared, individual]
+                  expiresAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  playerLink:
+                    type: object
+                    nullable: true
+                    properties:
+                      url:
+                        type: string
+                  reason:
+                    type: string
+                    enum: [missing, notRetrievable]
+                    description: Present only when playerLink is null
+                  atakAvailable:
+                    type: boolean
+        '403':
+          description: Not a valid leader session for an open event
+
+  /events/my-team/enrollment:
+    post:
+      tags:
+        - Events
+      summary: Create the ATAK enrollment QR of the team's shared account (leader session) 🔒
+      description: >
+        Shared mode only. Creates (and provisions if needed) the team's shared player
+        account enrollment string, valid until the event ends, max 500 uses. Every call
+        creates a NEW 500-use enrollment token in OTS (nothing is cached); access is
+        limited to genuine leader sessions. The response never contains a password
+        (the qrString is a bearer enrollment token).
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: ATAK enrollment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  atak:
+                    type: object
+                    properties:
+                      qrString:
+                        type: string
+                        nullable: true
+                      expiresAt:
+                        type: integer
+                        description: Unix epoch seconds
+        '403':
+          description: Not a valid leader session for an open event
+        '409':
+          description: Event is in individual mode
+        '500':
+          description: Could not provision or generate the enrollment
 
   /users:
     get:

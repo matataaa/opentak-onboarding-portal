@@ -14,6 +14,8 @@
 .events-leader-form { display: flex; gap: 0.3rem; flex-wrap: wrap; }
 .events-leader-form input { padding: 0.35rem 0.5rem; border: 1px solid var(--border-color, #ccc); border-radius: 6px; }
 .events-new-link { background: #e7f1fb; padding: 0.75rem; border-radius: 6px; margin-bottom: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.events-qr-panel { align-items: center; text-align: center; }
+.events-qr-panel svg { max-width: 100%; height: auto; }
 .events-new-link code { word-break: break-all; font-size: 0.9rem; }
 @media (max-width: 640px) { .events-form-row { flex-direction: column; align-items: stretch; } }
 .events-print-sheet { margin-top: 1.5rem; }

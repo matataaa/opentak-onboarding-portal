@@ -396,7 +396,7 @@ function UsersList() {
                     minLength={3}
                     maxLength={32}
                   />
-                  {!editingUser && <span className="help-text">{t('admin.users.usernameHelp')}</span>}
+                  <span className="help-text">{editingUser ? t('admin.users.usernameImmutable') : t('admin.users.usernameHelp')}</span>
                 </div>
 
                 <div className="form-group">

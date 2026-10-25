@@ -339,6 +339,14 @@
   border-color: var(--text-primary);
 }
 
+.form-group input:disabled,
+.form-group select:disabled,
+.form-group textarea:disabled {
+  background: var(--bg-page);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .form-group textarea {
   min-height: 100px;
   resize: vertical;

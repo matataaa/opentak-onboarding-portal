@@ -610,10 +610,14 @@ export const eventsAPI = {
 
   listLinks: (eventId) => api.get(`/events/${eventId}/links`),
   createLink: (eventId, data) => api.post(`/events/${eventId}/links`, data),
+  getLinkUrl: (linkId) => api.get(`/events/links/${linkId}/url`),
   revokeLink: (linkId) => api.post(`/events/links/${linkId}/revoke`),
   deleteLink: (linkId) => api.delete(`/events/links/${linkId}`),
 
   join: (token) => axios.post(`${API_BASE_URL}/api/v1/events/join/${token}`),
+
+  myTeam: () => api.get('/events/my-team'),
+  myTeamEnrollment: () => api.post('/events/my-team/enrollment'),
 };
 
 export default api;

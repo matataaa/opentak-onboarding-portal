@@ -345,6 +345,7 @@
     "failedReject": "Ablehnung der Registrierung fehlgeschlagen"
   },
   "layout": {
+    "myTeam": "Mein Team",
     "homepage": "Startseite",
     "approvals": "Genehmigungen",
     "admin": "Admin",
@@ -511,6 +512,7 @@
     "links": "Links",
     "linksFor": "Links für Event",
     "linkOnce": "Kopieren Sie diesen Link jetzt — er wird nur einmal angezeigt:",
+    "linkCreated": "Link erstellt:",
     "selectTeam": "Team wählen",
     "roleLeader": "Leiter",
     "rolePlayer": "Spieler",
@@ -520,11 +522,37 @@
     "role": "Rolle",
     "code": "Code",
     "version": "Version",
-    "revoke": "Widerrufen",
+    "regenerate": "Neu generieren",
+    "regenerateConfirm": "Diesen Link neu generieren? Der alte Link und ein gedruckter QR-Code funktionieren dann nicht mehr.",
+    "regenerateToShowQr": "Neu generieren, um den QR anzuzeigen",
+    "qrLink": "QR / Link",
+    "copyLink": "Link kopieren",
+    "printAllQrs": "Alle QR-Codes dieser Veranstaltung drucken",
     "loadFailed": "Events konnten nicht geladen werden",
     "actionFailed": "Aktion fehlgeschlagen",
     "printSheet": "Druckbogen",
     "clearSheet": "Leeren"
+  },
+  "eventsMyTeam": {
+    "loading": "Laden…",
+    "loadFailed": "Dein Team konnte nicht geladen werden.",
+    "playerLink": "Beitrittslink für Spieler",
+    "copy": "Link kopieren",
+    "copied": "Kopiert!",
+    "missing": "Für dieses Team gibt es keinen Spielerlink. Bitte einen Admin, ihn zu erstellen.",
+    "notRetrievable": "Dieser Link kann nicht mehr angezeigt werden. Bitte einen Admin, ihn neu zu erzeugen.",
+    "atakEnrollment": "ATAK-Enrollment",
+    "showAtak": "ATAK-Enrollment-QR anzeigen",
+    "generating": "Wird erzeugt…",
+    "scanAtak": "ATAK → Enrollment → diesen QR-Code scannen.",
+    "enrollmentFailed": "Das Enrollment konnte nicht erzeugt werden."
+  },
+  "eventsShared": {
+    "openInAtak": "In ATAK öffnen",
+    "copyEnrollment": "Registrierungslink kopieren",
+    "copied": "Kopiert!",
+    "sameDeviceHint": "Auf diesem Handy? Tippe auf \"In ATAK öffnen\" oder kopiere den Link, statt den QR-Code zu scannen.",
+    "linkLabel": "Registrierungslink"
   },
   "eventsJoin": {
     "loading": "Wird geladen…",
@@ -583,6 +611,7 @@
       "createUser": "Benutzer erstellen",
       "usernameLabel": "Benutzername *",
       "usernameHelp": "Nur Buchstaben und Zahlen (3-32 Zeichen)",
+      "usernameImmutable": "Der Benutzername kann nach der Erstellung nicht mehr geändert werden.",
       "emailLabel": "E-Mail *",
       "firstNameLabel": "Vorname *",
       "lastNameLabel": "Nachname *",
