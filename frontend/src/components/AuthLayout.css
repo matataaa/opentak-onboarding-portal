@@ -1,0 +1,183 @@
+/* Login page appearance (non-classic layouts). The classic layout uses Auth.css only. */
+:root,
+[data-theme="light"] {
+  --auth-overlay-rgb: 255, 255, 255;
+  --auth-card-rgb: 255, 255, 255;
+}
+
+[data-theme="dark"] {
+  --auth-overlay-rgb: 0, 0, 0;
+  --auth-card-rgb: 22, 33, 62;
+}
+
+/* Fixed to the viewport so it escapes #root's padding/max-width and is truly
+   full-bleed; it is its own scroll container for long pages (e.g. Register).
+   The overlay is the top background layer, so it stays put while scrolling. */
+.auth-layout {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-page);
+  background-image:
+    linear-gradient(
+      rgba(var(--auth-overlay-rgb), var(--auth-overlay-alpha, 0.45)),
+      rgba(var(--auth-overlay-rgb), var(--auth-overlay-alpha, 0.45))
+    ),
+    var(--auth-bg-image, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-sizing: border-box;
+}
+
+.auth-layout__header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1.25rem;
+  box-sizing: border-box;
+  background-color: rgba(var(--auth-card-rgb), 0.85);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.auth-layout--glass .auth-layout__header {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.auth-layout__header img {
+  max-height: 32px;
+  max-width: 120px;
+  object-fit: contain;
+}
+
+.auth-layout__body {
+  flex: 1 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.auth-layout__main {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  max-width: 450px;
+}
+
+.auth-layout__split {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+/* The card is always a floating card on branded layouts, also on mobile */
+.auth-layout .auth-card {
+  min-height: 0;
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+.auth-layout--glass .auth-card,
+.auth-layout--glass .auth-layout__hero {
+  background: rgba(var(--auth-card-rgb), 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.auth-layout--branded .btn-primary {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.auth-layout--branded .btn-primary:hover:not(:disabled) {
+  background-color: var(--accent-color);
+  filter: brightness(0.9);
+}
+
+/* Hero panel: same surface as the card so text stays readable on any image */
+.auth-layout__hero {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 3rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.auth-layout__hero-eyebrow {
+  margin: 0 0 1rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+/* Accent only as a decorative bar, so the text never depends on the accent colour */
+.auth-layout__hero-eyebrow::after {
+  content: '';
+  display: block;
+  width: 2.5rem;
+  height: 3px;
+  margin-top: 0.5rem;
+  border-radius: 2px;
+  background-color: var(--accent-color);
+}
+
+.auth-layout__hero-headline {
+  margin: 0 0 1rem 0;
+  font-size: 2.25rem;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--text-primary);
+}
+
+.auth-layout__hero-description {
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-line;
+}
+
+.auth-layout__hero-footer {
+  margin: 2rem 0 0 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+@media (min-width: 768px) {
+  .auth-layout__body {
+    padding: 40px 20px;
+  }
+
+  /* Hero and card side by side with equal height */
+  .auth-layout__split {
+    align-items: stretch;
+    gap: 2rem;
+    max-width: 1100px;
+  }
+
+  .auth-layout--split .auth-layout__hero {
+    display: flex;
+    flex: 1 1 0;
+    max-width: 560px;
+  }
+
+  .auth-layout__split .auth-layout__main {
+    flex: 0 1 450px;
+  }
+}

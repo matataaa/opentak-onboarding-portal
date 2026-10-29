@@ -54,6 +54,16 @@ const SETTING_GROUP_OVERRIDES = {
   events_enabled: 'advanced',
 };
 
+// Branding settings rendered in the "Login page" subsection
+const LOGIN_PAGE_SETTING_KEYS = [
+  'login_layout',
+  'login_overlay_strength',
+  'login_background_path',
+  'login_glass_enabled',
+  'login_header_bar_enabled',
+  'login_hero_texts',
+];
+
 // Fallback label for settings without a translation (e.g. newly added settings)
 const formatSettingName = (key) => {
   return key
@@ -522,6 +532,200 @@ function LogoUploadSetting({ logoSettings, onUpload, onDelete, onDisplayModeChan
           >
             {t('admin.settings.resetToDefault')}
           </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Component for the login page background image upload
+function LoginBackgroundSetting({ backgroundPath, onUpload, onDelete, saving, canEdit = true }) {
+  const { t } = useTranslation();
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const handleFileSelect = (file) => {
+    if (!file) return;
+
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      alert(t('admin.settings.loginBackgroundInvalidType'));
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert(t('admin.settings.loginBackgroundTooLarge'));
+      return;
+    }
+
+    onUpload(file);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    handleFileSelect(e.dataTransfer.files[0]);
+  };
+
+  return (
+    <div className="setting-item setting-item-logo">
+      <div className="setting-header">
+        <div className="setting-info">
+          <h4>{t('admin.settings.loginBackground')}</h4>
+          <p className="setting-description">{t('admin.settings.loginBackgroundHelp')}</p>
+        </div>
+      </div>
+
+      <div className="logo-upload-section">
+        {backgroundPath && (
+          <div className="logo-preview-container">
+            <img
+              src={`${API_BASE_URL}${backgroundPath}`}
+              alt={t('admin.settings.currentLoginBackground')}
+              className="login-bg-preview"
+            />
+          </div>
+        )}
+
+        {canEdit && (
+          <div
+            className={`logo-dropzone ${dragOver ? 'drag-over' : ''}`}
+            onDrop={handleDrop}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".png,.jpg,.jpeg,.webp"
+              onChange={(e) => { handleFileSelect(e.target.files[0]); e.target.value = ''; }}
+              style={{ display: 'none' }}
+            />
+            <p>{t('admin.settings.dropImage')}</p>
+          </div>
+        )}
+
+        {backgroundPath && (
+          <button
+            className="btn-cancel-setting"
+            onClick={onDelete}
+            disabled={saving || !canEdit}
+          >
+            {t('admin.settings.removeLoginBackground')}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const HERO_LANGUAGES = ['en', 'nl', 'de'];
+const HERO_FIELDS = ['eyebrow', 'headline', 'description', 'footer'];
+
+const parseHeroTexts = (value) => {
+  try {
+    const parsed = JSON.parse(value || '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+// Editor for the per-language hero texts of the split login layout (stored as JSON)
+function HeroTextsSetting({ setting, onSave, saving, canEdit = true }) {
+  const { t } = useTranslation();
+  const [language, setLanguage] = useState('en');
+  const [texts, setTexts] = useState(() => parseHeroTexts(setting?.value));
+  const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    setTexts(parseHeroTexts(setting?.value));
+    setIsEditing(false);
+  }, [setting?.value]);
+
+  const handleChange = (field, value) => {
+    setTexts(prev => ({ ...prev, [language]: { ...prev[language], [field]: value } }));
+    setIsEditing(true);
+  };
+
+  const handleSave = () => {
+    // Store only non-empty fields and languages
+    const cleaned = {};
+    HERO_LANGUAGES.forEach(lang => {
+      const entry = {};
+      HERO_FIELDS.forEach(field => {
+        const value = texts[lang]?.[field];
+        if (typeof value === 'string' && value.trim()) entry[field] = value.trim();
+      });
+      if (Object.keys(entry).length > 0) cleaned[lang] = entry;
+    });
+    onSave(setting.id, JSON.stringify(cleaned));
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setTexts(parseHeroTexts(setting?.value));
+    setIsEditing(false);
+  };
+
+  return (
+    <div className="setting-item setting-item-text">
+      <div className="setting-info">
+        <h4>{t('admin.settings.heroTexts')}</h4>
+        <p className="setting-description">{t('admin.settings.heroTextsHelp')}</p>
+      </div>
+      <div className="setting-text-input">
+        <div className="hero-texts-tabs" role="tablist">
+          {HERO_LANGUAGES.map(lang => (
+            <button
+              key={lang}
+              type="button"
+              role="tab"
+              aria-selected={language === lang}
+              className={`hero-texts-tab ${language === lang ? 'active' : ''}`}
+              onClick={() => setLanguage(lang)}
+            >
+              {t(`admin.settings.heroLanguage.${lang}`)}
+            </button>
+          ))}
+        </div>
+        {HERO_FIELDS.map(field => {
+          const inputId = `hero-${language}-${field}`;
+          const value = texts[language]?.[field] || '';
+          return (
+            <div key={field} className="hero-texts-field">
+              <label htmlFor={inputId}>{t(`admin.settings.heroField.${field}`)}</label>
+              {field === 'description' ? (
+                <textarea
+                  id={inputId}
+                  value={value}
+                  maxLength={300}
+                  rows={3}
+                  onChange={(e) => handleChange(field, e.target.value)}
+                  disabled={saving || !canEdit}
+                />
+              ) : (
+                <input
+                  id={inputId}
+                  type="text"
+                  value={value}
+                  maxLength={300}
+                  onChange={(e) => handleChange(field, e.target.value)}
+                  disabled={saving || !canEdit}
+                />
+              )}
+            </div>
+          );
+        })}
+        {isEditing && (
+          <div className="setting-text-actions">
+            <button className="btn-save-setting" onClick={handleSave} disabled={saving}>
+              {t('common.save')}
+            </button>
+            <button className="btn-cancel-setting" onClick={handleCancel} disabled={saving}>
+              {t('common.cancel')}
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -1060,6 +1264,38 @@ function Settings() {
     }
   };
 
+  const handleLoginBackgroundUpload = async (file) => {
+    try {
+      setSaving(true);
+      setError('');
+      await settingsAPI.admin.uploadLoginBackground(file);
+      setSuccess(t('admin.settings.loginBackgroundUploaded'));
+      fetchSettings();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      console.error('Error uploading login background:', err);
+      setError(err.response?.data?.error || t('admin.settings.failedUploadLoginBackground'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLoginBackgroundDelete = async () => {
+    try {
+      setSaving(true);
+      setError('');
+      await settingsAPI.admin.deleteLoginBackground();
+      setSuccess(t('admin.settings.loginBackgroundRemoved'));
+      fetchSettings();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      console.error('Error deleting login background:', err);
+      setError(err.response?.data?.error || t('admin.settings.failedRemoveLoginBackground'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDisplayModeChange = async (mode) => {
     try {
       setSaving(true);
@@ -1188,7 +1424,7 @@ function Settings() {
   const colorSettingKeys = ['primary_color', 'accent_color'];
 
   // Dropdown setting keys (rendered with <select>)
-  const dropdownSettingKeys = ['default_theme', 'kiosk_default_theme'];
+  const dropdownSettingKeys = ['default_theme', 'kiosk_default_theme', 'login_layout', 'login_overlay_strength'];
   const dropdownOptions = {
     default_theme: [
       { value: 'light', label: t('admin.settings.light') },
@@ -1198,12 +1434,18 @@ function Settings() {
       { value: 'light', label: t('admin.settings.light') },
       { value: 'dark', label: t('admin.settings.dark') },
     ],
+    login_layout: ['classic', 'centered', 'split'].map(value => (
+      { value, label: t(`admin.settings.loginLayoutOption.${value}`) }
+    )),
+    login_overlay_strength: ['none', 'light', 'medium', 'strong'].map(value => (
+      { value, label: t(`admin.settings.loginOverlayOption.${value}`) }
+    )),
   };
 
   // Get regular (non-paired) settings from a category
   const getRegularSettings = (categorySettings, processedKeys) => {
     // Settings managed by dedicated components (not shown as toggles)
-    const managedSettings = ['custom_logo_path', 'logo_display_mode', ...colorSettingKeys, ...dropdownSettingKeys];
+    const managedSettings = ['custom_logo_path', 'logo_display_mode', 'login_background_path', 'login_hero_texts', ...colorSettingKeys, ...dropdownSettingKeys];
     return categorySettings?.filter(s => !processedKeys.has(s.key) && !managedSettings.includes(s.key)) || [];
   };
 
@@ -1276,6 +1518,61 @@ function Settings() {
     setOpenGroups(allGroupsOpen ? new Set() : new Set(visibleGroups.map(g => g.id)));
   };
 
+  // Branding settings shown in the group's main list (login page settings get their own subsection)
+  const mainGroupSettings = (groupId, groupSettings) => (
+    groupId === 'branding' ? groupSettings.filter(s => !LOGIN_PAGE_SETTING_KEYS.includes(s.key)) : groupSettings
+  );
+
+  const renderLoginPageSettings = (loginSettings) => {
+    const backgroundSetting = loginSettings.find(s => s.key === 'login_background_path');
+    const heroSetting = loginSettings.find(s => s.key === 'login_hero_texts');
+
+    return (
+      <div className="settings-subsection">
+        <div className="oidc-section-header">
+          <h3>{t('admin.settings.loginPage')}</h3>
+          <a href="/login" target="_blank" rel="noopener noreferrer">{t('admin.settings.previewLoginPage')}</a>
+        </div>
+        <p className="setting-description" style={{ marginBottom: '1rem' }}>
+          {t('admin.settings.loginPageHelp')}
+        </p>
+        <p className="setting-description" style={{ marginBottom: '1rem' }}>
+          {t('admin.settings.loginPageContrastHint')}
+        </p>
+        <div className="settings-list">
+          {getDropdownSettings(loginSettings).map(setting => (
+            <DropdownSettingItem
+              key={setting.id}
+              setting={setting}
+              options={dropdownOptions[setting.key] || []}
+              onSave={handleTextChange}
+              saving={saving}
+              canEdit={canEdit}
+            />
+          ))}
+          {backgroundSetting && (
+            <LoginBackgroundSetting
+              backgroundPath={backgroundSetting.value}
+              onUpload={handleLoginBackgroundUpload}
+              onDelete={handleLoginBackgroundDelete}
+              saving={saving}
+              canEdit={canEdit}
+            />
+          )}
+          {renderCategorySettings(loginSettings)}
+          {heroSetting && (
+            <HeroTextsSetting
+              setting={heroSetting}
+              onSave={handleTextChange}
+              saving={saving}
+              canEdit={canEdit}
+            />
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderGroupContent = (groupId, groupSettings) => (
     <>
       {groupId === 'kiosk' && (
@@ -1295,7 +1592,7 @@ function Settings() {
           />
         )}
         {/* Color Settings */}
-        {getColorSettings(groupSettings).map(setting => (
+        {getColorSettings(mainGroupSettings(groupId, groupSettings)).map(setting => (
           <ColorSettingItem
             key={setting.id}
             setting={setting}
@@ -1304,9 +1601,9 @@ function Settings() {
             canEdit={canEdit}
           />
         ))}
-        {renderCategorySettings(groupSettings)}
+        {renderCategorySettings(mainGroupSettings(groupId, groupSettings))}
         {/* Dropdown Settings */}
-        {getDropdownSettings(groupSettings).map(setting => (
+        {getDropdownSettings(mainGroupSettings(groupId, groupSettings)).map(setting => (
           <DropdownSettingItem
             key={setting.id}
             setting={setting}
@@ -1317,6 +1614,9 @@ function Settings() {
           />
         ))}
       </div>
+
+      {/* Login page appearance (part of Branding) */}
+      {groupId === 'branding' && renderLoginPageSettings(groupSettings.filter(s => LOGIN_PAGE_SETTING_KEYS.includes(s.key)))}
 
       {/* OIDC Providers (part of Security) */}
       {groupId === 'security' && (

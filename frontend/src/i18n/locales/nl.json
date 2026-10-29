@@ -1124,6 +1124,44 @@
       "enterValue": "Voer een waarde in...",
       "currentLogo": "Huidig logo",
       "failedLoadSettings": "Laden van instellingen mislukt",
+      "loginPage": "Inlogpagina",
+      "loginPageHelp": "Uiterlijk van de inlogpagina en de andere aanmeldpagina's. Achtergrond, overlay, glaseffect, kopbalk en de accentkleur op knoppen gelden alleen voor de layouts Gecentreerd en Gesplitst.",
+      "loginPageContrastHint": "Tip: een lichte accentkleur, of overlay \"Geen\" over een heldere afbeelding, kan tekst en knoppen slecht leesbaar maken. Controleer het voorbeeld.",
+      "previewLoginPage": "Voorbeeld inlogpagina",
+      "loginLayoutOption": {
+        "classic": "Klassiek",
+        "centered": "Gecentreerd",
+        "split": "Gesplitst (tekst naast het formulier)"
+      },
+      "loginOverlayOption": {
+        "none": "Geen",
+        "light": "Licht",
+        "medium": "Gemiddeld",
+        "strong": "Sterk"
+      },
+      "loginBackground": "Inlogachtergrond",
+      "loginBackgroundHelp": "Achtergrondafbeelding voor de inlogpagina. PNG, JPG, WebP, max. 5 MB",
+      "currentLoginBackground": "Huidige inlogachtergrond",
+      "removeLoginBackground": "Achtergrond verwijderen",
+      "loginBackgroundInvalidType": "Ongeldig bestandstype. Gebruik PNG, JPG of WebP.",
+      "loginBackgroundTooLarge": "Bestand te groot. Maximale grootte is 5 MB.",
+      "loginBackgroundUploaded": "Inlogachtergrond succesvol geüpload",
+      "loginBackgroundRemoved": "Inlogachtergrond verwijderd",
+      "failedUploadLoginBackground": "Uploaden van inlogachtergrond mislukt",
+      "failedRemoveLoginBackground": "Verwijderen van inlogachtergrond mislukt",
+      "heroTexts": "Teksten inlogpagina",
+      "heroTextsHelp": "Wordt naast het inlogformulier getoond in de layout Gesplitst. Lege velden worden verborgen; talen zonder teksten vallen terug op Engels.",
+      "heroLanguage": {
+        "en": "Engels",
+        "nl": "Nederlands",
+        "de": "Duits"
+      },
+      "heroField": {
+        "eyebrow": "Bovenregel (kleine tekst boven de kop)",
+        "headline": "Kop",
+        "description": "Omschrijving",
+        "footer": "Voettekst"
+      },
       "items": {
         "notify_admin_pending_registration": {
           "label": "Beheerders informeren over openstaande registraties",
@@ -1277,6 +1315,22 @@
         "accent_color": {
           "label": "Accentkleur",
           "description": "Accentkleur voor knoppen en accenten"
+        },
+        "login_layout": {
+          "label": "Layout inlogpagina",
+          "description": "Klassiek behoudt het standaarduiterlijk; Gecentreerd en Gesplitst gebruiken de achtergrond, overlay en accentkleur hieronder"
+        },
+        "login_overlay_strength": {
+          "label": "Achtergrondoverlay",
+          "description": "Hoe sterk de achtergrondafbeelding achter het inlogformulier wordt gedimd"
+        },
+        "login_glass_enabled": {
+          "label": "Glaseffect",
+          "description": "Toon het inlogformulier als een kaart van matglas"
+        },
+        "login_header_bar_enabled": {
+          "label": "Kopbalk",
+          "description": "Toon een balk met het logo en de merknaam bovenaan de inlogpagina"
         },
         "kiosk_enrollment_enabled": {
           "label": "Kiosk-inschrijving",

@@ -2005,6 +2005,39 @@ paths:
                     type: boolean
                   forgot_password_enabled:
                     type: boolean
+                  login_layout:
+                    type: string
+                    enum: [classic, centered, split]
+                    example: classic
+                  login_background_path:
+                    type: string
+                    description: URL of the uploaded login background image, empty when none
+                    example: /api/v1/uploads/login_bg_1a2b3c4d.jpg
+                  login_overlay_strength:
+                    type: string
+                    enum: [none, light, medium, strong]
+                    example: medium
+                  login_glass_enabled:
+                    type: boolean
+                  login_header_bar_enabled:
+                    type: boolean
+                  login_hero_texts:
+                    type: object
+                    description: Hero texts per language for the split layout ({} when unset or malformed)
+                    additionalProperties:
+                      type: object
+                      properties:
+                        eyebrow:
+                          type: string
+                        headline:
+                          type: string
+                        description:
+                          type: string
+                        footer:
+                          type: string
+                    example:
+                      en:
+                        headline: Welcome to our TAK server
 
   /admin/settings:
     get:
@@ -2092,7 +2125,7 @@ paths:
                   setting:
                     $ref: '#/components/schemas/Setting'
         '400':
-          description: Value is required
+          description: Value is required, or invalid value for this setting
           content:
             application/json:
               schema:
@@ -2158,7 +2191,7 @@ paths:
                   setting:
                     $ref: '#/components/schemas/Setting'
         '400':
-          description: Value is required
+          description: Value is required, or invalid value for this setting
           content:
             application/json:
               schema:
@@ -2177,6 +2210,88 @@ paths:
                 $ref: '#/components/schemas/Error'
         '500':
           description: Failed to update setting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/login-background:
+    post:
+      tags:
+        - Settings
+      summary: Upload the login page background image
+      description: Requires administrator or settings_admin. Replaces (and deletes) any previous background.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - background
+              properties:
+                background:
+                  type: string
+                  format: binary
+                  description: PNG, JPG/JPEG or WebP image, max 5MB
+      responses:
+        '200':
+          description: Background uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  login_background_path:
+                    type: string
+                    example: /api/v1/uploads/login_bg_1a2b3c4d.jpg
+        '400':
+          description: No file, invalid file type or file too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Settings admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Failed to upload login background
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags:
+        - Settings
+      summary: Remove the login page background image
+      description: Requires administrator or settings_admin. Deletes the file and clears login_background_path.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Login background removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '403':
+          description: Settings admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Failed to delete login background
           content:
             application/json:
               schema:
