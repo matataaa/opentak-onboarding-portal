@@ -8,6 +8,52 @@ from flask_jwt_extended import jwt_required, get_jwt
 from app.api_v1 import api_v1
 from app.models import SystemSettingsModel
 from app import db
+import json
+
+LOGIN_HERO_LANGUAGES = ('en', 'nl', 'de')
+LOGIN_HERO_FIELDS = ('eyebrow', 'headline', 'description', 'footer')
+LOGIN_HERO_MAX_LENGTH = 300
+LOGIN_ENUM_SETTINGS = {
+    'login_layout': ('classic', 'centered', 'split'),
+    'login_overlay_strength': ('none', 'light', 'medium', 'strong'),
+}
+
+
+def _parse_login_hero_texts(raw):
+    """Parse the stored login_hero_texts JSON, returning {} when it is missing or malformed"""
+    try:
+        value = json.loads(raw) if raw else {}
+    except (TypeError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _validate_setting_value(key, value):
+    """Return an error message if the value is invalid for the given setting key, else None"""
+    if key == 'login_background_path':
+        return 'login_background_path can only be changed through /api/v1/admin/login-background'
+    if key in LOGIN_ENUM_SETTINGS:
+        allowed = LOGIN_ENUM_SETTINGS[key]
+        if value not in allowed:
+            return f'{key} must be one of: {", ".join(allowed)}'
+        return None
+    if key != 'login_hero_texts':
+        return None
+    error = ('login_hero_texts must be a JSON object keyed by language (en, nl, de) with '
+             f'string fields {", ".join(LOGIN_HERO_FIELDS)} of at most {LOGIN_HERO_MAX_LENGTH} characters')
+    try:
+        parsed = json.loads(value) if isinstance(value, str) else None
+    except ValueError:
+        return error
+    if not isinstance(parsed, dict):
+        return error
+    for lang, texts in parsed.items():
+        if lang not in LOGIN_HERO_LANGUAGES or not isinstance(texts, dict):
+            return error
+        for field, text in texts.items():
+            if field not in LOGIN_HERO_FIELDS or not isinstance(text, str) or len(text) > LOGIN_HERO_MAX_LENGTH:
+                return error
+    return None
 
 
 @api_v1.route('/settings', methods=['GET'])
@@ -80,6 +126,13 @@ def get_settings():
         'custom_logo_path': get_str_setting('custom_logo_path', ''),
         'logo_display_mode': get_str_setting('logo_display_mode', 'logo_and_text'),
         'default_logo_path': '/static/img/logo.png',
+        # Login page appearance
+        'login_layout': get_str_setting('login_layout', 'classic'),
+        'login_background_path': get_str_setting('login_background_path', ''),
+        'login_overlay_strength': get_str_setting('login_overlay_strength', 'medium'),
+        'login_glass_enabled': get_bool_setting('login_glass_enabled', True),
+        'login_header_bar_enabled': get_bool_setting('login_header_bar_enabled', False),
+        'login_hero_texts': _parse_login_hero_texts(get_str_setting('login_hero_texts', '')),
         # Radio settings
         'claim_radio_enabled': get_bool_setting('claim_radio_enabled', False),
         'user_program_radio_enabled': get_bool_setting('user_program_radio_enabled', False),
@@ -233,7 +286,7 @@ def update_admin_setting(setting_id):
                 description:
                   type: string
       400:
-        description: Value is required
+        description: Value is required or invalid for this setting
       403:
         description: Admin access required
       404:
@@ -255,6 +308,10 @@ def update_admin_setting(setting_id):
         setting = SystemSettingsModel.query.get(setting_id)
         if not setting:
             return jsonify({'error': 'Setting not found'}), 404
+
+        error = _validate_setting_value(setting.key, data['value'])
+        if error:
+            return jsonify({'error': error}), 400
 
         # Update the setting
         setting.value = str(data['value']).lower() if isinstance(data['value'], bool) else data['value']
@@ -325,7 +382,7 @@ def update_admin_setting_by_key(key):
                 description:
                   type: string
       400:
-        description: Value is required
+        description: Value is required or invalid for this setting
       403:
         description: Admin access required
       404:
@@ -347,6 +404,10 @@ def update_admin_setting_by_key(key):
         setting = SystemSettingsModel.query.filter_by(key=key).first()
         if not setting:
             return jsonify({'error': 'Setting not found'}), 404
+
+        error = _validate_setting_value(setting.key, data['value'])
+        if error:
+            return jsonify({'error': error}), 400
 
         # Update the setting
         setting.value = str(data['value']).lower() if isinstance(data['value'], bool) else data['value']

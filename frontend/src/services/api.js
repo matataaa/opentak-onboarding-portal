@@ -439,6 +439,16 @@ export const settingsAPI = {
 
     deleteLogo: () =>
       api.delete('/admin/logo'),
+
+    // Login page background
+    uploadLoginBackground: (file) => {
+      const formData = new FormData();
+      formData.append('background', file);
+      return api.post('/admin/login-background', formData);
+    },
+
+    deleteLoginBackground: () =>
+      api.delete('/admin/login-background'),
   },
 };
 

@@ -1,0 +1,144 @@
+/* Login page appearance (non-classic layouts). The classic layout uses Auth.css only. */
+:root,
+[data-theme="light"] {
+  --auth-overlay-rgb: 255, 255, 255;
+  --auth-card-rgb: 255, 255, 255;
+}
+
+[data-theme="dark"] {
+  --auth-overlay-rgb: 0, 0, 0;
+  --auth-card-rgb: 22, 33, 62;
+}
+
+.auth-layout {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--bg-page);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-sizing: border-box;
+}
+
+.auth-layout__overlay {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(var(--auth-overlay-rgb), var(--auth-overlay-alpha, 0.45));
+  pointer-events: none;
+}
+
+.auth-layout__header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  background-color: rgba(var(--auth-card-rgb), 0.85);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.auth-layout--glass .auth-layout__header {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.auth-layout__header img {
+  max-height: 32px;
+  max-width: 120px;
+  object-fit: contain;
+}
+
+.auth-layout__body {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3rem;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.auth-layout__main {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  max-width: 450px;
+}
+
+/* The card is always a floating card on branded layouts, also on mobile */
+.auth-layout .auth-card {
+  min-height: 0;
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+.auth-layout--glass .auth-card {
+  background: rgba(var(--auth-card-rgb), 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.auth-layout--branded .btn-primary {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.auth-layout--branded .btn-primary:hover:not(:disabled) {
+  background-color: var(--accent-color);
+  filter: brightness(0.9);
+}
+
+.auth-layout__hero {
+  display: none;
+  color: var(--text-primary);
+  max-width: 520px;
+}
+
+.auth-layout__hero-eyebrow {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-color);
+}
+
+.auth-layout__hero-headline {
+  margin: 0 0 1rem 0;
+  font-size: 2.5rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.auth-layout__hero-description {
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-line;
+}
+
+.auth-layout__hero-footer {
+  margin: 2rem 0 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+@media (min-width: 768px) {
+  .auth-layout__body {
+    padding: 40px 20px;
+  }
+
+  .auth-layout--split .auth-layout__body {
+    justify-content: space-evenly;
+  }
+
+  .auth-layout--split .auth-layout__hero {
+    display: block;
+    flex: 1;
+  }
+}

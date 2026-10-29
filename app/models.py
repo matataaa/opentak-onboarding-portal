@@ -1651,6 +1651,43 @@ class SystemSettingsModel(db.Model):
                 'category': 'branding',
                 'description': 'Accent color for buttons and highlights'
             },
+            # Login page appearance
+            {
+                'key': 'login_layout',
+                'value': 'classic',
+                'category': 'branding',
+                'description': 'Layout of the login and other sign-in pages (classic, centered, split)'
+            },
+            {
+                'key': 'login_background_path',
+                'value': '',
+                'category': 'branding',
+                'description': 'Path to uploaded login page background image'
+            },
+            {
+                'key': 'login_overlay_strength',
+                'value': 'medium',
+                'category': 'branding',
+                'description': 'Strength of the overlay on the login background (none, light, medium, strong)'
+            },
+            {
+                'key': 'login_glass_enabled',
+                'value': 'true',
+                'category': 'branding',
+                'description': 'Show the login card with a frosted glass effect'
+            },
+            {
+                'key': 'login_header_bar_enabled',
+                'value': 'false',
+                'category': 'branding',
+                'description': 'Show a header bar with logo and brand name on the login page'
+            },
+            {
+                'key': 'login_hero_texts',
+                'value': '{}',
+                'category': 'branding',
+                'description': 'Hero texts per language for the split login layout (JSON)'
+            },
             # Kiosk Enrollment
             {
                 'key': 'kiosk_enrollment_enabled',

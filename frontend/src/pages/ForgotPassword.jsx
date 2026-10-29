@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { settingsAPI } from '../services/api';
+import AuthLayout from '../components/AuthLayout';
 import './Auth.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || window.location.origin;
@@ -46,7 +47,7 @@ function ForgotPassword() {
 
   if (success) {
     return (
-      <div className="auth-container">
+      <AuthLayout>
         <div className="auth-card">
           {logoPath && (
             <div className="auth-logo">
@@ -63,12 +64,12 @@ function ForgotPassword() {
             </p>
           </div>
         </div>
-      </div>
+      </AuthLayout>
     );
   }
 
   return (
-    <div className="auth-container">
+    <AuthLayout>
       <div className="auth-card">
         {logoPath && (
           <div className="auth-logo">
@@ -113,7 +114,7 @@ function ForgotPassword() {
           </div>
         </form>
       </div>
-    </div>
+    </AuthLayout>
   );
 }
 

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { onboardingCodesAPI, settingsAPI } from '../services/api';
+import AuthLayout from '../components/AuthLayout';
 import './Auth.css';
 
 function Register() {
@@ -147,7 +148,7 @@ function Register() {
 
   if (!codeValid && !error) {
     return (
-      <div className="auth-container">
+      <AuthLayout>
         <div className="auth-card">
           {logoPath && (
             <div className="auth-logo">
@@ -156,13 +157,13 @@ function Register() {
           )}
           <h2>{t('auth.validatingCode')}</h2>
         </div>
-      </div>
+      </AuthLayout>
     );
   }
 
   if (error && !codeValid) {
     return (
-      <div className="auth-container">
+      <AuthLayout>
         <div className="auth-card">
           {logoPath && (
             <div className="auth-logo">
@@ -172,12 +173,12 @@ function Register() {
           <h2>{t('auth.invalidCode')}</h2>
           <div className="alert alert-error">{error}</div>
         </div>
-      </div>
+      </AuthLayout>
     );
   }
 
   return (
-    <div className="auth-container">
+    <AuthLayout>
       <div className="auth-card">
         {logoPath && (
           <div className="auth-logo">
@@ -310,7 +311,7 @@ function Register() {
           <p><a href="/login">{t('auth.alreadyHaveAccount')}</a></p>
         </div>
       </div>
-    </div>
+    </AuthLayout>
   );
 }
 

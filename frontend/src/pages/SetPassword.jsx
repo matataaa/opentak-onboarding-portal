@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI, settingsAPI } from '../services/api';
+import AuthLayout from '../components/AuthLayout';
 import './Auth.css';
 
 function SetPassword() {
@@ -77,7 +78,7 @@ function SetPassword() {
   };
 
   return (
-    <div className="auth-container">
+    <AuthLayout>
       <div className="auth-card">
         {logoPath && (
           <div className="auth-logo">
@@ -137,7 +138,7 @@ function SetPassword() {
           </button>
         </form>
       </div>
-    </div>
+    </AuthLayout>
   );
 }
 

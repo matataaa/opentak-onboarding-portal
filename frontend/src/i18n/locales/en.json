@@ -1125,6 +1125,44 @@
       "enterValue": "Enter value...",
       "currentLogo": "Current logo",
       "failedLoadSettings": "Failed to load settings",
+      "loginPage": "Login page",
+      "loginPageHelp": "Appearance of the login and other sign-in pages. Background, overlay, glass effect, header bar and the accent color on buttons only apply to the Centered and Split layouts.",
+      "loginPageContrastHint": "Tip: a light accent color, or overlay \"None\" over a bright image, can make text and buttons hard to read. Check the preview.",
+      "previewLoginPage": "Preview login page",
+      "loginLayoutOption": {
+        "classic": "Classic",
+        "centered": "Centered",
+        "split": "Split (text beside the form)"
+      },
+      "loginOverlayOption": {
+        "none": "None",
+        "light": "Light",
+        "medium": "Medium",
+        "strong": "Strong"
+      },
+      "loginBackground": "Login Background",
+      "loginBackgroundHelp": "Background image for the login page. PNG, JPG, WebP, max 5 MB",
+      "currentLoginBackground": "Current login background",
+      "removeLoginBackground": "Remove Background",
+      "loginBackgroundInvalidType": "Invalid file type. Please use PNG, JPG or WebP.",
+      "loginBackgroundTooLarge": "File too large. Maximum size is 5 MB.",
+      "loginBackgroundUploaded": "Login background uploaded successfully",
+      "loginBackgroundRemoved": "Login background removed",
+      "failedUploadLoginBackground": "Failed to upload login background",
+      "failedRemoveLoginBackground": "Failed to remove login background",
+      "heroTexts": "Login Page Texts",
+      "heroTextsHelp": "Shown beside the login form in the Split layout. Empty fields are hidden; languages without texts fall back to English.",
+      "heroLanguage": {
+        "en": "English",
+        "nl": "Dutch",
+        "de": "German"
+      },
+      "heroField": {
+        "eyebrow": "Eyebrow (small text above the headline)",
+        "headline": "Headline",
+        "description": "Description",
+        "footer": "Footer"
+      },
       "items": {
         "notify_admin_pending_registration": {
           "label": "Notify Admins of Pending Registrations",
@@ -1278,6 +1316,22 @@
         "accent_color": {
           "label": "Accent Color",
           "description": "Accent color for buttons and highlights"
+        },
+        "login_layout": {
+          "label": "Login Page Layout",
+          "description": "Classic keeps the standard look; Centered and Split use the background, overlay and accent color below"
+        },
+        "login_overlay_strength": {
+          "label": "Background Overlay",
+          "description": "How strongly the background image is dimmed behind the login form"
+        },
+        "login_glass_enabled": {
+          "label": "Glass Effect",
+          "description": "Show the login form as a frosted glass card"
+        },
+        "login_header_bar_enabled": {
+          "label": "Header Bar",
+          "description": "Show a bar with the logo and brand name at the top of the login page"
         },
         "kiosk_enrollment_enabled": {
           "label": "Kiosk Enrollment",

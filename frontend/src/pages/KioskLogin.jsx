@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { kioskAPI, settingsAPI, oidcAPI } from '../services/api';
+import AuthLayout from '../components/AuthLayout';
 import './Auth.css';
 
 const API_BASE_URL = window.location.origin;
@@ -132,7 +133,7 @@ function KioskLogin() {
   }, [sessionId]);
 
   return (
-    <div className="auth-container">
+    <AuthLayout hero>
       <div className="auth-card">
         {logoPath && (
           <div className="auth-logo">
@@ -264,7 +265,7 @@ function KioskLogin() {
           </div>
         )}
       </div>
-    </div>
+    </AuthLayout>
   );
 }
 

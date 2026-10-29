@@ -1124,6 +1124,44 @@
       "enterValue": "Wert eingeben...",
       "currentLogo": "Aktuelles Logo",
       "failedLoadSettings": "Einstellungen konnten nicht geladen werden",
+      "loginPage": "Anmeldeseite",
+      "loginPageHelp": "Darstellung der Anmeldeseite und der weiteren Anmeldeseiten. Hintergrund, Überlagerung, Glaseffekt, Kopfleiste und die Akzentfarbe auf Schaltflächen gelten nur für die Layouts Zentriert und Geteilt.",
+      "loginPageContrastHint": "Tipp: Eine helle Akzentfarbe oder die Überlagerung \"Keine\" über einem hellen Bild kann Text und Schaltflächen schwer lesbar machen. Prüfen Sie die Vorschau.",
+      "previewLoginPage": "Vorschau der Anmeldeseite",
+      "loginLayoutOption": {
+        "classic": "Klassisch",
+        "centered": "Zentriert",
+        "split": "Geteilt (Text neben dem Formular)"
+      },
+      "loginOverlayOption": {
+        "none": "Keine",
+        "light": "Leicht",
+        "medium": "Mittel",
+        "strong": "Stark"
+      },
+      "loginBackground": "Anmeldehintergrund",
+      "loginBackgroundHelp": "Hintergrundbild für die Anmeldeseite. PNG, JPG, WebP, max. 5 MB",
+      "currentLoginBackground": "Aktueller Anmeldehintergrund",
+      "removeLoginBackground": "Hintergrund entfernen",
+      "loginBackgroundInvalidType": "Ungültiger Dateityp. Bitte PNG, JPG oder WebP verwenden.",
+      "loginBackgroundTooLarge": "Datei zu groß. Maximale Größe ist 5 MB.",
+      "loginBackgroundUploaded": "Anmeldehintergrund erfolgreich hochgeladen",
+      "loginBackgroundRemoved": "Anmeldehintergrund entfernt",
+      "failedUploadLoginBackground": "Hochladen des Anmeldehintergrunds fehlgeschlagen",
+      "failedRemoveLoginBackground": "Entfernen des Anmeldehintergrunds fehlgeschlagen",
+      "heroTexts": "Texte der Anmeldeseite",
+      "heroTextsHelp": "Wird im Layout Geteilt neben dem Anmeldeformular angezeigt. Leere Felder werden ausgeblendet; Sprachen ohne Texte greifen auf Englisch zurück.",
+      "heroLanguage": {
+        "en": "Englisch",
+        "nl": "Niederländisch",
+        "de": "Deutsch"
+      },
+      "heroField": {
+        "eyebrow": "Dachzeile (kleiner Text über der Überschrift)",
+        "headline": "Überschrift",
+        "description": "Beschreibung",
+        "footer": "Fußzeile"
+      },
       "items": {
         "notify_admin_pending_registration": {
           "label": "Administratoren über ausstehende Registrierungen benachrichtigen",
@@ -1277,6 +1315,22 @@
         "accent_color": {
           "label": "Akzentfarbe",
           "description": "Akzentfarbe für Schaltflächen und Hervorhebungen"
+        },
+        "login_layout": {
+          "label": "Layout der Anmeldeseite",
+          "description": "Klassisch behält das Standardaussehen; Zentriert und Geteilt verwenden den Hintergrund, die Überlagerung und die Akzentfarbe unten"
+        },
+        "login_overlay_strength": {
+          "label": "Hintergrundüberlagerung",
+          "description": "Wie stark das Hintergrundbild hinter dem Anmeldeformular abgedunkelt wird"
+        },
+        "login_glass_enabled": {
+          "label": "Glaseffekt",
+          "description": "Das Anmeldeformular als Milchglas-Karte anzeigen"
+        },
+        "login_header_bar_enabled": {
+          "label": "Kopfleiste",
+          "description": "Eine Leiste mit Logo und Markenname oben auf der Anmeldeseite anzeigen"
         },
         "kiosk_enrollment_enabled": {
           "label": "Kiosk-Registrierung",

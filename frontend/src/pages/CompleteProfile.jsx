@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI, settingsAPI } from '../services/api';
+import AuthLayout from '../components/AuthLayout';
 import './Auth.css';
 
 function CompleteProfile() {
@@ -78,7 +79,7 @@ function CompleteProfile() {
   const needsCallsign = !user?.callsign;
 
   return (
-    <div className="auth-container">
+    <AuthLayout>
       <div className="auth-card">
         {logoPath && (
           <div className="auth-logo">
@@ -136,7 +137,7 @@ function CompleteProfile() {
           </button>
         </form>
       </div>
-    </div>
+    </AuthLayout>
   );
 }
 
