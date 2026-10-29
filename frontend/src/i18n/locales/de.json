@@ -1120,7 +1120,189 @@
       "failedDeleteOidc": "OIDC-Anbieter konnte nicht gelöscht werden",
       "light": "Hell",
       "dark": "Dunkel",
-      "radiosSection": "Funkgeräte"
+      "radiosSection": "Funkgeräte",
+      "enterValue": "Wert eingeben...",
+      "currentLogo": "Aktuelles Logo",
+      "failedLoadSettings": "Einstellungen konnten nicht geladen werden",
+      "items": {
+        "notify_admin_pending_registration": {
+          "label": "Administratoren über ausstehende Registrierungen benachrichtigen",
+          "description": "Benachrichtigung an die Administratoren senden, wenn eine neue ausstehende Registrierung erstellt wird"
+        },
+        "notify_admin_new_registration": {
+          "label": "Administratoren über neue Registrierungen benachrichtigen",
+          "description": "Benachrichtigung an die Administratoren senden, wenn ein neuer Benutzer die Registrierung abschließt"
+        },
+        "allow_manual_approval": {
+          "label": "Manuelle Genehmigung erlauben",
+          "description": "Administratoren erlauben, ausstehende Registrierungen ohne E-Mail-Bestätigung manuell zu genehmigen"
+        },
+        "remove_expired_accounts_enabled": {
+          "label": "Abgelaufene Konten entfernen",
+          "description": "Konten mit überschrittenem Ablaufdatum jede Nacht um 01:00 Uhr aus OpenTAK Server und dem Portal löschen (Administratoren werden nie entfernt)"
+        },
+        "brand_name_enabled": {
+          "label": "Portalname",
+          "description": "Benutzerdefinierten Portalnamen aktivieren"
+        },
+        "brand_name_value": {
+          "description": "Im Kopfbereich angezeigter Portalname"
+        },
+        "help_link_enabled": {
+          "label": "Hilfe-Link",
+          "description": "Schaltfläche Hilfe / Installationsanleitung im Dashboard anzeigen"
+        },
+        "help_link_value": {
+          "description": "URL für die Schaltfläche Hilfe / Installationsanleitung"
+        },
+        "help_email_enabled": {
+          "label": "Support-E-Mail",
+          "description": "Support-E-Mail-Adresse anzeigen"
+        },
+        "help_email_value": {
+          "description": "Support-E-Mail-Adresse"
+        },
+        "open_in_atak_enabled": {
+          "label": "Schaltfläche \"In ATAK öffnen\"",
+          "description": "Schaltfläche „In ATAK öffnen“ im Dashboard für TAK-Profile anzeigen"
+        },
+        "atak_homepage_icon_enabled": {
+          "label": "ATAK-Download-Kachel",
+          "description": "ATAK-Download-Symbol im Dashboard anzeigen"
+        },
+        "itak_homepage_icon_enabled": {
+          "label": "iTAK-Download-Kachel",
+          "description": "iTAK-Download-Symbol im Dashboard anzeigen"
+        },
+        "truststore_homepage_icon_enabled": {
+          "label": "TrustStore-Download-Kachel",
+          "description": "TrustStore-Download-Symbol im Dashboard anzeigen"
+        },
+        "zerotier_icon": {
+          "label": "ZeroTier-Download-Kachel",
+          "description": "ZeroTier-Download-Symbol im Dashboard anzeigen"
+        },
+        "meshtastic_homepage_icon_enabled": {
+          "label": "Meshtastic-Download-Kachel",
+          "description": "Meshtastic-Download-Symbol im Dashboard anzeigen"
+        },
+        "claim_radio_enabled": {
+          "label": "Funkgerät-Beanspruchung",
+          "description": "Benutzern erlauben, Funkgeräte ohne Besitzer über eine Beanspruchungs-URL zu beanspruchen"
+        },
+        "user_program_radio_enabled": {
+          "label": "Funkgeräte-Programmierung durch Benutzer",
+          "description": "Benutzern erlauben, ihre zugewiesenen Funkgeräte über das Dashboard zu programmieren"
+        },
+        "user_validate_radio_enabled": {
+          "label": "Funkgeräte-Validierung durch Benutzer",
+          "description": "Benutzern erlauben, die Konfiguration ihres Funkgeräts über das Dashboard mit der zugewiesenen Zielkonfiguration abzugleichen"
+        },
+        "user_radio_enrollment_enabled": {
+          "label": "Funkgeräte-Registrierung durch Benutzer",
+          "description": "Benutzern erlauben, eigene Funkgeräte per USB über das Dashboard zu registrieren"
+        },
+        "oidc_enabled": {
+          "label": "OIDC / SSO-Anmeldung",
+          "description": "OIDC / Single Sign-On-Anmeldung aktivieren (erfordert mindestens einen konfigurierten OIDC-Provider)"
+        },
+        "oidc_auto_create_user": {
+          "label": "OIDC-Benutzer automatisch anlegen",
+          "description": "Automatisch ein lokales Konto anlegen, wenn sich ein Benutzer zum ersten Mal über OIDC anmeldet"
+        },
+        "events_enabled": {
+          "label": "Events-Modul",
+          "description": "Events-Modul aktivieren (Teams, Events und Zugangslinks)"
+        },
+        "atak_installer_qr_enabled": {
+          "label": "QR-Code für ATAK-Installation",
+          "description": "QR-Code zum Herunterladen der ATAK-App anzeigen"
+        },
+        "atak_installer_qr_url": {
+          "description": "URL für den QR-Code der ATAK-Installation"
+        },
+        "itak_installer_qr_enabled": {
+          "label": "QR-Code für iTAK-Installation",
+          "description": "QR-Code zum Herunterladen der iTAK-App anzeigen"
+        },
+        "itak_installer_qr_url": {
+          "description": "URL für den QR-Code der iTAK-Installation"
+        },
+        "meshtastic_installer_qr_android_enabled": {
+          "label": "QR-Code für Meshtastic-Installation (Android)",
+          "description": "QR-Code zum Herunterladen der Meshtastic-Android-App anzeigen"
+        },
+        "meshtastic_installer_qr_android_url": {
+          "description": "URL für den QR-Code der Meshtastic-Installation (Android)"
+        },
+        "meshtastic_installer_qr_iphone_enabled": {
+          "label": "QR-Code für Meshtastic-Installation (iPhone)",
+          "description": "QR-Code zum Herunterladen der Meshtastic-iPhone-App anzeigen"
+        },
+        "meshtastic_installer_qr_iphone_url": {
+          "description": "URL für den QR-Code der Meshtastic-Installation (iPhone)"
+        },
+        "generate_atak_qr_code": {
+          "label": "QR-Code für ATAK-Registrierung",
+          "description": "QR-Code für die ATAK-Registrierung (Android) im Dashboard anzeigen"
+        },
+        "generate_itak_qr_code": {
+          "label": "QR-Code für iTAK-Registrierung",
+          "description": "QR-Code für die iTAK-Registrierung (iOS) im Dashboard anzeigen"
+        },
+        "qr_token_expiry_minutes": {
+          "label": "Gültigkeitsdauer QR-Token (Minuten)",
+          "description": "Gültigkeitsdauer von QR-Code-Tokens in Minuten"
+        },
+        "qr_token_max_uses": {
+          "label": "Max. Nutzungen pro QR-Token",
+          "description": "Maximale Anzahl von Nutzungen pro QR-Code-Token"
+        },
+        "callsign_qr_code_enabled": {
+          "label": "Rufzeichen-QR-Code",
+          "description": "QR-Code zum Festlegen des Rufzeichens in der ATAK-App anzeigen"
+        },
+        "forgot_password_enabled": {
+          "label": "Passwort vergessen",
+          "description": "Funktion \"Passwort vergessen\" aktivieren"
+        },
+        "custom_logo_enabled": {
+          "label": "Benutzerdefiniertes Logo",
+          "description": "Anzeige des benutzerdefinierten Logos aktivieren"
+        },
+        "primary_color": {
+          "label": "Primärfarbe",
+          "description": "Primärfarbe für das Portal-Design"
+        },
+        "accent_color": {
+          "label": "Akzentfarbe",
+          "description": "Akzentfarbe für Schaltflächen und Hervorhebungen"
+        },
+        "kiosk_enrollment_enabled": {
+          "label": "Kiosk-Registrierung",
+          "description": "Kiosk-Registrierungsbildschirm unter /kiosk aktivieren"
+        },
+        "kiosk_session_timeout_minutes": {
+          "label": "Kiosk-Sitzungs-Timeout (Minuten)",
+          "description": "Zeit in Minuten bis zur automatischen Abmeldung, nachdem sich ein Benutzer am Kiosk angemeldet hat"
+        },
+        "magic_link_login_enabled": {
+          "label": "Anmeldung per Magic-Link",
+          "description": "Passwortlose Anmeldung per Magic-Link via E-Mail aktivieren"
+        },
+        "magic_link_expiry_minutes": {
+          "label": "Gültigkeitsdauer Magic-Link (Minuten)",
+          "description": "Gültigkeitsdauer des Magic-Links in Minuten"
+        },
+        "default_theme": {
+          "label": "Standarddesign",
+          "description": "Standarddesign für das Portal (hell oder dunkel)"
+        },
+        "kiosk_default_theme": {
+          "label": "Kiosk-Standarddesign",
+          "description": "Standarddesign für den Kiosk-Bildschirm (hell oder dunkel)"
+        }
+      }
     },
     "announcements": {
       "title": "Ankündigungen",

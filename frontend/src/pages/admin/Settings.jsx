@@ -54,6 +54,18 @@ const SETTING_GROUP_OVERRIDES = {
   events_enabled: 'advanced',
 };
 
+// Fallback label for settings without a translation (e.g. newly added settings)
+const formatSettingName = (key) => {
+  return key
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
+// Translated label/description of a setting row, falling back to the key name / DB description
+const settingLabel = (t, key) => t(`admin.settings.items.${key}.label`, { defaultValue: formatSettingName(key) });
+const settingDescription = (t, s) => t(`admin.settings.items.${s.key}.description`, { defaultValue: s.description || '' });
+
 // Collapsible settings group (heading button + region, content only rendered when open)
 function SettingsGroup({ id, title, count, isOpen, onToggle, children }) {
   const { t } = useTranslation();
@@ -86,7 +98,7 @@ function SettingsGroup({ id, title, count, isOpen, onToggle, children }) {
 }
 
 // Component for numeric settings (number input with save button)
-function NumericSettingItem({ setting, onSave, saving, formatSettingName, canEdit = true }) {
+function NumericSettingItem({ setting, onSave, saving, canEdit = true }) {
   const { t } = useTranslation();
   const [localValue, setLocalValue] = useState(setting?.value || '');
   const [isEditing, setIsEditing] = useState(false);
@@ -109,8 +121,8 @@ function NumericSettingItem({ setting, onSave, saving, formatSettingName, canEdi
   return (
     <div className="setting-item setting-item-numeric">
       <div className="setting-info">
-        <h4>{formatSettingName(setting.key)}</h4>
-        <p className="setting-description">{setting.description}</p>
+        <h4>{settingLabel(t, setting.key)}</h4>
+        <p className="setting-description">{settingDescription(t, setting)}</p>
       </div>
       <div className="setting-numeric-input">
         <input
@@ -147,7 +159,7 @@ function NumericSettingItem({ setting, onSave, saving, formatSettingName, canEdi
 }
 
 // Component for paired settings (toggle + text value)
-function PairedSettingItem({ enabledSetting, valueSetting, onToggle, onSave, saving, formatSettingName, canEdit = true }) {
+function PairedSettingItem({ enabledSetting, valueSetting, onToggle, onSave, saving, canEdit = true }) {
   const { t } = useTranslation();
   const [localValue, setLocalValue] = useState(valueSetting?.value || '');
   const [isEditing, setIsEditing] = useState(false);
@@ -168,16 +180,12 @@ function PairedSettingItem({ enabledSetting, valueSetting, onToggle, onSave, sav
     setIsEditing(false);
   };
 
-  // Extract the base name (remove _enabled suffix)
-  const baseName = enabledSetting.key.replace('_enabled', '');
-  const displayName = formatSettingName(baseName);
-
   return (
     <div className="setting-item setting-item-paired">
       <div className="setting-header">
         <div className="setting-info">
-          <h4>{displayName}</h4>
-          <p className="setting-description">{enabledSetting.description}</p>
+          <h4>{settingLabel(t, enabledSetting.key)}</h4>
+          <p className="setting-description">{settingDescription(t, enabledSetting)}</p>
         </div>
         <label className="toggle-switch">
           <input
@@ -191,7 +199,7 @@ function PairedSettingItem({ enabledSetting, valueSetting, onToggle, onSave, sav
       </div>
       {valueSetting && (
         <div className="setting-value-section">
-          <p className="setting-value-description">{valueSetting.description}</p>
+          <p className="setting-value-description">{settingDescription(t, valueSetting)}</p>
           <div className="setting-text-input">
             <input
               type="text"
@@ -200,7 +208,7 @@ function PairedSettingItem({ enabledSetting, valueSetting, onToggle, onSave, sav
                 setLocalValue(e.target.value);
                 setIsEditing(true);
               }}
-              placeholder="Enter value..."
+              placeholder={t('admin.settings.enterValue')}
               disabled={saving || !canEdit}
             />
             {isEditing && (
@@ -265,7 +273,7 @@ const toHexColor = (value) => {
 };
 
 // Component for color settings
-function ColorSettingItem({ setting, onSave, saving, formatSettingName, canEdit = true }) {
+function ColorSettingItem({ setting, onSave, saving, canEdit = true }) {
   const { t } = useTranslation();
   const [localValue, setLocalValue] = useState(setting?.value || '#000000');
   const [isEditing, setIsEditing] = useState(false);
@@ -294,8 +302,8 @@ function ColorSettingItem({ setting, onSave, saving, formatSettingName, canEdit 
   return (
     <div className="setting-item setting-item-color">
       <div className="setting-info">
-        <h4>{formatSettingName(setting.key)}</h4>
-        <p className="setting-description">{setting.description}</p>
+        <h4>{settingLabel(t, setting.key)}</h4>
+        <p className="setting-description">{settingDescription(t, setting)}</p>
       </div>
       <div className="setting-color-input">
         <input
@@ -340,7 +348,7 @@ function ColorSettingItem({ setting, onSave, saving, formatSettingName, canEdit 
 }
 
 // Component for dropdown settings (e.g. theme selection)
-function DropdownSettingItem({ setting, options, onSave, saving, formatSettingName, canEdit = true }) {
+function DropdownSettingItem({ setting, options, onSave, saving, canEdit = true }) {
   const { t } = useTranslation();
   const [localValue, setLocalValue] = useState(setting?.value || '');
   const [isEditing, setIsEditing] = useState(false);
@@ -368,8 +376,8 @@ function DropdownSettingItem({ setting, options, onSave, saving, formatSettingNa
   return (
     <div className="setting-item setting-item-color">
       <div className="setting-info">
-        <h4>{formatSettingName(setting.key)}</h4>
-        <p className="setting-description">{setting.description}</p>
+        <h4>{settingLabel(t, setting.key)}</h4>
+        <p className="setting-description">{settingDescription(t, setting)}</p>
       </div>
       <div className="setting-color-input">
         <select
@@ -465,7 +473,7 @@ function LogoUploadSetting({ logoSettings, onUpload, onDelete, onDisplayModeChan
           <div className="logo-preview-container">
             <img
               src={preview || currentLogo}
-              alt="Current logo"
+              alt={t('admin.settings.currentLogo')}
               className="logo-preview"
             />
           </div>
@@ -493,7 +501,7 @@ function LogoUploadSetting({ logoSettings, onUpload, onDelete, onDisplayModeChan
 
         {/* Display Mode */}
         <div className="logo-display-mode">
-          <label>{t('admin.settings.displayMode')}:</label>
+          <label>{t('admin.settings.displayMode')}</label>
           <select
             value={logoSettings?.logo_display_mode || 'logo_and_text'}
             onChange={(e) => onDisplayModeChange(e.target.value)}
@@ -655,7 +663,7 @@ function OIDCProviderModal({ provider, roles, onSave, onClose, saving, error: ex
       <div className="modal oidc-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{provider ? t('admin.settings.editProvider') : t('admin.settings.addOidcProvider')}</h2>
-          <button className="modal-close" onClick={onClose}>&times;</button>
+          <button className="modal-close" onClick={onClose} aria-label={t('common.close')}>&times;</button>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -667,7 +675,7 @@ function OIDCProviderModal({ provider, roles, onSave, onClose, saving, error: ex
             )}
             <div className="oidc-form-grid">
               <div className="form-group">
-                <label>{t('admin.settings.internalName')} *</label>
+                <label>{t('admin.settings.internalName')}</label>
                 <input
                   type="text"
                   name="name"
@@ -680,7 +688,7 @@ function OIDCProviderModal({ provider, roles, onSave, onClose, saving, error: ex
               </div>
 
               <div className="form-group">
-                <label>{t('admin.settings.displayNameLabel')} *</label>
+                <label>{t('admin.settings.displayNameLabel')}</label>
                 <input
                   type="text"
                   name="display_name"
@@ -692,7 +700,7 @@ function OIDCProviderModal({ provider, roles, onSave, onClose, saving, error: ex
               </div>
 
               <div className="form-group">
-                <label>{t('admin.settings.discoveryUrl')} *</label>
+                <label>{t('admin.settings.discoveryUrl')}</label>
                 <input
                   type="url"
                   name="discovery_url"
@@ -704,7 +712,7 @@ function OIDCProviderModal({ provider, roles, onSave, onClose, saving, error: ex
               </div>
 
               <div className="form-group">
-                <label>{t('admin.settings.clientId')} *</label>
+                <label>{t('admin.settings.clientId')}</label>
                 <input
                   type="text"
                   name="client_id"
@@ -944,7 +952,7 @@ function Settings() {
       setError('');
     } catch (err) {
       console.error('Error fetching settings:', err);
-      setError(err.response?.data?.error || t('admin.settings.failedUpdateSetting'));
+      setError(err.response?.data?.error || t('admin.settings.failedLoadSettings'));
     } finally {
       setLoading(false);
     }
@@ -1109,13 +1117,6 @@ function Settings() {
     }
   };
 
-  const formatSettingName = (key) => {
-    return key
-      .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  };
-
   // Detect if a setting should be rendered as a number input
   const isNumericSetting = (setting) => {
     // Check if key suggests it's a numeric value
@@ -1134,8 +1135,8 @@ function Settings() {
     return (
       <div key={setting.id} className="setting-item">
         <div className="setting-info">
-          <h4>{formatSettingName(setting.key)}</h4>
-          <p className="setting-description">{setting.description}</p>
+          <h4>{settingLabel(t, setting.key)}</h4>
+          <p className="setting-description">{settingDescription(t, setting)}</p>
         </div>
         <label className="toggle-switch">
           <input
@@ -1157,7 +1158,6 @@ function Settings() {
         setting={setting}
         onSave={handleTextChange}
         saving={saving}
-        formatSettingName={formatSettingName}
         canEdit={canEdit}
       />
     );
@@ -1236,7 +1236,6 @@ function Settings() {
             onToggle={handleToggle}
             onSave={handleTextChange}
             saving={saving}
-            formatSettingName={formatSettingName}
             canEdit={canEdit}
           />
         ))}
@@ -1302,7 +1301,6 @@ function Settings() {
             setting={setting}
             onSave={handleTextChange}
             saving={saving}
-            formatSettingName={formatSettingName}
             canEdit={canEdit}
           />
         ))}
@@ -1315,7 +1313,6 @@ function Settings() {
             options={dropdownOptions[setting.key] || []}
             onSave={handleTextChange}
             saving={saving}
-            formatSettingName={formatSettingName}
             canEdit={canEdit}
           />
         ))}
