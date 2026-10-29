@@ -8,6 +8,83 @@ import '../../components/AdminTable.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || window.location.origin;
 
+// UI grouping of the settings page. This is presentation only: the DB `category`
+// of each setting is intentionally left unchanged. A setting is shown in
+// SETTING_GROUP_OVERRIDES[key] if mapped, otherwise in the group matching its DB
+// category (or General if no such group exists).
+const GROUPS = [
+  { id: 'branding', titleKey: 'admin.settings.branding' },
+  { id: 'notifications', titleKey: 'admin.settings.notifications' },
+  { id: 'email', titleKey: 'admin.settings.email' },
+  { id: 'registration', titleKey: 'admin.settings.registration' },
+  { id: 'security', titleKey: 'admin.settings.security' },
+  { id: 'qr_enrollment', titleKey: 'admin.settings.qrCodeEnrollment' },
+  { id: 'homepage_tiles', titleKey: 'admin.settings.homepageTiles' },
+  { id: 'help_support', titleKey: 'admin.settings.helpSupport' },
+  { id: 'radios', titleKey: 'admin.settings.radiosSection' },
+  { id: 'kiosk', titleKey: 'admin.settings.kioskEnrollment' },
+  { id: 'advanced', titleKey: 'admin.settings.advanced' },
+  { id: 'general', titleKey: 'admin.settings.general' },
+];
+
+const SETTING_GROUP_OVERRIDES = {
+  brand_name_enabled: 'branding',
+  brand_name_value: 'branding',
+  default_theme: 'branding',
+  atak_homepage_icon_enabled: 'homepage_tiles',
+  itak_homepage_icon_enabled: 'homepage_tiles',
+  truststore_homepage_icon_enabled: 'homepage_tiles',
+  meshtastic_homepage_icon_enabled: 'homepage_tiles',
+  zerotier_icon: 'homepage_tiles',
+  open_in_atak_enabled: 'homepage_tiles',
+  atak_installer_qr_enabled: 'homepage_tiles',
+  atak_installer_qr_url: 'homepage_tiles',
+  itak_installer_qr_enabled: 'homepage_tiles',
+  itak_installer_qr_url: 'homepage_tiles',
+  meshtastic_installer_qr_android_enabled: 'homepage_tiles',
+  meshtastic_installer_qr_android_url: 'homepage_tiles',
+  meshtastic_installer_qr_iphone_enabled: 'homepage_tiles',
+  meshtastic_installer_qr_iphone_url: 'homepage_tiles',
+  help_link_enabled: 'help_support',
+  help_link_value: 'help_support',
+  help_email_enabled: 'help_support',
+  help_email_value: 'help_support',
+  kiosk_default_theme: 'kiosk',
+  forgot_password_enabled: 'advanced',
+  events_enabled: 'advanced',
+};
+
+// Collapsible settings group (heading button + region, content only rendered when open)
+function SettingsGroup({ id, title, count, isOpen, onToggle, children }) {
+  const { t } = useTranslation();
+  const buttonId = `settings-group-${id}-toggle`;
+  const panelId = `settings-group-${id}-panel`;
+
+  return (
+    <div className="settings-section settings-group">
+      <h2 className="settings-group-heading">
+        <button
+          type="button"
+          id={buttonId}
+          className="settings-group-toggle"
+          aria-expanded={isOpen}
+          aria-controls={isOpen ? panelId : undefined}
+          onClick={onToggle}
+        >
+          <span className="settings-group-title">{title}</span>
+          <span className="settings-group-count">{t('admin.settings.settingCount', { count })}</span>
+          <span className="settings-group-chevron" aria-hidden="true">&#9656;</span>
+        </button>
+      </h2>
+      {isOpen && (
+        <div id={panelId} className="settings-group-panel">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Component for numeric settings (number input with save button)
 function NumericSettingItem({ setting, onSave, saving, formatSettingName, canEdit = true }) {
   const { t } = useTranslation();
@@ -832,6 +909,7 @@ function Settings() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
+  const [openGroups, setOpenGroups] = useState(() => new Set());
 
   // OIDC Provider state
   const [oidcProviders, setOidcProviders] = useState([]);
@@ -1170,71 +1248,84 @@ function Settings() {
     );
   };
 
-  if (loading) {
-    return (
-      <div className="admin-page">
-        <div className="admin-header">
-          <h1>{t('admin.settings.title')}</h1>
-        </div>
-        <div className="loading">{t('admin.settings.loadingSettings')}</div>
+  // Bucket all settings into their UI group
+  const settingsByGroup = {};
+  Object.entries(settings).forEach(([category, categorySettings]) => {
+    (categorySettings || []).forEach(setting => {
+      let groupId = SETTING_GROUP_OVERRIDES[setting.key] ?? category;
+      if (!GROUPS.some(g => g.id === groupId)) groupId = 'general';
+      (settingsByGroup[groupId] ||= []).push(setting);
+    });
+  });
+
+  // Branding (logo upload) and Security (OIDC providers) always have content
+  const visibleGroups = GROUPS.filter(g =>
+    g.id === 'branding' || g.id === 'security' || settingsByGroup[g.id]?.length > 0
+  );
+  const allGroupsOpen = visibleGroups.every(g => openGroups.has(g.id));
+
+  const toggleGroup = (groupId) => {
+    setOpenGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
+
+  const toggleAllGroups = () => {
+    setOpenGroups(allGroupsOpen ? new Set() : new Set(visibleGroups.map(g => g.id)));
+  };
+
+  const renderGroupContent = (groupId, groupSettings) => (
+    <>
+      {groupId === 'kiosk' && (
+        <p className="setting-description" style={{ marginBottom: '1rem' }}>
+          {t('admin.settings.kioskEnrollmentHelp')} <a href="/kiosk" target="_blank" rel="noopener noreferrer"><code>/kiosk</code></a>
+        </p>
+      )}
+      <div className="settings-list">
+        {groupId === 'branding' && (
+          <LogoUploadSetting
+            logoSettings={logoSettings}
+            onUpload={handleLogoUpload}
+            onDelete={handleLogoDelete}
+            onDisplayModeChange={handleDisplayModeChange}
+            saving={saving}
+            canEdit={canEdit}
+          />
+        )}
+        {/* Color Settings */}
+        {getColorSettings(groupSettings).map(setting => (
+          <ColorSettingItem
+            key={setting.id}
+            setting={setting}
+            onSave={handleTextChange}
+            saving={saving}
+            formatSettingName={formatSettingName}
+            canEdit={canEdit}
+          />
+        ))}
+        {renderCategorySettings(groupSettings)}
+        {/* Dropdown Settings */}
+        {getDropdownSettings(groupSettings).map(setting => (
+          <DropdownSettingItem
+            key={setting.id}
+            setting={setting}
+            options={dropdownOptions[setting.key] || []}
+            onSave={handleTextChange}
+            saving={saving}
+            formatSettingName={formatSettingName}
+            canEdit={canEdit}
+          />
+        ))}
       </div>
-    );
-  }
 
-  return (
-    <div className="admin-page">
-      <div className="admin-header">
-        <h1>{t('admin.settings.title')}</h1>
-      </div>
-
-      {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
-
-      <div className="settings-container">
-        {/* Notifications Section */}
-        {settings.notifications && settings.notifications.length > 0 && (
-          <div className="settings-section">
-            <h2>{t('admin.settings.notifications')}</h2>
-            <div className="settings-list">
-              {renderCategorySettings(settings.notifications)}
-            </div>
-          </div>
-        )}
-
-        {/* Email Section */}
-        {settings.email && settings.email.length > 0 && (
-          <div className="settings-section">
-            <h2>{t('admin.settings.email')}</h2>
-            <div className="settings-list">
-              {renderCategorySettings(settings.email)}
-            </div>
-          </div>
-        )}
-
-        {/* Registration Section */}
-        {settings.registration && settings.registration.length > 0 && (
-          <div className="settings-section">
-            <h2>{t('admin.settings.registration')}</h2>
-            <div className="settings-list">
-              {renderCategorySettings(settings.registration)}
-            </div>
-          </div>
-        )}
-
-        {/* Security Section */}
-        {settings.security && settings.security.length > 0 && (
-          <div className="settings-section">
-            <h2>{t('admin.settings.security')}</h2>
-            <div className="settings-list">
-              {renderCategorySettings(settings.security)}
-            </div>
-          </div>
-        )}
-
-        {/* OIDC Providers Section */}
-        <div className="settings-section">
+      {/* OIDC Providers (part of Security) */}
+      {groupId === 'security' && (
+        <div className="settings-subsection">
           <div className="oidc-section-header">
-            <h2>{t('admin.settings.oidcProviders')}</h2>
+            <h3>{t('admin.settings.oidcProviders')}</h3>
             <button
               className="btn btn-primary"
               onClick={() => { setEditingProvider(null); setOidcModalError(''); setShowOidcModal(true); }}
@@ -1311,97 +1402,46 @@ function Settings() {
             </div>
           )}
         </div>
+      )}
+    </>
+  );
 
-        {/* QR Code Enrollment Section */}
-        {settings.qr_enrollment && settings.qr_enrollment.length > 0 && (
-          <div className="settings-section">
-            <h2>{t('admin.settings.qrCodeEnrollment')}</h2>
-            <div className="settings-list">
-              {renderCategorySettings(settings.qr_enrollment)}
-            </div>
-          </div>
-        )}
-
-        {/* Branding Section */}
-        <div className="settings-section">
-          <h2>{t('admin.settings.branding')}</h2>
-          <div className="settings-list">
-            <LogoUploadSetting
-              logoSettings={logoSettings}
-              onUpload={handleLogoUpload}
-              onDelete={handleLogoDelete}
-              onDisplayModeChange={handleDisplayModeChange}
-              saving={saving}
-              canEdit={canEdit}
-            />
-            {/* Color Settings */}
-            {settings.branding && getColorSettings(settings.branding).map(setting => (
-              <ColorSettingItem
-                key={setting.id}
-                setting={setting}
-                onSave={handleTextChange}
-                saving={saving}
-                formatSettingName={formatSettingName}
-                canEdit={canEdit}
-              />
-            ))}
-            {settings.branding && renderCategorySettings(settings.branding)}
-          </div>
+  if (loading) {
+    return (
+      <div className="admin-page">
+        <div className="admin-header">
+          <h1>{t('admin.settings.title')}</h1>
         </div>
+        <div className="loading">{t('admin.settings.loadingSettings')}</div>
+      </div>
+    );
+  }
 
-        {/* Radios Section */}
-        {settings.radios && settings.radios.length > 0 && (
-          <div className="settings-section">
-            <h2>{t('admin.settings.radiosSection')}</h2>
-            <div className="settings-list">
-              {renderCategorySettings(settings.radios)}
-            </div>
-          </div>
-        )}
+  return (
+    <div className="admin-page">
+      <div className="admin-header">
+        <h1>{t('admin.settings.title')}</h1>
+        <button type="button" className="btn btn-secondary settings-toggle-all" onClick={toggleAllGroups}>
+          {allGroupsOpen ? t('admin.settings.collapseAll') : t('admin.settings.expandAll')}
+        </button>
+      </div>
 
-        {/* Kiosk Enrollment Section */}
-        {settings.kiosk && settings.kiosk.length > 0 && (
-          <div className="settings-section">
-            <h2>{t('admin.settings.kioskEnrollment')}</h2>
-            <p className="setting-description" style={{ marginBottom: '1rem' }}>
-              {t('admin.settings.kioskEnrollmentHelp')} <a href="/kiosk" target="_blank" rel="noopener noreferrer"><code>/kiosk</code></a>
-            </p>
-            <div className="settings-list">
-              {renderCategorySettings(settings.kiosk)}
-            </div>
-          </div>
-        )}
+      {error && <div className="alert alert-error">{error}</div>}
+      {success && <div className="alert alert-success">{success}</div>}
 
-        {/* Appearance Section */}
-        {settings.appearance && settings.appearance.length > 0 && (
-          <div className="settings-section">
-            <h2>{t('admin.settings.appearance')}</h2>
-            <div className="settings-list">
-              {getDropdownSettings(settings.appearance).map(setting => (
-                <DropdownSettingItem
-                  key={setting.id}
-                  setting={setting}
-                  options={dropdownOptions[setting.key] || []}
-                  onSave={handleTextChange}
-                  saving={saving}
-                  formatSettingName={formatSettingName}
-                  canEdit={canEdit}
-                />
-              ))}
-              {renderCategorySettings(settings.appearance)}
-            </div>
-          </div>
-        )}
-
-        {/* General Section */}
-        {settings.general && settings.general.length > 0 && (
-          <div className="settings-section">
-            <h2>{t('admin.settings.general')}</h2>
-            <div className="settings-list">
-              {renderCategorySettings(settings.general)}
-            </div>
-          </div>
-        )}
+      <div className="settings-container">
+        {visibleGroups.map(group => (
+          <SettingsGroup
+            key={group.id}
+            id={group.id}
+            title={t(group.titleKey)}
+            count={settingsByGroup[group.id]?.length || 0}
+            isOpen={openGroups.has(group.id)}
+            onToggle={() => toggleGroup(group.id)}
+          >
+            {renderGroupContent(group.id, settingsByGroup[group.id] || [])}
+          </SettingsGroup>
+        ))}
       </div>
 
       {/* OIDC Provider Modal */}
