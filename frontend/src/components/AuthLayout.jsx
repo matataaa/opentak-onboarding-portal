@@ -81,12 +81,11 @@ function AuthLayout({ children, hero = false }) {
     '--auth-overlay-alpha': overlayAlpha,
   };
   if (background) {
-    style.backgroundImage = `url("${background}")`;
+    style['--auth-bg-image'] = `url("${background}")`;
   }
 
   return (
     <div className={classNames} style={style}>
-      <div className="auth-layout__overlay" aria-hidden="true" />
       {headerBar && (
         <header className="auth-layout__header">
           {showLogo && <img src={logoPath} alt={showText ? '' : brandName} />}
@@ -94,15 +93,19 @@ function AuthLayout({ children, hero = false }) {
         </header>
       )}
       <div className="auth-layout__body">
-        {showHero && (
-          <section className="auth-layout__hero">
-            {heroTexts.eyebrow && <p className="auth-layout__hero-eyebrow">{heroTexts.eyebrow}</p>}
-            {heroTexts.headline && <h1 className="auth-layout__hero-headline">{heroTexts.headline}</h1>}
-            {heroTexts.description && <p className="auth-layout__hero-description">{heroTexts.description}</p>}
-            {heroTexts.footer && <p className="auth-layout__hero-footer">{heroTexts.footer}</p>}
-          </section>
+        {showHero ? (
+          <div className="auth-layout__split">
+            <section className="auth-layout__hero">
+              {heroTexts.eyebrow && <p className="auth-layout__hero-eyebrow">{heroTexts.eyebrow}</p>}
+              {heroTexts.headline && <h1 className="auth-layout__hero-headline">{heroTexts.headline}</h1>}
+              {heroTexts.description && <p className="auth-layout__hero-description">{heroTexts.description}</p>}
+              {heroTexts.footer && <p className="auth-layout__hero-footer">{heroTexts.footer}</p>}
+            </section>
+            <div className="auth-layout__main">{children}</div>
+          </div>
+        ) : (
+          <div className="auth-layout__main">{children}</div>
         )}
-        <div className="auth-layout__main">{children}</div>
       </div>
     </div>
   );
