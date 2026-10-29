@@ -1121,7 +1121,189 @@
       "failedDeleteOidc": "Failed to delete OIDC provider",
       "light": "Light",
       "dark": "Dark",
-      "radiosSection": "Radios"
+      "radiosSection": "Radios",
+      "enterValue": "Enter value...",
+      "currentLogo": "Current logo",
+      "failedLoadSettings": "Failed to load settings",
+      "items": {
+        "notify_admin_pending_registration": {
+          "label": "Notify Admins of Pending Registrations",
+          "description": "Send notification to administrators when a new pending registration is created"
+        },
+        "notify_admin_new_registration": {
+          "label": "Notify Admins of New Registrations",
+          "description": "Send notification to administrators when a new user completes registration"
+        },
+        "allow_manual_approval": {
+          "label": "Allow Manual Approval",
+          "description": "Allow administrators to manually approve pending registrations without email verification"
+        },
+        "remove_expired_accounts_enabled": {
+          "label": "Remove Expired Accounts",
+          "description": "Nightly at 01:00, delete accounts whose expiry date has passed from OpenTAK Server and the portal (administrators are never removed)"
+        },
+        "brand_name_enabled": {
+          "label": "Portal Name",
+          "description": "Enable custom portal name"
+        },
+        "brand_name_value": {
+          "description": "Portal name displayed in the header"
+        },
+        "help_link_enabled": {
+          "label": "Help Link",
+          "description": "Show Help / How to Install button on dashboard"
+        },
+        "help_link_value": {
+          "description": "URL for the Help / How to Install button"
+        },
+        "help_email_enabled": {
+          "label": "Support Email",
+          "description": "Show support email"
+        },
+        "help_email_value": {
+          "description": "Support email address"
+        },
+        "open_in_atak_enabled": {
+          "label": "\"Open in ATAK\" Button",
+          "description": "Show the \"Open in ATAK\" button on the dashboard for TAK profiles"
+        },
+        "atak_homepage_icon_enabled": {
+          "label": "ATAK Download Tile",
+          "description": "Show ATAK download icon on the dashboard"
+        },
+        "itak_homepage_icon_enabled": {
+          "label": "iTAK Download Tile",
+          "description": "Show iTAK download icon on the dashboard"
+        },
+        "truststore_homepage_icon_enabled": {
+          "label": "TrustStore Download Tile",
+          "description": "Show TrustStore download icon on the dashboard"
+        },
+        "zerotier_icon": {
+          "label": "ZeroTier Download Tile",
+          "description": "Show ZeroTier download icon on the dashboard"
+        },
+        "meshtastic_homepage_icon_enabled": {
+          "label": "Meshtastic Download Tile",
+          "description": "Show Meshtastic download icon on the dashboard"
+        },
+        "claim_radio_enabled": {
+          "label": "Radio Claiming",
+          "description": "Allow users to claim unowned radios by visiting a claim URL"
+        },
+        "user_program_radio_enabled": {
+          "label": "User Radio Programming",
+          "description": "Allow users to program their assigned radios from the dashboard"
+        },
+        "user_validate_radio_enabled": {
+          "label": "User Radio Validation",
+          "description": "Allow users to check their radio's configuration against its assigned target from the dashboard"
+        },
+        "user_radio_enrollment_enabled": {
+          "label": "User Radio Enrollment",
+          "description": "Allow users to register their own radios via USB from the dashboard"
+        },
+        "oidc_enabled": {
+          "label": "OIDC / SSO Login",
+          "description": "Enable OIDC / Single Sign-On login (requires at least one OIDC provider to be configured)"
+        },
+        "oidc_auto_create_user": {
+          "label": "Auto-Create OIDC Users",
+          "description": "Automatically create a local account when a user logs in via OIDC for the first time"
+        },
+        "events_enabled": {
+          "label": "Events Module",
+          "description": "Enable the events module (teams, events and access links)"
+        },
+        "atak_installer_qr_enabled": {
+          "label": "ATAK Installer QR Code",
+          "description": "Show QR code for ATAK app download"
+        },
+        "atak_installer_qr_url": {
+          "description": "URL for ATAK installer QR code"
+        },
+        "itak_installer_qr_enabled": {
+          "label": "iTAK Installer QR Code",
+          "description": "Show QR code for iTAK app download"
+        },
+        "itak_installer_qr_url": {
+          "description": "URL for iTAK installer QR code"
+        },
+        "meshtastic_installer_qr_android_enabled": {
+          "label": "Meshtastic Android Installer QR Code",
+          "description": "Show QR code for Meshtastic Android app download"
+        },
+        "meshtastic_installer_qr_android_url": {
+          "description": "URL for Meshtastic Android installer QR code"
+        },
+        "meshtastic_installer_qr_iphone_enabled": {
+          "label": "Meshtastic iPhone Installer QR Code",
+          "description": "Show QR code for Meshtastic iPhone app download"
+        },
+        "meshtastic_installer_qr_iphone_url": {
+          "description": "URL for Meshtastic iPhone installer QR code"
+        },
+        "generate_atak_qr_code": {
+          "label": "ATAK Enrollment QR Code",
+          "description": "Show QR code for ATAK (Android) enrollment on the dashboard"
+        },
+        "generate_itak_qr_code": {
+          "label": "iTAK Enrollment QR Code",
+          "description": "Show QR code for iTAK (iOS) enrollment on the dashboard"
+        },
+        "qr_token_expiry_minutes": {
+          "label": "QR Token Expiry (Minutes)",
+          "description": "QR code token expiry time in minutes"
+        },
+        "qr_token_max_uses": {
+          "label": "QR Token Max Uses",
+          "description": "Maximum number of uses per QR code token"
+        },
+        "callsign_qr_code_enabled": {
+          "label": "Callsign QR Code",
+          "description": "Show QR code to set callsign in ATAK app"
+        },
+        "forgot_password_enabled": {
+          "label": "Forgot Password",
+          "description": "Enable forgot password functionality"
+        },
+        "custom_logo_enabled": {
+          "label": "Custom Logo",
+          "description": "Enable custom logo display"
+        },
+        "primary_color": {
+          "label": "Primary Color",
+          "description": "Primary color for the portal theme"
+        },
+        "accent_color": {
+          "label": "Accent Color",
+          "description": "Accent color for buttons and highlights"
+        },
+        "kiosk_enrollment_enabled": {
+          "label": "Kiosk Enrollment",
+          "description": "Enable the kiosk enrollment screen at /kiosk"
+        },
+        "kiosk_session_timeout_minutes": {
+          "label": "Kiosk Session Timeout (Minutes)",
+          "description": "Auto-logout timeout in minutes after a user authenticates on the kiosk"
+        },
+        "magic_link_login_enabled": {
+          "label": "Magic Link Login",
+          "description": "Enable passwordless login via email magic link"
+        },
+        "magic_link_expiry_minutes": {
+          "label": "Magic Link Expiry (Minutes)",
+          "description": "Magic link expiry time in minutes"
+        },
+        "default_theme": {
+          "label": "Default Theme",
+          "description": "Default theme for the portal (light or dark)"
+        },
+        "kiosk_default_theme": {
+          "label": "Kiosk Default Theme",
+          "description": "Default theme for the kiosk screen (light or dark)"
+        }
+      }
     },
     "announcements": {
       "title": "Announcements",

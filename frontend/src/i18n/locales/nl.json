@@ -1120,7 +1120,189 @@
       "failedDeleteOidc": "Verwijderen van OIDC-provider mislukt",
       "light": "Licht",
       "dark": "Donker",
-      "radiosSection": "Radio's"
+      "radiosSection": "Radio's",
+      "enterValue": "Voer een waarde in...",
+      "currentLogo": "Huidig logo",
+      "failedLoadSettings": "Laden van instellingen mislukt",
+      "items": {
+        "notify_admin_pending_registration": {
+          "label": "Beheerders informeren over openstaande registraties",
+          "description": "Stuur een melding naar de beheerders wanneer er een nieuwe openstaande registratie is aangemaakt"
+        },
+        "notify_admin_new_registration": {
+          "label": "Beheerders informeren over nieuwe registraties",
+          "description": "Stuur een melding naar de beheerders wanneer een nieuwe gebruiker de registratie heeft afgerond"
+        },
+        "allow_manual_approval": {
+          "label": "Handmatige goedkeuring toestaan",
+          "description": "Sta beheerders toe openstaande registraties handmatig goed te keuren zonder e-mailverificatie"
+        },
+        "remove_expired_accounts_enabled": {
+          "label": "Verlopen accounts verwijderen",
+          "description": "Verwijder elke nacht om 01:00 accounts waarvan de vervaldatum is verstreken uit OpenTAK Server en het portaal (beheerders worden nooit verwijderd)"
+        },
+        "brand_name_enabled": {
+          "label": "Portaalnaam",
+          "description": "Schakel een aangepaste portaalnaam in"
+        },
+        "brand_name_value": {
+          "description": "Portaalnaam die in de kopbalk wordt getoond"
+        },
+        "help_link_enabled": {
+          "label": "Helplink",
+          "description": "Toon de knop Hulp / Installatie-instructies op het dashboard"
+        },
+        "help_link_value": {
+          "description": "URL voor de knop Hulp / Installatie-instructies"
+        },
+        "help_email_enabled": {
+          "label": "Support-e-mail",
+          "description": "Toon het support-e-mailadres"
+        },
+        "help_email_value": {
+          "description": "Support-e-mailadres"
+        },
+        "open_in_atak_enabled": {
+          "label": "Knop \"Openen in ATAK\"",
+          "description": "Toon de knop \"Openen in ATAK\" op het dashboard voor TAK-profielen"
+        },
+        "atak_homepage_icon_enabled": {
+          "label": "ATAK-downloadtegel",
+          "description": "Toon het ATAK-downloadpictogram op het dashboard"
+        },
+        "itak_homepage_icon_enabled": {
+          "label": "iTAK-downloadtegel",
+          "description": "Toon het iTAK-downloadpictogram op het dashboard"
+        },
+        "truststore_homepage_icon_enabled": {
+          "label": "TrustStore-downloadtegel",
+          "description": "Toon het TrustStore-downloadpictogram op het dashboard"
+        },
+        "zerotier_icon": {
+          "label": "ZeroTier-downloadtegel",
+          "description": "Toon het ZeroTier-downloadpictogram op het dashboard"
+        },
+        "meshtastic_homepage_icon_enabled": {
+          "label": "Meshtastic-downloadtegel",
+          "description": "Toon het Meshtastic-downloadpictogram op het dashboard"
+        },
+        "claim_radio_enabled": {
+          "label": "Radio's claimen",
+          "description": "Sta gebruikers toe radio's zonder eigenaar te claimen via een claim-URL"
+        },
+        "user_program_radio_enabled": {
+          "label": "Radioprogrammering door gebruikers",
+          "description": "Sta gebruikers toe hun toegewezen radio's vanaf het dashboard te programmeren"
+        },
+        "user_validate_radio_enabled": {
+          "label": "Radiovalidatie door gebruikers",
+          "description": "Sta gebruikers toe vanaf het dashboard de configuratie van hun radio te controleren tegen de toegewezen doelconfiguratie"
+        },
+        "user_radio_enrollment_enabled": {
+          "label": "Radioregistratie door gebruikers",
+          "description": "Sta gebruikers toe hun eigen radio's via USB vanaf het dashboard te registreren"
+        },
+        "oidc_enabled": {
+          "label": "OIDC / SSO-login",
+          "description": "Schakel inloggen via OIDC / Single Sign-On in (vereist minimaal één geconfigureerde OIDC-provider)"
+        },
+        "oidc_auto_create_user": {
+          "label": "OIDC-gebruikers automatisch aanmaken",
+          "description": "Maak automatisch een lokaal account aan wanneer een gebruiker voor het eerst via OIDC inlogt"
+        },
+        "events_enabled": {
+          "label": "Events-module",
+          "description": "Schakel de events-module in (teams, events en toegangslinks)"
+        },
+        "atak_installer_qr_enabled": {
+          "label": "QR-code ATAK-installatie",
+          "description": "Toon QR-code voor het downloaden van de ATAK-app"
+        },
+        "atak_installer_qr_url": {
+          "description": "URL voor de QR-code van de ATAK-installatie"
+        },
+        "itak_installer_qr_enabled": {
+          "label": "QR-code iTAK-installatie",
+          "description": "Toon QR-code voor het downloaden van de iTAK-app"
+        },
+        "itak_installer_qr_url": {
+          "description": "URL voor de QR-code van de iTAK-installatie"
+        },
+        "meshtastic_installer_qr_android_enabled": {
+          "label": "QR-code Meshtastic-installatie (Android)",
+          "description": "Toon QR-code voor het downloaden van de Meshtastic Android-app"
+        },
+        "meshtastic_installer_qr_android_url": {
+          "description": "URL voor de QR-code van de Meshtastic-installatie (Android)"
+        },
+        "meshtastic_installer_qr_iphone_enabled": {
+          "label": "QR-code Meshtastic-installatie (iPhone)",
+          "description": "Toon QR-code voor het downloaden van de Meshtastic iPhone-app"
+        },
+        "meshtastic_installer_qr_iphone_url": {
+          "description": "URL voor de QR-code van de Meshtastic-installatie (iPhone)"
+        },
+        "generate_atak_qr_code": {
+          "label": "QR-code ATAK-inschrijving",
+          "description": "Toon QR-code voor ATAK-inschrijving (Android) op het dashboard"
+        },
+        "generate_itak_qr_code": {
+          "label": "QR-code iTAK-inschrijving",
+          "description": "Toon QR-code voor iTAK-inschrijving (iOS) op het dashboard"
+        },
+        "qr_token_expiry_minutes": {
+          "label": "Geldigheid QR-token (minuten)",
+          "description": "Geldigheidsduur van QR-code-tokens in minuten"
+        },
+        "qr_token_max_uses": {
+          "label": "Max. aantal gebruiken per QR-token",
+          "description": "Maximaal aantal keer dat een QR-code-token gebruikt kan worden"
+        },
+        "callsign_qr_code_enabled": {
+          "label": "Roepnaam-QR-code",
+          "description": "Toon QR-code om de roepnaam in de ATAK-app in te stellen"
+        },
+        "forgot_password_enabled": {
+          "label": "Wachtwoord vergeten",
+          "description": "Schakel de functie \"wachtwoord vergeten\" in"
+        },
+        "custom_logo_enabled": {
+          "label": "Aangepast logo",
+          "description": "Schakel de weergave van het aangepaste logo in"
+        },
+        "primary_color": {
+          "label": "Primaire kleur",
+          "description": "Primaire kleur voor het portaalthema"
+        },
+        "accent_color": {
+          "label": "Accentkleur",
+          "description": "Accentkleur voor knoppen en accenten"
+        },
+        "kiosk_enrollment_enabled": {
+          "label": "Kiosk-inschrijving",
+          "description": "Schakel het kiosk-inschrijvingsscherm in op /kiosk"
+        },
+        "kiosk_session_timeout_minutes": {
+          "label": "Time-out kiosksessie (minuten)",
+          "description": "Tijd in minuten waarna een gebruiker automatisch wordt uitgelogd nadat deze zich op de kiosk heeft aangemeld"
+        },
+        "magic_link_login_enabled": {
+          "label": "Inloggen via magische link",
+          "description": "Schakel wachtwoordloos inloggen via een magische link per e-mail in"
+        },
+        "magic_link_expiry_minutes": {
+          "label": "Geldigheid magische link (minuten)",
+          "description": "Geldigheidsduur van de magische link in minuten"
+        },
+        "default_theme": {
+          "label": "Standaardthema",
+          "description": "Standaardthema voor het portaal (licht of donker)"
+        },
+        "kiosk_default_theme": {
+          "label": "Standaardthema kiosk",
+          "description": "Standaardthema voor het kioskscherm (licht of donker)"
+        }
+      }
     },
     "announcements": {
       "title": "Aankondigingen",
