@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import axios from 'axios';
+import { useQueryClient } from '@tanstack/react-query';
 import { QRCodeSVG } from 'qrcode.react';
 import { useTranslation } from 'react-i18next';
 import { kioskAPI, settingsAPI } from '../services/api';
@@ -15,13 +16,21 @@ const KIOSK_SESSION_KEY = 'kiosk_session';
 
 function saveKioskSession(data) {
   sessionStorage.setItem(KIOSK_SESSION_KEY, JSON.stringify(data));
-  // Also write to localStorage so ProgramRadioModal/ConfigValidatorModal API calls work
-  localStorage.setItem('access_token', data.accessToken);
+  // The kiosk token stays out of localStorage: the modals get the kiosk axios
+  // instance instead, so closing the tab cannot leave it behind for the shared
+  // api client. Drop any earlier user's session on this browser so the 401
+  // refresh interceptor and AuthContext cannot fall back into it.
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('user');
 }
 
 function clearKioskSession() {
   sessionStorage.removeItem(KIOSK_SESSION_KEY);
+  // Also clears a kiosk token left in localStorage by older versions
   localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('user');
 }
 
 function loadKioskSession() {
@@ -43,6 +52,7 @@ function loadKioskSession() {
 
 function Kiosk() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [state, setState] = useState('loading'); // loading, qr, authenticated, disabled, error
   const [sessionId, setSessionId] = useState(null);
   const [qrUrl, setQrUrl] = useState(null);
@@ -63,14 +73,6 @@ function Kiosk() {
   // Radio enrollment state
   const [showEnrollModal, setShowEnrollModal] = useState(false);
 
-  // Password change state
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [passwordSuccess, setPasswordSuccess] = useState('');
-  const [changingPassword, setChangingPassword] = useState(false);
-
   const pollRef = useRef(null);
   const timerRef = useRef(null);
   const timeoutMinutesRef = useRef(10);
@@ -87,6 +89,7 @@ function Kiosk() {
       },
     });
   }, [accessToken]);
+  const kioskClient = useMemo(() => getKioskApi(), [getKioskApi]);
 
   // Load settings on mount and restore session if saved
   useEffect(() => {
@@ -105,6 +108,8 @@ function Kiosk() {
       // Check for saved session (survives page refresh)
       const saved = loadKioskSession();
       if (saved) {
+        // Older versions also kept the kiosk token in localStorage
+        localStorage.removeItem('access_token');
         setAccessToken(saved.accessToken);
         setRefreshToken(saved.refreshToken);
         setKioskUser(saved.user);
@@ -240,6 +245,8 @@ function Kiosk() {
     clearInterval(timerRef.current);
     clearInterval(pollRef.current);
     clearKioskSession();
+    // The next person at this kiosk must not see this user's cached groups
+    queryClient.removeQueries({ queryKey: ['meshtasticGroups'] });
     expiryTimeRef.current = null;
     setAccessToken(null);
     setRefreshToken(null);
@@ -250,52 +257,7 @@ function Kiosk() {
     setProgrammingRadio(null);
     setValidatingRadio(null);
     setShowEnrollModal(false);
-    setShowPasswordForm(false);
-    setNewPassword('');
-    setConfirmPassword('');
-    setPasswordError('');
-    setPasswordSuccess('');
     createNewSession();
-  };
-
-  const handleChangePassword = async (e) => {
-    e.preventDefault();
-    setPasswordError('');
-    setPasswordSuccess('');
-
-    if (!newPassword || !confirmPassword) {
-      setPasswordError(t('profile.allFieldsRequired'));
-      return;
-    }
-    if (newPassword.length < 8) {
-      setPasswordError(t('profile.newPasswordTooShort'));
-      return;
-    }
-    if (/[&^$]/.test(newPassword)) {
-      setPasswordError(t('profile.passwordDisallowedChars'));
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordError(t('profile.newPasswordsNoMatch'));
-      return;
-    }
-
-    setChangingPassword(true);
-    try {
-      const kioskApi = getKioskApi();
-      await kioskApi.post('/auth/change-password', { newPassword });
-      setPasswordSuccess(t('profile.passwordChanged'));
-      setNewPassword('');
-      setConfirmPassword('');
-      setTimeout(() => {
-        setShowPasswordForm(false);
-        setPasswordSuccess('');
-      }, 3000);
-    } catch (err) {
-      setPasswordError(err.response?.data?.error || t('profile.failedChangePassword'));
-    } finally {
-      setChangingPassword(false);
-    }
   };
 
   const formatTime = (seconds) => {
@@ -480,56 +442,6 @@ function Kiosk() {
               <p><strong>Username:</strong> {kioskUser.username}</p>
               <p><strong>Name:</strong> {kioskUser.firstName} {kioskUser.lastName}</p>
               <p><strong>Callsign:</strong> {kioskUser.callsign || '-'}</p>
-
-              {!showPasswordForm ? (
-                <button
-                  className="kiosk-btn-program"
-                  style={{ marginTop: '1rem' }}
-                  onClick={() => setShowPasswordForm(true)}
-                >
-                  Change Password
-                </button>
-              ) : (
-                <form className="kiosk-password-form" onSubmit={handleChangePassword} style={{ marginTop: '1rem' }}>
-                  {passwordError && <div className="kiosk-alert kiosk-alert-error">{passwordError}</div>}
-                  {passwordSuccess && <div className="kiosk-alert kiosk-alert-success">{passwordSuccess}</div>}
-                  <input
-                    type="password"
-                    placeholder="New Password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    minLength={8}
-                    required
-                    autoComplete="new-password"
-                  />
-                  <input
-                    type="password"
-                    placeholder="Confirm Password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    minLength={8}
-                    required
-                    autoComplete="new-password"
-                  />
-                  <div className="kiosk-form-actions">
-                    <button type="submit" className="btn-primary" disabled={changingPassword}>
-                      {changingPassword ? 'Changing...' : 'Change Password'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowPasswordForm(false);
-                        setPasswordError('');
-                        setPasswordSuccess('');
-                        setNewPassword('');
-                        setConfirmPassword('');
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              )}
             </div>
           </div>
         </div>
@@ -539,6 +451,7 @@ function Kiosk() {
           <ProgramRadioModal
             radio={programmingRadio}
             onClose={() => setProgrammingRadio(null)}
+            apiClient={kioskClient}
           />
         )}
 
@@ -547,6 +460,7 @@ function Kiosk() {
           <ConfigValidatorModal
             radio={validatingRadio}
             onClose={() => setValidatingRadio(null)}
+            apiClient={kioskClient}
           />
         )}
 
@@ -554,6 +468,7 @@ function Kiosk() {
         {showEnrollModal && (
           <EnrollRadioModal
             onClose={() => setShowEnrollModal(false)}
+            apiClient={kioskClient}
             onSuccess={() => {
               // Re-fetch radios after enrollment
               const kioskApi = getKioskApi();

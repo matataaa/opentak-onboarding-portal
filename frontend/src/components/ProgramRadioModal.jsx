@@ -5,7 +5,7 @@ import { radiosAPI, meshtasticGroupsAPI } from '../services/api';
 import { meshtasticSerial } from '../services/meshtasticSerial';
 import './ProgramRadioModal.css';
 
-function ProgramRadioModal({ radio, onClose }) {
+function ProgramRadioModal({ radio, onClose, apiClient }) {
   const { t } = useTranslation();
   const [step, setStep] = useState(1); // 1: Select config, 2: Connect, 3: Programming, 4: Result
   const [selectedGroupId, setSelectedGroupId] = useState(null);
@@ -29,7 +29,7 @@ function ProgramRadioModal({ radio, onClose }) {
   const { data: groupsData, isLoading: loadingGroups } = useQuery({
     queryKey: ['meshtasticGroups'],
     queryFn: async () => {
-      const response = await meshtasticGroupsAPI.getAll();
+      const response = await meshtasticGroupsAPI.getAll(apiClient);
       return response.data;
     },
   });
@@ -60,7 +60,7 @@ function ProgramRadioModal({ radio, onClose }) {
       try {
         const response = await radiosAPI.getProgramConfig(radio.id, {
           channelGroupId: groupId
-        });
+        }, apiClient);
         setPreviewConfig(response.data);
       } catch (err) {
         console.error('Failed to load preview:', err);
@@ -115,7 +115,7 @@ function ProgramRadioModal({ radio, onClose }) {
       // Get programming config from backend
       const configResponse = await radiosAPI.getProgramConfig(radio.id, {
         channelGroupId: selectedGroupId
-      });
+      }, apiClient);
       const config = configResponse.data;
 
       // Program the radio

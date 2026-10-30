@@ -80,6 +80,14 @@ def get_user_roles():
         except Exception:
             pass
 
+        # A kiosk session runs on a shared terminal: it never acts with the
+        # user's roles, so an admin signing in at a kiosk leaves no admin token.
+        try:
+            if get_jwt().get('kiosk_session'):
+                return []
+        except Exception:
+            pass
+
         current_user_id = get_jwt_identity()
         if not current_user_id:
             return []

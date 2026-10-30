@@ -5,7 +5,7 @@ import { radiosAPI, meshtasticGroupsAPI } from '../services/api';
 import { meshtasticSerial } from '../services/meshtasticSerial';
 import './ConfigValidatorModal.css';
 
-function ConfigValidatorModal({ radio, onClose }) {
+function ConfigValidatorModal({ radio, onClose, apiClient }) {
   const { t } = useTranslation();
   const [step, setStep] = useState(1); // 1: Select config, 2: Connect & Compare
   const [selectedGroupId, setSelectedGroupId] = useState(null);
@@ -26,7 +26,7 @@ function ConfigValidatorModal({ radio, onClose }) {
   const { data: groupsData, isLoading: loadingGroups } = useQuery({
     queryKey: ['meshtasticGroups'],
     queryFn: async () => {
-      const response = await meshtasticGroupsAPI.getAll();
+      const response = await meshtasticGroupsAPI.getAll(apiClient);
       return response.data;
     },
   });
@@ -91,7 +91,7 @@ function ConfigValidatorModal({ radio, onClose }) {
       // Get target config from backend
       const targetResponse = await radiosAPI.getProgramConfig(radio.id, {
         channelGroupId: selectedGroupId
-      });
+      }, apiClient);
       setTargetConfig(targetResponse.data);
 
       setConnectionStatus('disconnected');
