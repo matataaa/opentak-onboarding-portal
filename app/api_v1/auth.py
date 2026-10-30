@@ -15,7 +15,7 @@ from datetime import timedelta, datetime
 from app.api_v1 import api_v1
 from app.models import db, UserModel, UserRoleModel, PendingRegistrationModel, OnboardingCodeModel, OneTimeTokenModel
 from app.ots import OTSClient
-from app.exceptions import BadRequestError
+from app.exceptions import AuthenticationError, AuthorizationError, BadRequestError
 from app.email import send_html_email
 import secrets
 
@@ -1200,10 +1200,11 @@ The OpenTAK Team"""
 @jwt_required()
 def change_password():
     """
-    Change password for authenticated user (does not require current password)
+    Change password for authenticated user (requires the current password)
 
     Request body:
     {
+        "currentPassword": "string",
         "newPassword": "string"
     }
     """
@@ -1212,10 +1213,17 @@ def change_password():
         if not data:
             return jsonify({'error': 'Request body is required'}), 400
 
+        current_password = data.get('currentPassword')
         new_password = data.get('newPassword')
+
+        if not current_password:
+            return jsonify({'error': 'Current password is required'}), 400
 
         if not new_password:
             return jsonify({'error': 'New password is required'}), 400
+
+        if len(new_password) < 8:
+            return jsonify({'error': 'Password must be at least 8 characters'}), 400
 
         current_user_id = get_jwt_identity()
         # Convert to int since JWT identity is stored as string
@@ -1224,20 +1232,35 @@ def change_password():
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
-        # Change password in OTS (no current password verification required)
+        if user.has_password is False:
+            return jsonify({'error': 'No password set; use set password'}), 400
+
+        # Verify the current password against OTS before changing it
+        try:
+            OTSClient(current_app.config['OTS_URL'], user.username, current_password).login()
+        except (AuthenticationError, AuthorizationError):
+            current_app.logger.info(f"Change password: incorrect current password for {user.username}")
+            return jsonify({'error': 'Current password is incorrect'}), 403
+        except ConnectionError as e:
+            current_app.logger.error(f"Change password: OTS server unreachable: {str(e)}")
+            return jsonify({'error': 'Cannot connect to TAK server. Please try again later.'}), 503
+        except Exception as e:
+            current_app.logger.error(f"Change password: current password verification failed: {str(e)}")
+            return jsonify({'error': 'Could not verify current password'}), 502
+
+        # Change password in OTS
         try:
             ots = OTSClient(current_app.config['OTS_URL'], current_app.config['OTS_USERNAME'], current_app.config['OTS_PASSWORD'])
-            result = ots.reset_user_password(user.username, new_password)
-            current_app.logger.info(f"Password reset result: {result}")
+            ots.reset_user_password(user.username, new_password)
         except Exception as e:
             current_app.logger.error(f"Password reset failed: {str(e)}")
-            return jsonify({'error': f'Failed to reset password: {str(e)}'}), 400
+            return jsonify({'error': 'Failed to change password'}), 502
 
         return jsonify({'message': 'Password changed successfully'}), 200
 
     except Exception as e:
         current_app.logger.error(f"Change password error: {str(e)}")
-        return jsonify({'error': f'Password change failed: {str(e)}'}), 400
+        return jsonify({'error': 'Password change failed'}), 400
 
 
 @api_v1.route('/auth/set-password', methods=['POST'])

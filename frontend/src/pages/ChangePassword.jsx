@@ -5,15 +5,14 @@ import { useTranslation } from 'react-i18next';
 import './ChangePassword.css';
 
 // Import the centralized API helper
-import api from '../services/api';
-
-const API_BASE_URL = window.location.origin;
+import { authAPI } from '../services/api';
 
 export default function ChangePassword() {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
+    currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
@@ -22,26 +21,13 @@ export default function ChangePassword() {
 
   // Change password mutation
   const changeMutation = useMutation({
-    mutationFn: async (data) => {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_BASE_URL}/api/v1/auth/change-password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(data)
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to change password');
-      }
-      return response.json();
-    },
+    mutationFn: ({ currentPassword, newPassword }) =>
+      authAPI.changePassword(currentPassword, newPassword),
     onSuccess: () => {
       setSuccess(t('profile.passwordChanged'));
       setError('');
       setFormData({
+        currentPassword: '',
         newPassword: '',
         confirmPassword: ''
       });
@@ -50,7 +36,9 @@ export default function ChangePassword() {
       }, 1500);
     },
     onError: (error) => {
-      setError(error.message);
+      setError(error.response?.status === 403
+        ? t('profile.currentPasswordIncorrect')
+        : t('profile.changePasswordFailed'));
       setSuccess('');
     }
   });
@@ -68,7 +56,7 @@ export default function ChangePassword() {
     setSuccess('');
 
     // Validation
-    if (!formData.newPassword || !formData.confirmPassword) {
+    if (!formData.currentPassword || !formData.newPassword || !formData.confirmPassword) {
       setError(t('profile.allFieldsRequired'));
       return;
     }
@@ -91,6 +79,7 @@ export default function ChangePassword() {
     }
 
     changeMutation.mutate({
+      currentPassword: formData.currentPassword,
       newPassword: formData.newPassword
     });
   };
@@ -108,6 +97,19 @@ export default function ChangePassword() {
         {success && <div className="success-message">{success}</div>}
 
         <form onSubmit={handleSubmit} className="change-password-form">
+          <div className="form-group">
+            <label htmlFor="currentPassword">{t('profile.currentPasswordLabel')}</label>
+            <input
+              type="password"
+              id="currentPassword"
+              name="currentPassword"
+              value={formData.currentPassword}
+              onChange={handleChange}
+              required
+              autoComplete="current-password"
+            />
+          </div>
+
           <div className="form-group">
             <label htmlFor="newPassword">{t('profile.newPasswordLabel')} *</label>
             <input
