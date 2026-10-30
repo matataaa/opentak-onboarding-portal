@@ -896,7 +896,7 @@ class RadioModel(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column()
     platform: Mapped[str] = mapped_column()
-    radioType = Column(String, CheckConstraint("radioType IN ('meshtastic', 'other')", name="check_radio_type"), nullable=False, default="meshtastic")
+    radioType = Column(String, CheckConstraint("\"radioType\" IN ('meshtastic', 'other')", name="check_radio_type"), nullable=False, default="meshtastic")
     description: Mapped[str] = mapped_column(nullable=True)
     softwareVersion: Mapped[str] = mapped_column(nullable=True)
     model: Mapped[str] = mapped_column(nullable=True)
