@@ -8,7 +8,7 @@ import AuthLayout from '../components/AuthLayout';
 import './Auth.css';
 
 function Register() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { code } = useParams();
   const navigate = useNavigate();
   const { register: registerUser } = useAuth();
@@ -106,7 +106,8 @@ function Register() {
 
     const result = await registerUser({
       ...formData,
-      username: username
+      username: username,
+      language: i18n.resolvedLanguage
     });
 
     if (result.success) {

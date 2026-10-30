@@ -1028,6 +1028,7 @@ class PendingRegistrationModel(db.Model):
     firstName: Mapped[str] = mapped_column(nullable=True)
     lastName: Mapped[str] = mapped_column(nullable=True)
     callsign: Mapped[str] = mapped_column(nullable=True)
+    language: Mapped[str] = mapped_column(String(5), nullable=True)  # None = not given
     onboarding_code_id: Mapped[int] = mapped_column(ForeignKey('onboardingcodes.id'), nullable=False)
     verification_token: Mapped[str] = mapped_column(unique=True, nullable=False)
     expires_at: Mapped[datetime.datetime] = mapped_column(nullable=False)
@@ -1044,7 +1045,7 @@ class PendingRegistrationModel(db.Model):
     approver = relationship("UserModel", foreign_keys=[approved_by])
 
     @staticmethod
-    def create_pending_registration(username, email, password, first_name, last_name, callsign, onboarding_code_id, verification_token, expires_at):
+    def create_pending_registration(username, email, password, first_name, last_name, callsign, onboarding_code_id, verification_token, expires_at, language=None):
         try:
             pending = PendingRegistrationModel(
                 username=username.lower(),
@@ -1053,6 +1054,7 @@ class PendingRegistrationModel(db.Model):
                 firstName=first_name,
                 lastName=last_name,
                 callsign=callsign,
+                language=language,
                 onboarding_code_id=onboarding_code_id,
                 verification_token=verification_token,
                 expires_at=expires_at

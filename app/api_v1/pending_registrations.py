@@ -700,6 +700,10 @@ def approve_pending_registration(pending_id):
         # Mark email as verified (admin approved)
         user.emailVerified = True
 
+        # Initial profile language captured at registration
+        if pending.language:
+            user.language = pending.language
+
         # Add roles from onboarding code
         for role in onboarding_code.roles:
             user.roles.append(role)
