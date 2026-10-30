@@ -1724,6 +1724,12 @@ class SystemSettingsModel(db.Model):
                 'description': 'Default theme for the kiosk screen (light or dark)'
             },
             {
+                'key': 'kiosk_language',
+                'value': '',
+                'category': 'kiosk',
+                'description': 'Fixed UI language for the kiosk screen (empty = follow the browser). Reload the kiosk page after changing it.'
+            },
+            {
                 'key': 'date_format',
                 'value': 'eu',
                 'category': 'appearance',

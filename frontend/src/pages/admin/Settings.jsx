@@ -1427,7 +1427,7 @@ function Settings() {
   const colorSettingKeys = ['primary_color', 'accent_color'];
 
   // Dropdown setting keys (rendered with <select>)
-  const dropdownSettingKeys = ['default_theme', 'kiosk_default_theme', 'date_format', 'login_layout', 'login_overlay_strength'];
+  const dropdownSettingKeys = ['default_theme', 'kiosk_default_theme', 'kiosk_language', 'date_format', 'login_layout', 'login_overlay_strength'];
   const dropdownOptions = {
     default_theme: [
       { value: 'light', label: t('admin.settings.light') },
@@ -1436,6 +1436,12 @@ function Settings() {
     kiosk_default_theme: [
       { value: 'light', label: t('admin.settings.light') },
       { value: 'dark', label: t('admin.settings.dark') },
+    ],
+    kiosk_language: [
+      { value: '', label: t('admin.settings.kioskLanguageOption.visitor') },
+      { value: 'en', label: 'English' },
+      { value: 'nl', label: 'Nederlands' },
+      { value: 'de', label: 'Deutsch' },
     ],
     date_format: ['eu', 'us', 'iso'].map(value => (
       { value, label: t(`admin.settings.dateFormatOption.${value}`) }

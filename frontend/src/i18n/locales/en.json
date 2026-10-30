@@ -1147,6 +1147,9 @@
         "us": "US — 10/31/2026 2:30 PM",
         "iso": "ISO — 2026-10-31 14:30"
       },
+      "kioskLanguageOption": {
+        "visitor": "Follow the browser"
+      },
       "loginLayoutOption": {
         "classic": "Classic",
         "centered": "Centered",
@@ -1374,6 +1377,10 @@
         "kiosk_default_theme": {
           "label": "Kiosk Default Theme",
           "description": "Default theme for the kiosk screen (light or dark)"
+        },
+        "kiosk_language": {
+          "label": "Kiosk Language",
+          "description": "Fixed UI language for the kiosk screen (/kiosk). \"Follow the browser\" uses the browser language. Reload the kiosk page after changing it."
         }
       }
     },

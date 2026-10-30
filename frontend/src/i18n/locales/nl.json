@@ -1147,6 +1147,9 @@
         "us": "VS — 10/31/2026 2:30 PM",
         "iso": "ISO — 2026-10-31 14:30"
       },
+      "kioskLanguageOption": {
+        "visitor": "Browser volgen"
+      },
       "loginLayoutOption": {
         "classic": "Klassiek",
         "centered": "Gecentreerd",
@@ -1374,6 +1377,10 @@
         "kiosk_default_theme": {
           "label": "Standaardthema kiosk",
           "description": "Standaardthema voor het kioskscherm (licht of donker)"
+        },
+        "kiosk_language": {
+          "label": "Kiosktaal",
+          "description": "Vaste interfacetaal voor het kioskscherm (/kiosk). \"Browser volgen\" gebruikt de taal van de browser. Herlaad de kioskpagina na een wijziging."
         }
       }
     },

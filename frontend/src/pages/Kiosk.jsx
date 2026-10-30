@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { useQueryClient } from '@tanstack/react-query';
 import { QRCodeSVG } from 'qrcode.react';
-import { useTranslation } from 'react-i18next';
+import { useTranslation, I18nextProvider } from 'react-i18next';
+import { createFixedLanguageI18n } from '../i18n';
 import { kioskAPI, settingsAPI } from '../services/api';
 import ProgramRadioModal from '../components/ProgramRadioModal';
 import ConfigValidatorModal from '../components/ConfigValidatorModal';
@@ -13,6 +14,7 @@ import './Kiosk.css';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || window.location.origin;
 
 const KIOSK_SESSION_KEY = 'kiosk_session';
+const KIOSK_LANGUAGES = ['en', 'nl', 'de'];
 
 function saveKioskSession(data) {
   sessionStorage.setItem(KIOSK_SESSION_KEY, JSON.stringify(data));
@@ -51,7 +53,6 @@ function loadKioskSession() {
 }
 
 function Kiosk() {
-  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [state, setState] = useState('loading'); // loading, qr, authenticated, disabled, error
   const [sessionId, setSessionId] = useState(null);
@@ -61,7 +62,22 @@ function Kiosk() {
   const [kioskUser, setKioskUser] = useState(null);
   const [settings, setSettings] = useState(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState(''); // i18n key
+
+  // Fixed kiosk language from the settings; otherwise follow the browser (global instance)
+  const kioskLanguage = settings?.kiosk_language;
+  const kioskI18n = useMemo(
+    () => (KIOSK_LANGUAGES.includes(kioskLanguage) ? createFixedLanguageI18n(kioskLanguage) : null),
+    [kioskLanguage]
+  );
+  const { t } = useTranslation(undefined, { i18n: kioskI18n || undefined });
+
+  useEffect(() => {
+    if (!kioskI18n) return;
+    const previousLang = document.documentElement.lang;
+    document.documentElement.lang = kioskLanguage;
+    return () => { document.documentElement.lang = previousLang; };
+  }, [kioskI18n, kioskLanguage]);
 
   // Authenticated view state
   const [atakQrData, setAtakQrData] = useState(null);
@@ -120,7 +136,7 @@ function Kiosk() {
       }
     }).catch(() => {
       setState('error');
-      setErrorMessage(t('kiosk.failedLoadSettings'));
+      setErrorMessage('kiosk.failedLoadSettings');
     });
   }, []);
 
@@ -137,7 +153,7 @@ function Kiosk() {
         setState('disabled');
       } else {
         setState('error');
-        setErrorMessage(t('kiosk.failedCreateSession'));
+        setErrorMessage('kiosk.failedCreateSession');
       }
     }
   };
@@ -308,7 +324,7 @@ function Kiosk() {
       <div className="kiosk-container">
         <div className="kiosk-message">
           <h2>{t('kiosk.error')}</h2>
-          <p>{errorMessage || t('kiosk.somethingWrong')}</p>
+          <p>{t(errorMessage || 'kiosk.somethingWrong')}</p>
           <button className="kiosk-retry-btn" onClick={createNewSession}>
             {t('kiosk.tryAgain')}
           </button>
@@ -345,7 +361,7 @@ function Kiosk() {
   if (state === 'authenticated' && kioskUser) {
     const isWarning = timeRemaining < 60;
 
-    return (
+    const dashboard = (
       <div className="kiosk-container">
         <div className="kiosk-dashboard">
           <div className="kiosk-header">
@@ -483,6 +499,9 @@ function Kiosk() {
         )}
       </div>
     );
+
+    // The radio modals translate via the provider, so they follow the kiosk language too
+    return kioskI18n ? <I18nextProvider i18n={kioskI18n}>{dashboard}</I18nextProvider> : dashboard;
   }
 
   return null;

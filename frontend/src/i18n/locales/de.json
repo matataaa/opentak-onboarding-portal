@@ -1147,6 +1147,9 @@
         "us": "US — 10/31/2026 2:30 PM",
         "iso": "ISO — 2026-10-31 14:30"
       },
+      "kioskLanguageOption": {
+        "visitor": "Browser folgen"
+      },
       "loginLayoutOption": {
         "classic": "Klassisch",
         "centered": "Zentriert",
@@ -1374,6 +1377,10 @@
         "kiosk_default_theme": {
           "label": "Kiosk-Standarddesign",
           "description": "Standarddesign für den Kiosk-Bildschirm (hell oder dunkel)"
+        },
+        "kiosk_language": {
+          "label": "Kiosk-Sprache",
+          "description": "Feste Oberflächensprache für den Kiosk-Bildschirm (/kiosk). „Browser folgen“ verwendet die Sprache des Browsers. Laden Sie die Kiosk-Seite nach einer Änderung neu."
         }
       }
     },

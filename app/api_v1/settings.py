@@ -18,6 +18,7 @@ LOGIN_ENUM_SETTINGS = {
     'login_layout': ('classic', 'centered', 'split'),
     'login_overlay_strength': ('none', 'light', 'medium', 'strong'),
     'date_format': ('eu', 'us', 'iso'),
+    'kiosk_language': ('', 'en', 'nl', 'de'),
 }
 
 
@@ -152,6 +153,7 @@ def get_settings():
         # Theme
         'default_theme': get_str_setting('default_theme', 'light'),
         'kiosk_default_theme': get_str_setting('kiosk_default_theme', 'dark'),
+        'kiosk_language': get_str_setting('kiosk_language', ''),
         'date_format': get_str_setting('date_format', 'eu'),
         # Help
         'help_link_enabled': get_bool_setting('help_link_enabled', False),
