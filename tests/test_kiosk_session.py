@@ -2,8 +2,10 @@
 Kiosk sessions are short-lived shared-terminal sessions: refreshing a kiosk token must
 keep the kiosk_session claim and the kiosk lifetime instead of minting a 12-hour session.
 """
+from datetime import timedelta
+
 import pytest
-from flask_jwt_extended import create_access_token, decode_token
+from flask_jwt_extended import create_access_token, create_refresh_token, decode_token
 
 from app.models import KioskSessionModel, SystemSettingsModel, UserModel
 
@@ -44,3 +46,19 @@ def test_kiosk_refresh_keeps_kiosk_claim_and_lifetime(client, db, kiosk):
     claims = decode_token(r.get_json()['access_token'])
     assert claims.get('kiosk_session') is True
     assert claims['exp'] - claims['iat'] <= 10 * 60
+
+
+def test_kiosk_refresh_never_outlives_refresh_token(client, db, kiosk):
+    user = UserModel.query.filter_by(username='kioskuser').first() or \
+        UserModel.create_user(username='kioskuser', email='kioskuser@example.com')
+    # A kiosk refresh token with only 60 seconds left, while the kiosk timeout is 10 minutes.
+    refresh_token = create_refresh_token(identity=str(user.id),
+                                         additional_claims={'kiosk_session': True},
+                                         expires_delta=timedelta(seconds=60))
+
+    r = client.post(PREFIX + '/auth/refresh',
+                    headers={'Authorization': 'Bearer ' + refresh_token})
+    assert r.status_code == 200
+    claims = decode_token(r.get_json()['access_token'])
+    assert claims.get('kiosk_session') is True
+    assert claims['exp'] <= decode_token(refresh_token)['exp']

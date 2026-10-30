@@ -302,6 +302,11 @@ def refresh():
             expires_delta = timedelta(minutes=int(timeout_str))
         except (ValueError, TypeError):
             expires_delta = timedelta(minutes=10)
+        # Never outlive the kiosk refresh token, so repeated refreshes cannot
+        # stretch the session past its original kiosk lifetime.
+        import time
+        remaining = int(jwt_data['exp']) - int(time.time())
+        expires_delta = min(expires_delta, timedelta(seconds=max(0, remaining)))
 
     # A bounded event-leader session keeps its scope claims and can never be
     # refreshed past its original hard expiry (event_leader_until, UTC epoch).
