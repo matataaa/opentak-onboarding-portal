@@ -25,4 +25,11 @@ i18n
     }
   });
 
+// Keep <html lang> in step with the UI language (screen readers, hyphenation)
+const setDocumentLang = () => {
+  document.documentElement.lang = i18n.resolvedLanguage || 'en';
+};
+setDocumentLang();
+i18n.on('languageChanged', setDocumentLang);
+
 export default i18n;
