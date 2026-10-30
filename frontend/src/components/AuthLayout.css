@@ -181,3 +181,34 @@
     flex: 0 1 450px;
   }
 }
+
+/* Language selector for signed-out visitors (all layouts, incl. classic) */
+.auth-lang-select {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+/* Keep the native dropdown list readable in both themes */
+[data-theme="light"] .auth-lang-select {
+  color-scheme: light;
+}
+
+[data-theme="dark"] .auth-lang-select {
+  color-scheme: dark;
+}
+
+.auth-lang-select--floating {
+  position: fixed;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 10;
+}
+
+.auth-layout__header-lang {
+  margin-left: auto;
+}

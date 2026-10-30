@@ -133,7 +133,7 @@ function KioskLogin() {
   }, [sessionId]);
 
   return (
-    <AuthLayout hero>
+    <AuthLayout hero languageSelector={false}>
       <div className="auth-card">
         {logoPath && (
           <div className="auth-logo">
