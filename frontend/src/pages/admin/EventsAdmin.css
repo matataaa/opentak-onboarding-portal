@@ -21,12 +21,24 @@
 .events-print-card svg { width: 100%; height: auto; max-width: 200px; }
 .events-print-label { margin-top: 0.5rem; font-weight: 600; color: #111; }
 .events-print-hq { color: #b00020; text-transform: uppercase; }
+.events-print-root { display: none; }
 @media print {
-  body * { visibility: hidden; }
-  .events-print-sheet, .events-print-sheet * { visibility: visible; }
-  .events-print-sheet { position: absolute; top: 0; left: 0; width: 100%; }
-  .no-print { display: none !important; }
-  .events-print-card { break-inside: avoid; page-break-inside: avoid; }
+  @page { size: A4 portrait; margin: 12mm; }
+  body:has(> .events-print-root) > *:not(.events-print-root) { display: none !important; }
+  body:has(> .events-print-root) { background: #fff !important; }
+  .events-print-root { display: block; color: #111; background: #fff; }
+  .events-print-page-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; box-sizing: border-box; break-inside: avoid; page-break-inside: avoid; }
+  .events-print-page-card svg { height: auto; margin-top: 6mm; }
+  .per-page-1 .events-print-page-card { height: 270mm; break-after: page; page-break-after: always; }
+  .per-page-1 .events-print-page-card:last-child { break-after: auto; page-break-after: auto; }
+  .per-page-1 .events-print-label { font-size: 28pt; }
+  .per-page-1 .events-print-page-card svg { width: 160mm; }
+  .per-page-2 .events-print-page-card { height: 134mm; }
+  .per-page-2 .events-print-page-card:nth-child(odd):not(:last-child) { border-bottom: 1px dashed #999; }
+  .per-page-2 .events-print-page-card:nth-child(even) { break-after: page; page-break-after: always; }
+  .per-page-2 .events-print-page-card:last-child { break-after: auto; page-break-after: auto; }
+  .per-page-2 .events-print-label { font-size: 18pt; }
+  .per-page-2 .events-print-page-card svg { width: 100mm; }
 }
 .events-hint { font-size: 0.85rem; color: var(--text-muted, #666); margin: 0.25rem 0 0; }
 .events-admin .admin-table select { padding: 0.35rem 0.5rem; border: 1px solid var(--border-input); border-radius: 6px; margin-right: 0.3rem; max-width: 100%; background: var(--bg-input); color: var(--text-primary); }
