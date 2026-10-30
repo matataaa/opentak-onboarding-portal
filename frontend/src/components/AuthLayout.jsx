@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { settingsAPI } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import LanguageSelector from './LanguageSelector';
 import './AuthLayout.css';
 
 const LAYOUTS = ['classic', 'centered', 'split'];
@@ -27,8 +29,11 @@ function getHeroTexts(heroTexts, language) {
  * renders exactly the original auth container; the other layouts add the
  * configured background, overlay, glass card, header bar and hero panel.
  */
-function AuthLayout({ children, hero = false }) {
+function AuthLayout({ children, hero = false, languageSelector = true }) {
   const { i18n } = useTranslation();
+  const { user } = useAuth();
+  // Only for signed-out visitors; it switches the UI language without touching a profile.
+  const showLang = languageSelector && !user;
 
   const { data: settings, isPending } = useQuery({
     queryKey: ['settings'],
@@ -47,7 +52,12 @@ function AuthLayout({ children, hero = false }) {
   const layout = LAYOUTS.includes(settings?.login_layout) ? settings.login_layout : 'classic';
 
   if (layout === 'classic') {
-    return <div className="auth-container">{children}</div>;
+    return (
+      <>
+        {showLang && <LanguageSelector className="auth-lang-select auth-lang-select--floating" />}
+        <div className="auth-container">{children}</div>
+      </>
+    );
   }
 
   const brandName = settings?.brand_name || 'OpenTAK Portal';
@@ -90,7 +100,11 @@ function AuthLayout({ children, hero = false }) {
         <header className="auth-layout__header">
           {showLogo && <img src={logoPath} alt={showText ? '' : brandName} />}
           {showText && <span>{brandName}</span>}
+          {showLang && <LanguageSelector className="auth-lang-select auth-layout__header-lang" />}
         </header>
+      )}
+      {!headerBar && showLang && (
+        <LanguageSelector className="auth-lang-select auth-lang-select--floating" />
       )}
       <div className="auth-layout__body">
         {showHero ? (

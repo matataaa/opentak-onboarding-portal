@@ -525,6 +525,10 @@ paths:
                   type: string
                 onboardingCode:
                   type: string
+                language:
+                  type: string
+                  enum: [en, nl, de]
+                  description: Initial profile language of the new account (the UI language used to register). Other values are ignored (default en). Stored on the pending registration and applied when the account is created (auto-approve, email verification or approval).
       responses:
         '201':
           description: User created successfully

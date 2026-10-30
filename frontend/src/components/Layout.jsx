@@ -1,12 +1,12 @@
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import i18n from '../i18n';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { settingsAPI, usersAPI } from '../services/api';
 import { useState, useEffect } from 'react';
 import AnnouncementsBadge from './AnnouncementsBadge';
+import LanguageSelector from './LanguageSelector';
 import './Layout.css';
 
 function Layout() {
@@ -164,21 +164,14 @@ function Layout() {
                 {theme === 'dark' ? t('layout.lightMode') : t('layout.darkMode')}
               </button>
               <div className="language-switcher">
-                <select
-                  value={i18n.language}
-                  onChange={(e) => {
-                    const lang = e.target.value;
-                    i18n.changeLanguage(lang);
+                <LanguageSelector
+                  className="lang-select"
+                  onChange={(lang) => {
                     if (user?.id) {
                       usersAPI.update(user.id, { language: lang }).catch(() => {});
                     }
                   }}
-                  className="lang-select"
-                >
-                  <option value="en">English</option>
-                  <option value="nl">Nederlands</option>
-                  <option value="de">Deutsch</option>
-                </select>
+                />
               </div>
               <button onClick={handleLogout} className="logout-btn">
                 {t('auth.logout')}

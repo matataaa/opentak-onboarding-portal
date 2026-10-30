@@ -531,7 +531,8 @@ def register():
         "firstName": "string",
         "lastName": "string",
         "callsign": "string",
-        "onboardingCode": "string"
+        "onboardingCode": "string",
+        "language": "string (optional: en, nl or de)"
     }
     """
     from app.models import OnboardingCodeModel, PendingRegistrationModel
@@ -547,6 +548,9 @@ def register():
 
     # Convert username to lowercase and remove spaces
     username = data['username'].lower().strip()
+
+    # Initial profile language of the new account (the UI language used to register)
+    language = data.get('language') if data.get('language') in ('en', 'nl', 'de') else None
 
     # Validate username format (only letters and numbers - no spaces, underscores, periods, or hyphens)
     import re
@@ -662,6 +666,10 @@ def register():
             # Mark email as verified (auto-approved)
             user.emailVerified = True
 
+            # Initial profile language from the UI language used to register
+            if language:
+                user.language = language
+
             # Add roles from onboarding code
             for role in onboarding_code.roles:
                 user.roles.append(role)
@@ -759,6 +767,7 @@ The OpenTAK Team"""
                 firstName=data['firstName'],
                 lastName=data['lastName'],
                 callsign=data['callsign'],
+                language=language,
                 onboarding_code_id=onboarding_code.id,
                 verification_token=verification_token,
                 approval_token=approval_token,
@@ -894,7 +903,8 @@ Thank you for your patience!"""
             callsign=data['callsign'],
             onboarding_code_id=onboarding_code.id,
             verification_token=verification_token,
-            expires_at=expires_at
+            expires_at=expires_at,
+            language=language
         )
 
         if not pending:
@@ -1063,6 +1073,10 @@ def verify_email():
 
         # Mark email as verified
         user.emailVerified = True
+
+        # Initial profile language captured at registration
+        if pending.language:
+            user.language = pending.language
 
         # Add roles from onboarding code
         for role in onboarding_code.roles:
@@ -1576,6 +1590,10 @@ def approve_registration(token):
             """, 500
 
         new_user.emailVerified = True
+
+        # Initial profile language captured at registration
+        if pending.language:
+            new_user.language = pending.language
 
         for role in onboarding_code.roles:
             new_user.roles.append(role)
