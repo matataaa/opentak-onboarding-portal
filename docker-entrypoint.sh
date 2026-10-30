@@ -1,24 +1,16 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 echo "Starting OpenTAK Onboarding Portal..."
 
-# Run database migrations
+# Run database migrations; refuse to start on a half-migrated database
 echo "Running database migrations..."
-MIGRATION_OUTPUT=$(flask db upgrade 2>&1) || true
-echo "$MIGRATION_OUTPUT"
-
-if echo "$MIGRATION_OUTPUT" | grep -q "user_roles_old"; then
-    echo "Warning: Migration issue detected with user_roles_old reference"
-    echo "Attempting to stamp database and continue..."
-    flask db stamp head || echo "Could not stamp database"
-elif echo "$MIGRATION_OUTPUT" | grep -iE "^\[?ERROR|alembic.*Error|sqlalchemy.*Error"; then
-    echo "Warning: Migration error detected"
-    echo "Current migration state:"
+if ! flask db upgrade; then
+    echo "ERROR: database migration failed; not starting. See docs/DOCKER.md (Recovering from a failed migration)." >&2
     flask db current || true
-else
-    echo "Migrations completed successfully"
+    exit 1
 fi
+echo "Migrations completed successfully"
 
 # Start the application with gunicorn
 echo "Starting gunicorn..."
