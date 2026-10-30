@@ -151,6 +151,7 @@ def authenticate_kiosk_session(session_id):
     )
     refresh_token = create_refresh_token(
         identity=str(user.id),
+        additional_claims={'kiosk_session': True},
         expires_delta=timedelta(minutes=timeout_minutes)
     )
 
