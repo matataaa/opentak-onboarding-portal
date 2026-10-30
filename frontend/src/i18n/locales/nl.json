@@ -190,8 +190,8 @@
   "dashboard": {
     "welcome": "Welkom, ",
     "user": "gebruiker",
-    "editProfile": "PROFIEL BEWERKEN",
-    "changePassword": "WACHTWOORD WIJZIGEN",
+    "editProfile": "Profiel bewerken",
+    "changePassword": "Wachtwoord wijzigen",
     "introText": "Dit portaal is ontworpen om je te helpen je ATAK-client in te stellen en klaar te maken voor gebruik. Als je ATAK nog niet hebt, kun je het downloaden via de onderstaande pictogrammen. Zodra je ATAK hebt, kun je de profielen downloaden en importeren.",
     "getStarted": "Aan de slag met ATAK",
     "collapseAll": "Alles inklappen",
@@ -235,8 +235,8 @@
     "registerRadio": "+ Radio registreren",
     "compareConfig": "Radioconfiguratie vergelijken met doel",
     "programConfig": "Radio programmeren met configuratie",
-    "helpLink": "HULP / INSTALLATIE-INSTRUCTIES",
-    "helpEmail": "CONTACT SUPPORT"
+    "helpLink": "Hulp / installatie-instructies",
+    "helpEmail": "Contact opnemen met support"
   },
   "profile": {
     "title": "Gebruikersprofiel",
@@ -369,7 +369,7 @@
     "darkMode": "Donkere modus",
     "viewingAs": "Bekijken als ",
     "loggedInAs": " — ingelogd als ",
-    "stopImpersonating": "Stop imitatie"
+    "stopImpersonating": "Terug naar eigen account"
   },
   "notifications": {
     "announcements": "Aankondigingen",
@@ -649,7 +649,7 @@
       "callsign": "Roepnaam",
       "roles": "Rollen",
       "expiryDate": "Vervaldatum",
-      "impersonate": "Imiteren",
+      "impersonate": "Inloggen als",
       "editUser": "Gebruiker bewerken",
       "createUser": "Gebruiker aanmaken",
       "usernameLabel": "Gebruikersnaam *",
@@ -671,8 +671,8 @@
       "rolesNotLoaded": "Rolgegevens niet geladen. Probeer het opnieuw.",
       "deleteConfirm": "Weet je zeker dat je gebruiker \"{{username}}\" wilt verwijderen?",
       "deleteUser": "Gebruiker verwijderen",
-      "impersonateConfirm": "Gebruiker \"{{username}}\" imiteren? Je ziet het portaal als deze gebruiker.",
-      "impersonateUser": "Gebruiker imiteren",
+      "impersonateConfirm": "Inloggen als \"{{username}}\"? Je ziet het portaal zoals deze gebruiker.",
+      "impersonateUser": "Inloggen als gebruiker",
       "userCreated": "Gebruiker succesvol aangemaakt",
       "userUpdatedPassword": "Gebruiker bijgewerkt en wachtwoord gereset",
       "userUpdated": "Gebruiker succesvol bijgewerkt",

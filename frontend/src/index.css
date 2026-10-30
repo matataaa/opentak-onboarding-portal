@@ -31,12 +31,12 @@ body {
 
 a {
   font-weight: 500;
-  color: #007bff;
+  color: var(--link-color);
   text-decoration: inherit;
 }
 
 a:hover {
-  color: #0056b3;
+  color: var(--link-hover);
   text-decoration: underline;
 }
 

@@ -10,6 +10,7 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
+  text-align: left;
 }
 
 .admin-header h1 {
@@ -89,6 +90,8 @@
   font-size: 0.8rem;
   font-weight: 400;
   color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .settings-group-chevron {
@@ -873,6 +876,13 @@
 }
 
 @media (max-width: 768px) {
+  /* Let a long group title break instead of pushing the count out */
+  .settings-group-title {
+    min-width: 0;
+    hyphens: auto;
+    overflow-wrap: break-word;
+  }
+
   .oidc-section-header {
     flex-direction: column;
     align-items: flex-start;

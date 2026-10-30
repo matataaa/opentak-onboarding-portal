@@ -18,6 +18,7 @@
 @media (max-width: 768px) {
   .dashboard {
     padding: 1rem;
+    min-height: calc(100vh - 60px); /* Subtract navbar height; footer is hidden */
   }
 }
 
@@ -45,7 +46,7 @@
 }
 
 .portal-name {
-  color: #ff9800;
+  color: var(--text-secondary);
   font-size: 1.2rem;
   margin: 0.5rem 0 0 0;
 }
@@ -139,6 +140,11 @@
 .help-buttons a.action-btn {
   text-decoration: none;
   display: inline-block;
+}
+
+/* Keep the button text colour; the global a:hover link colour would win */
+.help-buttons a.action-btn:hover {
+  color: #fff;
 }
 
 .help-buttons .help-email-text {
@@ -273,7 +279,7 @@
 }
 
 .links a {
-  color: #007bff;
+  color: var(--link-color);
   text-decoration: none;
 }
 
@@ -426,7 +432,7 @@
 }
 
 .cant-scan a {
-  color: #007bff;
+  color: var(--link-color);
   text-decoration: none;
   font-weight: 500;
 }
@@ -615,6 +621,7 @@
 
 .info-card {
   margin-bottom: 1.5rem;
+  text-align: left;
 }
 
 @media (max-width: 768px) {
@@ -757,6 +764,7 @@
   .action-btn {
     width: 100%;
     padding: 0.875rem 1rem;
+    white-space: normal;
   }
 }
 

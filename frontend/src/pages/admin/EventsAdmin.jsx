@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { eventsAPI, groupsAPI, onboardingCodesAPI } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatUtc } from '../../utils/formatUtc';
+import '../../components/AdminTable.css';
 import './EventsAdmin.css';
 
 // The fixed set of TAK team colours ATAK accepts.
@@ -208,9 +209,13 @@ export default function EventsAdmin() {
   };
 
   return (
-    <div className="events-admin">
-      <h1>{t('events.title')}</h1>
-      <p className="events-intro">{t('events.intro')}</p>
+    <div className="admin-page events-admin">
+      <div className="admin-header">
+        <div>
+          <h1>{t('events.title')}</h1>
+          <p className="events-intro">{t('events.intro')}</p>
+        </div>
+      </div>
       {error && <div className="events-error">{error}</div>}
 
       {/* Teams */}
@@ -228,35 +233,37 @@ export default function EventsAdmin() {
           </select>
           <button onClick={createTeam} disabled={!teamForm.name}>{t('events.addTeam')}</button>
         </div>
-        <table className="events-table">
-          <thead><tr><th>{t('events.teamName')}</th><th>{t('events.color')}</th><th>{t('events.group')}</th><th>{t('events.leader')}</th><th></th></tr></thead>
-          <tbody>
-            {teams.map((team) => (
-              <tr key={team.id}>
-                <td>{team.name}</td>
-                <td>{team.color || '-'}</td>
-                <td>
-                  {team.otsGroup?.name || '-'}
-                  {team.otsGroup?.missingInOts && (
-                    <span className="badge badge-warning" style={{ marginLeft: '0.5rem' }} title={t('admin.groups.notFoundInOtsHint')}>
-                      {t('admin.groups.notFoundInOts')}
-                    </span>
-                  )}
-                </td>
-                <td>
-                  {team.leaderUser ? team.leaderUser.username : (
-                    <span className="events-leader-form">
-                      <input placeholder={t('events.leaderUsername')} value={(leaderForm[team.id] || {}).username || ''} onChange={(e) => setLeaderForm((p) => ({ ...p, [team.id]: { ...(p[team.id] || {}), username: e.target.value } }))} />
-                      <input type="password" placeholder={t('events.password')} value={(leaderForm[team.id] || {}).password || ''} onChange={(e) => setLeaderForm((p) => ({ ...p, [team.id]: { ...(p[team.id] || {}), password: e.target.value } }))} />
-                      <button onClick={() => setLeader(team.id)}>{t('events.setLeader')}</button>
-                    </span>
-                  )}
-                </td>
-                <td><button className="events-danger" onClick={() => call(() => eventsAPI.deleteTeam(team.id))}>{t('common.delete')}</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="events-table-wrap">
+          <table className="events-table">
+            <thead><tr><th>{t('events.teamName')}</th><th>{t('events.color')}</th><th>{t('events.group')}</th><th>{t('events.leader')}</th><th></th></tr></thead>
+            <tbody>
+              {teams.map((team) => (
+                <tr key={team.id}>
+                  <td>{team.name}</td>
+                  <td>{team.color || '-'}</td>
+                  <td>
+                    {team.otsGroup?.name || '-'}
+                    {team.otsGroup?.missingInOts && (
+                      <span className="badge badge-warning" style={{ marginLeft: '0.5rem' }} title={t('admin.groups.notFoundInOtsHint')}>
+                        {t('admin.groups.notFoundInOts')}
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    {team.leaderUser ? team.leaderUser.username : (
+                      <span className="events-leader-form">
+                        <input placeholder={t('events.leaderUsername')} value={(leaderForm[team.id] || {}).username || ''} onChange={(e) => setLeaderForm((p) => ({ ...p, [team.id]: { ...(p[team.id] || {}), username: e.target.value } }))} />
+                        <input type="password" placeholder={t('events.password')} value={(leaderForm[team.id] || {}).password || ''} onChange={(e) => setLeaderForm((p) => ({ ...p, [team.id]: { ...(p[team.id] || {}), password: e.target.value } }))} />
+                        <button onClick={() => setLeader(team.id)}>{t('events.setLeader')}</button>
+                      </span>
+                    )}
+                  </td>
+                  <td><button className="events-danger" onClick={() => call(() => eventsAPI.deleteTeam(team.id))}>{t('common.delete')}</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {/* Events */}
@@ -279,23 +286,25 @@ export default function EventsAdmin() {
         {eventForm.playerAccessMode === 'shared' && !eventForm.validUntil && (
           <p className="events-hint">{t('events.sharedNeedsEnd')}</p>
         )}
-        <table className="events-table">
-          <thead><tr><th>{t('events.eventName')}</th><th>{t('events.validUntil')}</th><th>{t('events.playerMode')}</th><th>{t('events.cleanup')}</th><th></th></tr></thead>
-          <tbody>
-            {events.map((ev) => (
-              <tr key={ev.id}>
-                <td>{ev.name}</td>
-                <td>{ev.validUntil ? toLocalInput(ev.validUntil).replace('T', ' ') : t('common.never')}</td>
-                <td>{ev.playerAccessMode}</td>
-                <td>{ev.accountCleanup}</td>
-                <td>
-                  <button onClick={() => openLinks(ev.id)}>{t('events.links')}</button>
-                  <button className="events-danger" onClick={() => call(() => eventsAPI.deleteEvent(ev.id))}>{t('common.delete')}</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="events-table-wrap">
+          <table className="events-table">
+            <thead><tr><th>{t('events.eventName')}</th><th>{t('events.validUntil')}</th><th>{t('events.playerMode')}</th><th>{t('events.cleanup')}</th><th></th></tr></thead>
+            <tbody>
+              {events.map((ev) => (
+                <tr key={ev.id}>
+                  <td>{ev.name}</td>
+                  <td>{ev.validUntil ? toLocalInput(ev.validUntil).replace('T', ' ') : t('common.never')}</td>
+                  <td>{ev.playerAccessMode}</td>
+                  <td>{ev.accountCleanup}</td>
+                  <td>
+                    <button onClick={() => openLinks(ev.id)}>{t('events.links')}</button>
+                    <button className="events-danger" onClick={() => call(() => eventsAPI.deleteEvent(ev.id))}>{t('common.delete')}</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {/* Links for the selected event */}
@@ -325,30 +334,32 @@ export default function EventsAdmin() {
             )}
             <button onClick={createLink} disabled={!linkForm.teamId}>{t('events.generateLink')}</button>
           </div>
-          <table className="events-table">
-            <thead><tr><th>{t('events.team')}</th><th>{t('events.role')}</th><th>{t('events.code')}</th><th>{t('events.version')}</th><th></th></tr></thead>
-            <tbody>
-              {links.map((l) => (
-                <tr key={l.id}>
-                  <td>{l.team?.name}</td>
-                  <td>{l.role}</td>
-                  <td>{l.onboardingCode?.name || l.onboardingCode?.onboardingCode || '-'}</td>
-                  <td>v{l.tokenVersion}</td>
-                  <td>
-                    <button onClick={() => showQr(l)} disabled={!l.retrievable} title={l.retrievable ? '' : t('events.regenerateToShowQr')}>{t('events.qrLink')}</button>
-                    <button onClick={() => regenerate(l)}>{t('events.regenerate')}</button>
-                    {canEdit && (
-                      <button className="events-danger" onClick={() => closeLinkAccounts(l)}>{linkRemaining[l.id] > 0 ? t('events.closeLinkAccountsMore', { remaining: linkRemaining[l.id] }) : t('events.closeLinkAccounts')}</button>
-                    )}
-                    <button className="events-danger" onClick={() => call(() => eventsAPI.deleteLink(l.id), () => {
-                    setPrintSheet((p) => p.filter((x) => x.id !== l.id));
-                    setQrLink((q) => (q?.id === l.id ? null : q));
-                  }).then(() => loadLinks(openLinksFor))}>{t('common.delete')}</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="events-table-wrap">
+            <table className="events-table">
+              <thead><tr><th>{t('events.team')}</th><th>{t('events.role')}</th><th>{t('events.code')}</th><th>{t('events.version')}</th><th></th></tr></thead>
+              <tbody>
+                {links.map((l) => (
+                  <tr key={l.id}>
+                    <td>{l.team?.name}</td>
+                    <td>{l.role}</td>
+                    <td>{l.onboardingCode?.name || l.onboardingCode?.onboardingCode || '-'}</td>
+                    <td>v{l.tokenVersion}</td>
+                    <td>
+                      <button onClick={() => showQr(l)} disabled={!l.retrievable} title={l.retrievable ? '' : t('events.regenerateToShowQr')}>{t('events.qrLink')}</button>
+                      <button onClick={() => regenerate(l)}>{t('events.regenerate')}</button>
+                      {canEdit && (
+                        <button className="events-danger" onClick={() => closeLinkAccounts(l)}>{linkRemaining[l.id] > 0 ? t('events.closeLinkAccountsMore', { remaining: linkRemaining[l.id] }) : t('events.closeLinkAccounts')}</button>
+                      )}
+                      <button className="events-danger" onClick={() => call(() => eventsAPI.deleteLink(l.id), () => {
+                      setPrintSheet((p) => p.filter((x) => x.id !== l.id));
+                      setQrLink((q) => (q?.id === l.id ? null : q));
+                    }).then(() => loadLinks(openLinksFor))}>{t('common.delete')}</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <div className="events-form-row">
             <button onClick={printAll} disabled={!links.some((l) => l.retrievable)}>{t('events.printAllQrs')}</button>
           </div>

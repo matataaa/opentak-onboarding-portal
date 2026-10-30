@@ -126,7 +126,7 @@ function MeshtasticList() {
       <div className="admin-header">
         <div>
           <h1>{t('admin.meshtastic.title')}</h1>
-          <p style={{ color: '#666', fontSize: '0.9rem', marginTop: '0.25rem' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
             {t('admin.meshtastic.subtitle')} <a href="/admin/meshtastic/groups">{t('admin.meshtastic.manageGroups')}</a>
           </p>
         </div>

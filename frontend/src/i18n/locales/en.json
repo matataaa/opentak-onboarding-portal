@@ -190,8 +190,8 @@
   "dashboard": {
     "welcome": "Welcome, ",
     "user": "user",
-    "editProfile": "EDIT PROFILE",
-    "changePassword": "CHANGE PASSWORD",
+    "editProfile": "Edit profile",
+    "changePassword": "Change password",
     "introText": "This portal is designed to help you get your ATAK client setup and ready to use. If you do not have ATAK you can download it using the icons below, once you have ATAK you can download and import the profiles.",
     "getStarted": "Get started with ATAK",
     "collapseAll": "Collapse All",
@@ -235,8 +235,8 @@
     "registerRadio": "+ Register Radio",
     "compareConfig": "Compare radio config with target",
     "programConfig": "Program radio with config",
-    "helpLink": "HELP / HOW TO INSTALL",
-    "helpEmail": "CONTACT SUPPORT"
+    "helpLink": "Help / how to install",
+    "helpEmail": "Contact support"
   },
   "profile": {
     "title": "User Profile",

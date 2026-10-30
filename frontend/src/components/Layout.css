@@ -396,7 +396,7 @@
 
   .main-content {
     margin-top: 60px;
-    margin-bottom: 60px;
+    margin-bottom: 0; /* Footer is hidden on mobile */
   }
 
   .main-content-impersonating {
@@ -410,15 +410,6 @@
   }
 
   .footer {
-    padding: 0.75rem 1rem;
-  }
-
-  .footer > div {
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .footer > div > span:last-child {
     display: none;
   }
 }
@@ -427,9 +418,5 @@
 @media (max-width: 480px) {
   .navbar-brand a {
     font-size: 1rem;
-  }
-
-  .footer p {
-    font-size: 0.75rem;
   }
 }

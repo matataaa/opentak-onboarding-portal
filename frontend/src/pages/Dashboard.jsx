@@ -605,7 +605,7 @@ function Dashboard() {
     <div className="dashboard" style={{ '--accent-color': accentColor }}>
       <div className="dashboard-header">
         <h1>{t('dashboard.welcome')}{user?.callsign || user?.username}</h1>
-        <p className="portal-name" style={{ color: accentColor }}>{brandName}</p>
+        <p className="portal-name">{brandName}</p>
       </div>
 
       {/* User Info Section */}

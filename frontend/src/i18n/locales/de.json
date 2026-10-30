@@ -190,8 +190,8 @@
   "dashboard": {
     "welcome": "Willkommen, ",
     "user": "Benutzer",
-    "editProfile": "PROFIL BEARBEITEN",
-    "changePassword": "PASSWORT ÄNDERN",
+    "editProfile": "Profil bearbeiten",
+    "changePassword": "Passwort ändern",
     "introText": "Dieses Portal hilft Ihnen, Ihren ATAK-Client einzurichten und einsatzbereit zu machen. Falls Sie ATAK noch nicht haben, können Sie es über die Symbole unten herunterladen. Sobald Sie ATAK haben, können Sie die Profile herunterladen und importieren.",
     "getStarted": "Erste Schritte mit ATAK",
     "collapseAll": "Alle einklappen",
@@ -235,8 +235,8 @@
     "registerRadio": "+ Funkgerät registrieren",
     "compareConfig": "Funkgerät-Konfiguration mit Ziel vergleichen",
     "programConfig": "Funkgerät mit Konfiguration programmieren",
-    "helpLink": "HILFE / INSTALLATIONSANLEITUNG",
-    "helpEmail": "SUPPORT KONTAKTIEREN"
+    "helpLink": "Hilfe / Installationsanleitung",
+    "helpEmail": "Support kontaktieren"
   },
   "profile": {
     "title": "Benutzerprofil",
@@ -369,7 +369,7 @@
     "darkMode": "Dunkler Modus",
     "viewingAs": "Ansicht als ",
     "loggedInAs": " — angemeldet als ",
-    "stopImpersonating": "Identitätswechsel beenden"
+    "stopImpersonating": "Zurück zum eigenen Konto"
   },
   "notifications": {
     "announcements": "Ankündigungen",
@@ -649,7 +649,7 @@
       "callsign": "Rufzeichen",
       "roles": "Rollen",
       "expiryDate": "Ablaufdatum",
-      "impersonate": "Identität annehmen",
+      "impersonate": "Anmelden als",
       "editUser": "Benutzer bearbeiten",
       "createUser": "Benutzer erstellen",
       "usernameLabel": "Benutzername *",
@@ -671,8 +671,8 @@
       "rolesNotLoaded": "Rollendaten nicht geladen. Bitte versuchen Sie es erneut.",
       "deleteConfirm": "Sind Sie sicher, dass Sie den Benutzer \"{{username}}\" löschen möchten?",
       "deleteUser": "Benutzer löschen",
-      "impersonateConfirm": "Identität von Benutzer \"{{username}}\" annehmen? Sie sehen das Portal als dieser Benutzer.",
-      "impersonateUser": "Benutzer-Identität annehmen",
+      "impersonateConfirm": "Als \"{{username}}\" anmelden? Sie sehen das Portal wie dieser Benutzer.",
+      "impersonateUser": "Als Benutzer anmelden",
       "userCreated": "Benutzer erfolgreich erstellt",
       "userUpdatedPassword": "Benutzer aktualisiert und Passwort zurückgesetzt",
       "userUpdated": "Benutzer erfolgreich aktualisiert",
