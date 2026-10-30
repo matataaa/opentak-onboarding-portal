@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { announcementsAPI } from '../services/api';
+import { formatDateTime, useDateFormat } from '../utils/formatDate';
 import './AnnouncementHistory.css';
 
 function AnnouncementHistory() {
   const { t } = useTranslation();
+  const dateFormat = useDateFormat();
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
 
   const { data, isLoading } = useQuery({
@@ -20,13 +22,7 @@ function AnnouncementHistory() {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return formatDateTime(dateString, dateFormat);
   };
 
   // Convert HTML to plain text (strips tags and decodes entities)

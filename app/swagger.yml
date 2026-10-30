@@ -2021,6 +2021,11 @@ paths:
                     example: medium
                   login_glass_enabled:
                     type: boolean
+                  date_format:
+                    type: string
+                    enum: [eu, us, iso]
+                    description: Portal-wide date/time format (eu = 31-10-2026 14:30, us = 10/31/2026 2:30 PM, iso = 2026-10-31 14:30)
+                    example: eu
                   login_header_bar_enabled:
                     type: boolean
                   login_hero_texts:

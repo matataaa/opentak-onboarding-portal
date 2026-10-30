@@ -1129,6 +1129,11 @@
       "loginPageHelp": "Uiterlijk van de inlogpagina en de andere aanmeldpagina's. Achtergrond, overlay, glaseffect, kopbalk en de accentkleur op knoppen gelden alleen voor de layouts Gecentreerd en Gesplitst.",
       "loginPageContrastHint": "Tip: een lichte accentkleur, of overlay \"Geen\" over een heldere afbeelding, kan tekst en knoppen slecht leesbaar maken. Controleer het voorbeeld.",
       "previewLoginPage": "Voorbeeld inlogpagina",
+      "dateFormatOption": {
+        "eu": "EU — 31-10-2026 14:30",
+        "us": "VS — 10/31/2026 2:30 PM",
+        "iso": "ISO — 2026-10-31 14:30"
+      },
       "loginLayoutOption": {
         "classic": "Klassiek",
         "centered": "Gecentreerd",
@@ -1348,6 +1353,10 @@
         "default_theme": {
           "label": "Standaardthema",
           "description": "Standaardthema voor het portaal (licht of donker)"
+        },
+        "date_format": {
+          "label": "Datumnotatie",
+          "description": "Datum- en tijdnotatie die in het hele portaal wordt gebruikt"
         },
         "kiosk_default_theme": {
           "label": "Standaardthema kiosk",

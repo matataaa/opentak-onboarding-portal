@@ -1129,6 +1129,11 @@
       "loginPageHelp": "Darstellung der Anmeldeseite und der weiteren Anmeldeseiten. Hintergrund, Überlagerung, Glaseffekt, Kopfleiste und die Akzentfarbe auf Schaltflächen gelten nur für die Layouts Zentriert und Geteilt.",
       "loginPageContrastHint": "Tipp: Eine helle Akzentfarbe oder die Überlagerung \"Keine\" über einem hellen Bild kann Text und Schaltflächen schwer lesbar machen. Prüfen Sie die Vorschau.",
       "previewLoginPage": "Vorschau der Anmeldeseite",
+      "dateFormatOption": {
+        "eu": "EU — 31-10-2026 14:30",
+        "us": "US — 10/31/2026 2:30 PM",
+        "iso": "ISO — 2026-10-31 14:30"
+      },
       "loginLayoutOption": {
         "classic": "Klassisch",
         "centered": "Zentriert",
@@ -1348,6 +1353,10 @@
         "default_theme": {
           "label": "Standarddesign",
           "description": "Standarddesign für das Portal (hell oder dunkel)"
+        },
+        "date_format": {
+          "label": "Datumsformat",
+          "description": "Datums- und Uhrzeitformat, das im gesamten Portal verwendet wird"
         },
         "kiosk_default_theme": {
           "label": "Kiosk-Standarddesign",

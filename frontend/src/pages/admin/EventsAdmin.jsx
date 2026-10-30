@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { QRCodeSVG } from 'qrcode.react';
 import { eventsAPI, groupsAPI, onboardingCodesAPI } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
-import { formatUtc } from '../../utils/formatUtc';
+import { formatDateTime, useDateFormat } from '../../utils/formatDate';
 import '../../components/AdminTable.css';
 import './EventsAdmin.css';
 
@@ -13,16 +13,9 @@ const TAK_TEAM_COLORS = [
   'Dark Blue', 'Blue', 'Cyan', 'Teal', 'Green', 'Dark Green', 'Brown',
 ];
 
-function toLocalInput(iso) {
-  if (!iso) return '';
-  // ISO -> value for <input type="datetime-local">
-  const d = new Date(iso);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 export default function EventsAdmin() {
   const { t } = useTranslation();
+  const dateFormat = useDateFormat();
   const { hasRole } = useAuth();
   const canEdit = hasRole('events_admin') || hasRole('administrator');
   const [teams, setTeams] = useState([]);
@@ -293,7 +286,7 @@ export default function EventsAdmin() {
               {events.map((ev) => (
                 <tr key={ev.id}>
                   <td>{ev.name}</td>
-                  <td>{ev.validUntil ? toLocalInput(ev.validUntil).replace('T', ' ') : t('common.never')}</td>
+                  <td>{ev.validUntil ? formatDateTime(ev.validUntil, dateFormat) : t('common.never')}</td>
                   <td>{ev.playerAccessMode}</td>
                   <td>{ev.accountCleanup}</td>
                   <td>
@@ -387,7 +380,7 @@ export default function EventsAdmin() {
                     <td>
                       {a.legacy ? t('events.accountLegacy') : (a.parked ? t('events.accountParked') : t('events.accountActive'))}
                     </td>
-                    <td>{formatUtc(a.createdAt)}</td>
+                    <td>{formatDateTime(a.createdAt, dateFormat, { utc: true }) || '-'}</td>
                     {canEdit && (
                       <td>
                         {!a.legacy && (

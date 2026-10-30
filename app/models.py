@@ -1723,6 +1723,12 @@ class SystemSettingsModel(db.Model):
                 'category': 'appearance',
                 'description': 'Default theme for the kiosk screen (light or dark)'
             },
+            {
+                'key': 'date_format',
+                'value': 'eu',
+                'category': 'appearance',
+                'description': 'Date and time format used across the portal (eu, us or iso)'
+            },
         ]
 
         # Remove old/deprecated settings

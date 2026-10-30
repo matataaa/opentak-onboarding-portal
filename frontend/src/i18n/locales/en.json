@@ -1129,6 +1129,11 @@
       "loginPageHelp": "Appearance of the login and other sign-in pages. Background, overlay, glass effect, header bar and the accent color on buttons only apply to the Centered and Split layouts.",
       "loginPageContrastHint": "Tip: a light accent color, or overlay \"None\" over a bright image, can make text and buttons hard to read. Check the preview.",
       "previewLoginPage": "Preview login page",
+      "dateFormatOption": {
+        "eu": "EU — 31-10-2026 14:30",
+        "us": "US — 10/31/2026 2:30 PM",
+        "iso": "ISO — 2026-10-31 14:30"
+      },
       "loginLayoutOption": {
         "classic": "Classic",
         "centered": "Centered",
@@ -1348,6 +1353,10 @@
         "default_theme": {
           "label": "Default Theme",
           "description": "Default theme for the portal (light or dark)"
+        },
+        "date_format": {
+          "label": "Date Format",
+          "description": "Date and time format used across the portal"
         },
         "kiosk_default_theme": {
           "label": "Kiosk Default Theme",

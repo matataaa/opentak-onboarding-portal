@@ -4,10 +4,12 @@ import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatDateTime, useDateFormat } from '../../utils/formatDate';
 import './PendingRegistrationsList.css';
 
 function PendingRegistrationsList() {
   const { t } = useTranslation();
+  const dateFormat = useDateFormat();
   const [pendingRegistrations, setPendingRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -171,8 +173,7 @@ function PendingRegistrationsList() {
 
   const formatDate = (dateString) => {
     if (!dateString) return t('common.unknown');
-    const date = new Date(dateString);
-    return date.toLocaleString();
+    return formatDateTime(dateString, dateFormat);
   };
 
   const getTimeRemaining = (expiresAt) => {

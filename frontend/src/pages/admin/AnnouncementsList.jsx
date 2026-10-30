@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import { announcementsAPI, rolesAPI, usersAPI } from '../../services/api';
+import { formatDateTime, useDateFormat } from '../../utils/formatDate';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import '../../components/AdminTable.css';
@@ -32,6 +33,7 @@ const quillFormats = [
 
 function AnnouncementsList() {
   const { t } = useTranslation();
+  const dateFormat = useDateFormat();
   const queryClient = useQueryClient();
   const { showSuccess, showError, confirm } = useNotification();
   const { hasRole } = useAuth();
@@ -296,7 +298,7 @@ function AnnouncementsList() {
                     {a.targetType === 'users' && t('admin.announcements.nUsers', { count: a.targetUsers?.length || 0 })}
                   </td>
                   <td>{a.sendEmail ? t('common.yes') : t('common.no')}</td>
-                  <td>{a.scheduledAt ? new Date(a.scheduledAt).toLocaleString() : '-'}</td>
+                  <td>{a.scheduledAt ? formatDateTime(a.scheduledAt, dateFormat) : '-'}</td>
                   <td>{a.readCount} / {a.totalTargeted}</td>
                   <td>
                     <div className="table-actions">
@@ -522,9 +524,9 @@ function AnnouncementsList() {
                       {selectedAnnouncement.reads.map(r => (
                         <tr key={r.userId}>
                           <td>{r.username}</td>
-                          <td>{new Date(r.readAt).toLocaleString()}</td>
+                          <td>{formatDateTime(r.readAt, dateFormat)}</td>
                           {selectedAnnouncement.sendEmail && (
-                            <td>{r.emailOpened ? new Date(r.emailOpenedAt).toLocaleString() : t('common.no')}</td>
+                            <td>{r.emailOpened ? formatDateTime(r.emailOpenedAt, dateFormat) : t('common.no')}</td>
                           )}
                         </tr>
                       ))}
@@ -557,12 +559,12 @@ function AnnouncementsList() {
                 </div>
                 {selectedAnnouncement.sentAt && (
                   <div style={{ marginTop: '0.5rem' }}>
-                    <strong>{t('admin.announcements.sent')}:</strong> {new Date(selectedAnnouncement.sentAt).toLocaleString()}
+                    <strong>{t('admin.announcements.sent')}:</strong> {formatDateTime(selectedAnnouncement.sentAt, dateFormat)}
                   </div>
                 )}
                 {selectedAnnouncement.scheduledAt && selectedAnnouncement.status === 'scheduled' && (
                   <div style={{ marginTop: '0.5rem' }}>
-                    <strong>{t('admin.announcements.scheduled')}:</strong> {new Date(selectedAnnouncement.scheduledAt).toLocaleString()}
+                    <strong>{t('admin.announcements.scheduled')}:</strong> {formatDateTime(selectedAnnouncement.scheduledAt, dateFormat)}
                   </div>
                 )}
               </div>
@@ -607,7 +609,7 @@ function AnnouncementsList() {
               <p><strong>{selectedAnnouncement.title}</strong> {renderEmailBadge(selectedAnnouncement)}</p>
               <p><strong>{t('admin.announcements.emailAttempts')}:</strong> {selectedAnnouncement.emailAttempts}</p>
               {selectedAnnouncement.emailNextAttemptAt && selectedAnnouncement.emailStatus === 'pending' && (
-                <p><strong>{t('admin.announcements.emailNextAttempt')}:</strong> {new Date(selectedAnnouncement.emailNextAttemptAt).toLocaleString()}</p>
+                <p><strong>{t('admin.announcements.emailNextAttempt')}:</strong> {formatDateTime(selectedAnnouncement.emailNextAttemptAt, dateFormat)}</p>
               )}
               {selectedAnnouncement.emailLastError && (
                 <p><strong>{t('admin.announcements.emailLastError')}:</strong> {selectedAnnouncement.emailLastError}</p>

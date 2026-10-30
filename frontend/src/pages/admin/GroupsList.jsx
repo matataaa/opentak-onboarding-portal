@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { groupsAPI, usersAPI } from '../../services/api';
+import { formatDateTime, useDateFormat } from '../../utils/formatDate';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import Pagination from '../../components/Pagination';
@@ -9,6 +10,7 @@ import '../../components/AdminTable.css';
 
 function GroupsList() {
   const { t } = useTranslation();
+  const dateFormat = useDateFormat();
   const queryClient = useQueryClient();
   const { showError, confirm } = useNotification();
   const { hasRole } = useAuth();
@@ -356,7 +358,7 @@ function GroupsList() {
                   </td>
                   <td>{group.userCount || 0}</td>
                   <td>{group.onboardingCodeCount || 0}</td>
-                  <td>{group.syncedAt ? new Date(group.syncedAt).toLocaleString() : t('common.never')}</td>
+                  <td>{group.syncedAt ? formatDateTime(group.syncedAt, dateFormat) : t('common.never')}</td>
                   <td>
                     <div className="table-actions">
                       <button className="btn btn-sm btn-secondary" onClick={() => openEdit(group)}>

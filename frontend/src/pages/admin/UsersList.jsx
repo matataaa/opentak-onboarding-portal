@@ -3,12 +3,14 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { usersAPI, rolesAPI, groupsAPI } from '../../services/api';
+import { formatDate, useDateFormat } from '../../utils/formatDate';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import '../../components/AdminTable.css';
 
 function UsersList() {
   const { t } = useTranslation();
+  const dateFormat = useDateFormat();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { showError, showSuccess, confirm } = useNotification();
@@ -325,7 +327,7 @@ function UsersList() {
                         </span>
                       ))}
                     </td>
-                    <td>{user.expiryDate ? new Date(user.expiryDate).toLocaleDateString() : t('common.never')}</td>
+                    <td>{user.expiryDate ? formatDate(user.expiryDate, dateFormat) : t('common.never')}</td>
                     {canEdit && (
                       <td>
                         <div className="table-actions">

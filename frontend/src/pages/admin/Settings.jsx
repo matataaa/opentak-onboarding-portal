@@ -31,6 +31,7 @@ const SETTING_GROUP_OVERRIDES = {
   brand_name_enabled: 'branding',
   brand_name_value: 'branding',
   default_theme: 'branding',
+  date_format: 'branding',
   atak_homepage_icon_enabled: 'homepage_tiles',
   itak_homepage_icon_enabled: 'homepage_tiles',
   truststore_homepage_icon_enabled: 'homepage_tiles',
@@ -1113,6 +1114,7 @@ function Settings() {
   const { t } = useTranslation();
   const { hasRole } = useAuth();
   const canEdit = hasRole('settings_admin') || hasRole('administrator');
+  const queryClient = useQueryClient();
 
   const [settings, setSettings] = useState({});
   const [logoSettings, setLogoSettings] = useState(null);
@@ -1322,6 +1324,7 @@ function Settings() {
 
       setSuccess(t('admin.settings.settingUpdated'));
       fetchSettings();
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
 
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -1342,6 +1345,7 @@ function Settings() {
 
       setSuccess(t('admin.settings.settingUpdated'));
       fetchSettings();
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
 
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -1423,7 +1427,7 @@ function Settings() {
   const colorSettingKeys = ['primary_color', 'accent_color'];
 
   // Dropdown setting keys (rendered with <select>)
-  const dropdownSettingKeys = ['default_theme', 'kiosk_default_theme', 'login_layout', 'login_overlay_strength'];
+  const dropdownSettingKeys = ['default_theme', 'kiosk_default_theme', 'date_format', 'login_layout', 'login_overlay_strength'];
   const dropdownOptions = {
     default_theme: [
       { value: 'light', label: t('admin.settings.light') },
@@ -1433,6 +1437,9 @@ function Settings() {
       { value: 'light', label: t('admin.settings.light') },
       { value: 'dark', label: t('admin.settings.dark') },
     ],
+    date_format: ['eu', 'us', 'iso'].map(value => (
+      { value, label: t(`admin.settings.dateFormatOption.${value}`) }
+    )),
     login_layout: ['classic', 'centered', 'split'].map(value => (
       { value, label: t(`admin.settings.loginLayoutOption.${value}`) }
     )),
