@@ -350,6 +350,9 @@ def update_announcement(announcement_id):
 
     data = request.get_json()
 
+    if data.get('targetType') and data['targetType'] not in ['all', 'roles', 'users']:
+        return jsonify({'error': 'Invalid target type'}), 400
+
     try:
         if data.get('title'):
             announcement.title = data['title']
