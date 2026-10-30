@@ -21,6 +21,15 @@ info:
     before this claim existed are no longer accepted (401/403): the leader joins again
     through the leader link.
 
+    Personal leaders are portal users designated as leader of a team for one event
+    (by an admin via `/events/{id}/team-leaders`, or by scanning the team's leader link
+    while logged in). They keep their normal session and rights and may call the
+    `/events/my-team*` endpoints with it while the designation is valid (events enabled,
+    event active and open, the team has a link in the event and, for designations made
+    by scanning, the leader link has not been regenerated or deleted since; the user is
+    not expired and is not a team's shared leader account). With more
+    than one valid designation they pass the query parameters `eventId` and `teamId`.
+
     ## Switchable modules
     The Meshtastic, radios and events modules can be turned off with the settings
     `meshtastic_enabled`, `radios_enabled` (both default on) and `events_enabled`
@@ -79,6 +88,26 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: JWT access token obtained from /auth/login
+
+  parameters:
+    LeaderEventId:
+      name: eventId
+      in: query
+      required: false
+      description: >
+        Personal leaders only (ignored for shared leader sessions): the event of the team
+        to act for; needed when the user has more than one valid designation
+      schema:
+        type: integer
+    LeaderTeamId:
+      name: teamId
+      in: query
+      required: false
+      description: >
+        Personal leaders only (ignored for shared leader sessions): the team to act for
+        (on the move endpoint this query parameter is the own team, the body teamId the target)
+      schema:
+        type: integer
 
   schemas:
     Error:
@@ -471,10 +500,20 @@ components:
 
     EventLeaderSession:
       type: object
-      description: One person who joined through a leader link (shared leader account)
+      description: >
+        One person who joined through a leader link (shared leader account), or a
+        personal leader (own portal account)
       properties:
         id:
           type: integer
+        kind:
+          type: string
+          enum: [link, account]
+          description: link = shared leader account; account = personal leader (userId set)
+        username:
+          type: string
+          nullable: true
+          description: The personal leader's portal username (null for kind link)
         eventId:
           type: integer
         eventTeamId:
@@ -515,8 +554,63 @@ components:
           description: >
             revoked = revokedAt is set; ended = the session no longer works for another
             reason (event inactive/not open, leader link gone, or the team has no leader
-            account any more; a leader account swapped for another one is not detected);
+            account any more; a leader account swapped for another one is not detected;
+            for kind account: the designation is removed or no longer valid);
             else active
+
+    EventTeamLeader:
+      type: object
+      description: A portal user designated as leader of a team for one event (personal leader)
+      properties:
+        id:
+          type: integer
+        eventId:
+          type: integer
+        eventTeamId:
+          type: integer
+        team:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+        userId:
+          type: integer
+        user:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            username:
+              type: string
+            callsign:
+              type: string
+              nullable: true
+        source:
+          type: string
+          enum: [admin, link]
+          description: >
+            admin = designated by an admin; link = the user scanned the team's leader link
+            while logged in (ends when that link is regenerated or deleted)
+        eventLinkId:
+          type: integer
+          nullable: true
+          description: The leader link a source link designation is bound to
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [active, ended]
+          description: >
+            active while the designation gives access to the team page (ended also when
+            the user has expired or became a team's shared leader account)
 
     Event:
       type: object
@@ -661,6 +755,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+        '401':
+          description: Not authenticated
+
+  /auth/permissions:
+    get:
+      tags:
+        - Authentication
+      summary: Get the current user's roles, accessible admin modules and leader teams
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Permissions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  roles:
+                    type: array
+                    items:
+                      type: string
+                  modules:
+                    type: array
+                    items:
+                      type: string
+                  isAdmin:
+                    type: boolean
+                  leaderDesignations:
+                    type: array
+                    description: >
+                      The valid personal leader designations of the user (empty for shared
+                      leader and kiosk sessions)
+                    items:
+                      type: object
+                      properties:
+                        eventId: {type: integer}
+                        eventName: {type: string}
+                        teamId: {type: integer}
+                        teamName: {type: string}
+                        hq:
+                          type: boolean
+                          description: The team is the event's organizer (HQ) team
         '401':
           description: Not authenticated
 
@@ -903,6 +1040,13 @@ paths:
         password. Leader links need `displayName` (who is joining, 1-80 characters after
         trimming); every leader join creates its own leader session (see
         `/events/{id}/leader-sessions`), carried in the token claim `event_leader_session`.
+        A leader link sent with the access token of a normal user session (not a shared
+        leader session, not a kiosk session, not a team's shared leader account) instead
+        makes that user a personal leader of the team (see `/events/{id}/team-leaders`,
+        source `link`, bound to the link's current version) and returns
+        mode `leader-account` with a redirect; no tokens are issued and no displayName is
+        needed. An invalid or expired token is 401; an expired user account or an
+        impersonation session is 403. Counts towards the leader join throttle.
       parameters:
         - name: token
           in: path
@@ -925,16 +1069,23 @@ paths:
           description: >
             Shared player - role, mode, team, event, expiresAt, atak ({qrString, expiresAt})
             and itak (best effort, may be null). Leader - role, access_token, refresh_token,
-            expiresAt, team, event, user and leaderName
+            expiresAt, team, event, user and leaderName. Leader link with a normal user
+            session - role, mode `leader-account`, redirect (`/events/my-team?eventId=..&teamId=..`),
+            team and event
         '400':
           description: >
             Leader link without a valid displayName (missing, empty, longer than 80
             characters or with control characters): code `display_name_required`, no
             session is created
         '403':
-          description: Events disabled, event inactive, not started or ended
+          description: >
+            Events disabled, event inactive, not started or ended; or, for a leader link
+            sent with a normal user session, the user account has expired or the session
+            is an impersonation
         '404':
           description: Invalid or revoked link
+        '401':
+          description: An Authorization header with an invalid or expired token
         '409':
           description: >
             Misconfigured link (no leader account, no registration code, shared event
@@ -1347,14 +1498,163 @@ paths:
         '502':
           description: Some accounts could not be closed and are still open
 
+  /events/{id}/team-leaders:
+    get:
+      tags:
+        - Events
+      summary: List the personal leaders of an event (events_admin or events_readonly) 🔒
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Designations, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  teamLeaders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EventTeamLeader'
+        '404':
+          description: Event not found
+    post:
+      tags:
+        - Events
+      summary: Designate a portal user as leader of a team for this event (events_admin only) 🔒
+      description: >
+        The user keeps their normal login and rights and gets the team's leader page
+        (`/events/my-team*`) while the event is open. Also creates the user's leader
+        session row (kind account) that the devices they enrol record.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [teamId, userId]
+              properties:
+                teamId:
+                  type: integer
+                userId:
+                  type: integer
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventTeamLeader'
+        '400':
+          description: >
+            teamId/userId missing or not integers, the team has no link in this event,
+            unknown or expired user, or the user is the shared leader account of a team
+        '404':
+          description: Event not found
+        '409':
+          description: The user is already a leader of this team in this event
+
+  /events/{id}/team-leader-candidates:
+    get:
+      tags:
+        - Events
+      summary: Search users that can be designated as team leader (events_admin only) 🔒
+      description: >
+        Matches username or callsign, at most 20 results, ordered by username. Leaves
+        out expired users, shared leader accounts of any team and, with teamId, users
+        already designated for that team in this event. Returns only id, username and
+        callsign.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: search
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+        - name: teamId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Candidates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: {type: integer}
+                        username: {type: string}
+                        callsign: {type: string, nullable: true}
+        '400':
+          description: search shorter than 2 characters
+        '404':
+          description: Event not found
+
+  /events/{id}/team-leaders/{designationId}:
+    delete:
+      tags:
+        - Events
+      summary: Remove a personal leader (events_admin only) 🔒
+      description: >
+        Ends the user's access to the team page at once and marks their leader session
+        row revoked. The devices they enrolled stay open.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: designationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Removed
+        '404':
+          description: Not found in this event
+
   /events/{id}/leader-sessions:
     get:
       tags:
         - Events
       summary: List the leader sessions of an event (events_admin or events_readonly) 🔒
       description: >
-        Everyone who joined through a leader link of this event, oldest first, including
-        revoked sessions. Not available to leader sessions (403).
+        Everyone who joined through a leader link of this event, and the personal leaders
+        (kind account), oldest first, including revoked sessions. Not available to leader
+        sessions (403).
       security:
         - bearerAuth: []
       parameters:
@@ -1388,7 +1688,7 @@ paths:
         `/auth/permissions`, 403 on `/events/my-team*`) without regenerating the link, so
         the other leaders of the team keep working. The device accounts the leader created
         stay open; close them separately. Regenerating the leader link still ends all of
-        its sessions.
+        its sessions. For a personal leader (kind account) the designation is removed.
       security:
         - bearerAuth: []
       parameters:
@@ -1418,10 +1718,13 @@ paths:
     get:
       tags:
         - Events
-      summary: Own-team view for an event leader session 🔒
+      summary: Own-team view for an event leader session or a personal leader 🔒
       description: >
-        Only for a bounded leader session (JWT issued by joining a leader link).
-        Event and team are taken from the token, never from the request. Returns 403
+        For a bounded leader session (JWT issued by joining a leader link) event and
+        team are taken from the token, never from the request. For a normal user
+        session it needs a valid personal leader designation (see `/events/{id}/team-leaders`);
+        eventId/teamId pick one (400 code `leader_team_required` when several match,
+        403 when none). The same applies to every `/events/my-team*` endpoint. Returns 403
         for any other token, when events are disabled, when the event is not open, when
         the user is no longer the team's leader, or when the leader link the session
         came from was regenerated or deleted, or the leader session was revoked (or the
@@ -1430,6 +1733,9 @@ paths:
         `reason`: `missing` or `notRetrievable`.
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LeaderEventId'
+        - $ref: '#/components/parameters/LeaderTeamId'
       responses:
         '200':
           description: Own-team data
@@ -1480,9 +1786,11 @@ paths:
                     type: boolean
                   leaderName:
                     type: string
-                    description: displayName of the current leader session
+                    description: displayName of the current leader session (a personal leader's callsign or username)
+        '400':
+          description: Personal leader with several valid designations and no unique eventId/teamId
         '403':
-          description: Not a valid leader session for an open event
+          description: Not a valid leader session or personal leader for an open event
 
   /events/my-team/enrollment:
     post:
@@ -1497,11 +1805,16 @@ paths:
         (separate from the player link throttle); both return 429. The response
         never contains a password (the qrString is a bearer enrollment token).
         With forLeader true the device is the leader's own (session role `leader`):
-        it joins through the team's leader link and takes that link's direction;
-        otherwise it is a player device of the team's player link. Either way the
+        it joins through the team's leader link and takes that link's direction (a
+        personal leader whose team has no leader link in the event joins through the
+        player link and always gets BOTH); otherwise it is a player device of the team's
+        player link. Either way the
         device records the leader session that created it (leaderName in the account lists).
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LeaderEventId'
+        - $ref: '#/components/parameters/LeaderTeamId'
       requestBody:
         required: false
         content:
@@ -1556,6 +1869,9 @@ paths:
         (never the organizer (HQ) team).
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LeaderEventId'
+        - $ref: '#/components/parameters/LeaderTeamId'
       responses:
         '200':
           description: Accounts of the event
@@ -1634,6 +1950,8 @@ paths:
           required: true
           schema:
             type: integer
+        - $ref: '#/components/parameters/LeaderEventId'
+        - $ref: '#/components/parameters/LeaderTeamId'
       requestBody:
         required: true
         content:

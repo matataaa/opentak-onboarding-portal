@@ -16,14 +16,15 @@ import secrets
 import threading
 from collections import deque
 
-from flask import request, jsonify, current_app
+from flask import request, jsonify, current_app, g
 from flask_jwt_extended import (jwt_required, create_access_token, create_refresh_token,
-                                get_jwt, get_jwt_identity)
+                                get_jwt, get_jwt_identity, verify_jwt_in_request)
 from datetime import datetime, timedelta
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 
 from app.api_v1 import api_v1
-from app.models import db, EventTeamModel, EventModel, EventLinkModel, EventSessionModel, EventLeaderSessionModel, OTSGroupModel, UserModel, OnboardingCodeModel, SystemSettingsModel
+from app.models import db, EventTeamModel, EventModel, EventLinkModel, EventSessionModel, EventLeaderSessionModel, EventTeamLeaderModel, OTSGroupModel, UserModel, OnboardingCodeModel, SystemSettingsModel
 from app.ots import otsClient
 from app.exceptions import BadRequestError
 from app.rbac import require_role
@@ -330,6 +331,7 @@ def delete_event_team(team_id):
     # FKs do not cascade: remove children explicitly, in one transaction.
     _delete_closed_sessions(eventTeamId=team_id)
     _detach_sessions_from_links(EventLinkModel.eventTeamId == team_id)
+    EventTeamLeaderModel.query.filter_by(eventTeamId=team_id).delete(synchronize_session=False)
     EventLeaderSessionModel.query.filter_by(eventTeamId=team_id).delete(synchronize_session=False)
     EventLinkModel.query.filter_by(eventTeamId=team_id).delete(synchronize_session=False)
     db.session.delete(team)
@@ -532,6 +534,7 @@ def delete_event(event_id):
     # FKs do not cascade: remove children explicitly, in one transaction.
     _delete_closed_sessions(eventId=event_id)
     _detach_sessions_from_links(EventLinkModel.eventId == event_id)
+    EventTeamLeaderModel.query.filter_by(eventId=event_id).delete(synchronize_session=False)
     EventLeaderSessionModel.query.filter_by(eventId=event_id).delete(synchronize_session=False)
     EventLinkModel.query.filter_by(eventId=event_id).delete(synchronize_session=False)
     db.session.delete(event)
@@ -718,6 +721,11 @@ def _leader_session_status(row, event, link):
     """
     if row.revokedAt is not None:
         return 'revoked'
+    if row.userId is not None:
+        # A personal leader (own account): active while its designation gives access
+        designation = EventTeamLeaderModel.query.filter_by(
+            eventId=row.eventId, eventTeamId=row.eventTeamId, userId=row.userId).first()
+        return 'active' if designation and _designation_valid(designation, event) else 'ended'
     team = row.team
     if (not event or _event_window_error(event) or not link or link.role != 'leader'
             or link.eventId != row.eventId or link.eventTeamId != row.eventTeamId
@@ -727,8 +735,12 @@ def _leader_session_status(row, event, link):
 
 
 def _leader_session_to_dict(row, device_count=0, status=None):
+    user = UserModel.get_user_by_id(row.userId) if row.userId is not None else None
     return {
         'id': row.id,
+        # 'link': someone on the shared leader account; 'account': a personal leader
+        'kind': 'link' if row.userId is None else 'account',
+        'username': user.username if user else None,
         'eventId': row.eventId,
         'eventTeamId': row.eventTeamId,
         'team': {'id': row.team.id, 'name': row.team.name} if row.team else None,
@@ -772,6 +784,9 @@ def revoke_event_leader_session(event_id, session_id):
         return jsonify({'error': 'Leader session not found'}), 404
     if row.revokedAt is not None:
         return jsonify({'error': 'Leader session is already revoked'}), 409
+    if row.userId is not None:
+        # A personal leader: revoking removes the designation itself
+        _end_designation(row.eventId, row.eventTeamId, row.userId)
     row.revokedAt = datetime.now()
     row.revokedBy = _actor_id()
     db.session.commit()
@@ -779,6 +794,239 @@ def revoke_event_leader_session(event_id, session_id):
                             get_jwt_identity(), event_id, _leader_log(row))
     count = EventSessionModel.query.filter_by(leaderSessionId=row.id, closedAt=None).count()
     return jsonify(_leader_session_to_dict(row, count)), 200
+
+
+# ----------------------------------------------------------------------------
+# Personal leaders: portal users designated as leader of a team for an event
+# ----------------------------------------------------------------------------
+def _event_has_team(event_id, team_id):
+    """True if the team takes part in the event (has a link in it)."""
+    return db.session.query(EventLinkModel.id).filter_by(eventId=event_id, eventTeamId=team_id).first() is not None
+
+
+def _designation_valid(designation, event=None):
+    """True while a personal leader designation gives access to the team's leader page.
+
+    The single rule for personal leaders: events enabled, the event active and
+    open, the team taking part in it (a link in the event) and, for source
+    'link', the leader link it was bound through still a leader link of that
+    event and team with the same version and nonce, so regenerating or deleting
+    the link ends it. The user must exist, not be expired and not be a shared
+    leader (anchor) account.
+    """
+    if not SystemSettingsModel.get_setting('events_enabled', False):
+        return False
+    user = UserModel.get_user_by_id(designation.userId)
+    if not user or _user_expired(user) or _is_anchor_account(user.id):
+        return False
+    if event is None or event.id != designation.eventId:
+        event = EventModel.query.get(designation.eventId)
+    if not event or _event_window_error(event) or not _event_has_team(designation.eventId, designation.eventTeamId):
+        return False
+    if designation.source == 'admin':
+        return True
+    if designation.source != 'link' or designation.eventLinkId is None:
+        return False
+    link = EventLinkModel.query.get(designation.eventLinkId)
+    return bool(link and link.role == 'leader' and link.eventId == designation.eventId
+                and link.eventTeamId == designation.eventTeamId
+                and link.tokenVersion == designation.linkVersion
+                and link.tokenNonce and designation.linkNonce
+                and hmac.compare_digest(link.tokenNonce.encode(), designation.linkNonce.encode()))
+
+
+def _user_expired(user):
+    return user.expiryDate is not None and user.expiryDate < datetime.now()
+
+
+def _impersonator_log():
+    """' impersonatedBy=<admin>' when the current token is an impersonation, else ''."""
+    try:
+        claims = get_jwt()
+    except Exception:
+        return ''
+    if not claims.get('impersonated_by'):
+        return ''
+    return ' impersonatedBy=%s' % (claims.get('impersonated_by_username') or claims['impersonated_by'])
+
+
+def _is_anchor_account(user_id):
+    """True if the user is the shared leader account of any team."""
+    return EventTeamModel.query.filter_by(leaderUserId=user_id).first() is not None
+
+
+def _ensure_account_leader_session(designation):
+    """The open ledger row of a personal leader designation; created if missing (caller commits).
+
+    Its id is stored on the devices the leader creates. displayName is the
+    user's callsign, else the username.
+    """
+    row = EventLeaderSessionModel.query.filter_by(
+        eventId=designation.eventId, eventTeamId=designation.eventTeamId, userId=designation.userId,
+        revokedAt=None).order_by(EventLeaderSessionModel.id.desc()).first()
+    if row is None:
+        user = UserModel.get_user_by_id(designation.userId)
+        name = ((user.callsign or user.username) if user else None) or 'user %d' % designation.userId
+        row = EventLeaderSessionModel(
+            eventId=designation.eventId, eventTeamId=designation.eventTeamId, userId=designation.userId,
+            eventLinkId=designation.eventLinkId if designation.source == 'link' else None,
+            displayName=name[:LEADER_NAME_MAX])
+        db.session.add(row)
+    return row
+
+
+def _end_designation(event_id, team_id, user_id, revoked_by=None):
+    """Remove a personal leader designation and revoke its open ledger rows (caller commits)."""
+    EventTeamLeaderModel.query.filter_by(eventId=event_id, eventTeamId=team_id, userId=user_id).delete(
+        synchronize_session=False)
+    EventLeaderSessionModel.query.filter_by(
+        eventId=event_id, eventTeamId=team_id, userId=user_id, revokedAt=None).update(
+        {'revokedAt': datetime.now(), 'revokedBy': revoked_by if revoked_by is not None else _actor_id()},
+        synchronize_session=False)
+
+
+def remove_user_leader_designations(user_id, revoked_by=None):
+    """Before a user is deleted: drop their designations, revoke their ledger rows (caller commits).
+
+    The ledger rows themselves stay (no FK on userId) as the audit trail.
+    """
+    EventTeamLeaderModel.query.filter_by(userId=user_id).delete(synchronize_session=False)
+    EventLeaderSessionModel.query.filter_by(userId=user_id, revokedAt=None).update(
+        {'revokedAt': datetime.now(), 'revokedBy': revoked_by}, synchronize_session=False)
+
+
+def leader_designations_for(identity):
+    """The valid personal leader designations of a user, for /auth/permissions."""
+    try:
+        user_id = int(identity)
+    except (TypeError, ValueError):
+        return []
+    if not SystemSettingsModel.get_setting('events_enabled', False):
+        return []
+    result = []
+    for d in EventTeamLeaderModel.query.filter_by(userId=user_id).order_by(EventTeamLeaderModel.id).all():
+        if _designation_valid(d):
+            result.append({
+                'eventId': d.eventId, 'eventName': d.event.name if d.event else None,
+                'teamId': d.eventTeamId, 'teamName': d.team.name if d.team else None,
+                'hq': bool(d.event and d.event.organizerTeamId == d.eventTeamId),
+            })
+    return result
+
+
+def _designation_to_dict(designation, event=None):
+    user = designation.user
+    return {
+        'id': designation.id,
+        'eventId': designation.eventId,
+        'eventTeamId': designation.eventTeamId,
+        'team': {'id': designation.team.id, 'name': designation.team.name} if designation.team else None,
+        'userId': designation.userId,
+        'user': {'id': user.id, 'username': user.username, 'callsign': user.callsign} if user else None,
+        'source': designation.source,
+        'eventLinkId': designation.eventLinkId,
+        'createdAt': designation.createdAt.isoformat() if designation.createdAt else None,
+        'createdBy': designation.createdBy,
+        'status': 'active' if _designation_valid(designation, event) else 'ended',
+    }
+
+
+@api_v1.route('/events/<int:event_id>/team-leaders', methods=['GET'])
+@jwt_required()
+@require_role('events_admin', 'events_readonly')
+def list_event_team_leaders(event_id):
+    event = EventModel.query.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    rows = EventTeamLeaderModel.query.filter_by(eventId=event_id).order_by(EventTeamLeaderModel.id).all()
+    return jsonify({'teamLeaders': [_designation_to_dict(d, event) for d in rows]}), 200
+
+
+TEAM_LEADER_CANDIDATES_MAX = 20
+
+
+@api_v1.route('/events/<int:event_id>/team-leader-candidates', methods=['GET'])
+@jwt_required()
+@require_role('events_admin')
+def list_event_team_leader_candidates(event_id):
+    """Users that can be designated as team leader (search on username/callsign, at most 20).
+
+    Leaves out expired users, shared leader (anchor) accounts and, with teamId,
+    users already designated for that team in this event.
+    """
+    if not EventModel.query.get(event_id):
+        return jsonify({'error': 'Event not found'}), 404
+    search = (request.args.get('search') or '').strip()
+    if len(search) < 2:
+        return jsonify({'error': 'search must be at least 2 characters'}), 400
+    team_id = request.args.get('teamId', type=int)
+    pattern = '%%%s%%' % search
+    query = UserModel.query.filter(
+        or_(UserModel.username.ilike(pattern), UserModel.callsign.ilike(pattern)),
+        or_(UserModel.expiryDate.is_(None), UserModel.expiryDate >= datetime.now()),
+        ~UserModel.id.in_(db.session.query(EventTeamModel.leaderUserId).filter(
+            EventTeamModel.leaderUserId.isnot(None))),
+    )
+    if team_id is not None:
+        query = query.filter(~UserModel.id.in_(db.session.query(EventTeamLeaderModel.userId).filter_by(
+            eventId=event_id, eventTeamId=team_id)))
+    users = query.order_by(UserModel.username).limit(TEAM_LEADER_CANDIDATES_MAX).all()
+    return jsonify({'users': [{'id': u.id, 'username': u.username, 'callsign': u.callsign} for u in users]}), 200
+
+
+@api_v1.route('/events/<int:event_id>/team-leaders', methods=['POST'])
+@jwt_required()
+@require_role('events_admin')
+def create_event_team_leader_designation(event_id):
+    """Designate an existing portal user as leader of a team for this event."""
+    event = EventModel.query.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    data = request.get_json(silent=True) or {}
+    team_id, user_id = data.get('teamId'), data.get('userId')
+    if any(isinstance(v, bool) or not isinstance(v, int) for v in (team_id, user_id)):
+        return jsonify({'error': 'teamId and userId are required (integers)'}), 400
+    if not EventTeamModel.query.get(team_id) or not _event_has_team(event_id, team_id):
+        return jsonify({'error': 'teamId must be a team with a link in this event'}), 400
+    user = UserModel.get_user_by_id(user_id)
+    if not user:
+        return jsonify({'error': 'Unknown userId'}), 400
+    if _user_expired(user):
+        return jsonify({'error': 'This user account has expired'}), 400
+    if _is_anchor_account(user.id):
+        return jsonify({'error': 'This is the shared leader account of a team; choose a personal account'}), 400
+    if EventTeamLeaderModel.query.filter_by(eventId=event_id, eventTeamId=team_id, userId=user_id).first():
+        return jsonify({'error': 'This user is already a leader of this team in this event'}), 409
+
+    designation = EventTeamLeaderModel(eventId=event_id, eventTeamId=team_id, userId=user_id,
+                                       source='admin', createdBy=_actor_id())
+    try:
+        db.session.add(designation)
+        db.session.flush()
+        _ensure_account_leader_session(designation)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': 'This user is already a leader of this team in this event'}), 409
+    current_app.logger.info('Event team leader designated: actor=%s event=%s team=%s user=%s',
+                            get_jwt_identity(), event_id, team_id, user.username)
+    return jsonify(_designation_to_dict(designation, event)), 201
+
+
+@api_v1.route('/events/<int:event_id>/team-leaders/<int:designation_id>', methods=['DELETE'])
+@jwt_required()
+@require_role('events_admin')
+def delete_event_team_leader_designation(event_id, designation_id):
+    """Remove a personal leader: their access to the team page ends at once."""
+    designation = EventTeamLeaderModel.query.filter_by(id=designation_id, eventId=event_id).first()
+    if not designation:
+        return jsonify({'error': 'Team leader not found'}), 404
+    team_id, user_id = designation.eventTeamId, designation.userId
+    _end_designation(event_id, team_id, user_id)
+    db.session.commit()
+    current_app.logger.info('Event team leader removed: actor=%s event=%s team=%s user=%s',
+                            get_jwt_identity(), event_id, team_id, user_id)
+    return jsonify({'message': 'Team leader removed'}), 200
 
 
 # ----------------------------------------------------------------------------
@@ -813,6 +1061,9 @@ def join_event(token):
         return window_error
 
     if link.role == 'leader':
+        user = _joining_account()
+        if user is not None:
+            return _bind_leader_account(event, team, link, user)
         return _join_as_leader(event, team, link)
 
     if link.role == 'player':
@@ -1110,6 +1361,71 @@ def _join_as_player_shared(event, team, link):
     return response, 200
 
 
+def _joining_account():
+    """The portal user of the normal session sending this join, else None (anonymous).
+
+    Not a normal user: no token, a shared leader session (leader claim), a kiosk
+    session, or a shared leader (anchor) account itself; those take the anonymous
+    flow. An invalid or expired token is answered with 401 (raised here), so the
+    SPA refreshes and retries instead of trading its normal session for a shared one.
+    """
+    verify_jwt_in_request(optional=True)
+    claims = get_jwt()
+    if not claims or claims.get('event_leader_team') is not None or claims.get('kiosk_session'):
+        return None
+    try:
+        user = UserModel.get_user_by_id(int(get_jwt_identity()))
+    except (TypeError, ValueError):
+        return None
+    if not user or _is_anchor_account(user.id):
+        return None
+    return user
+
+
+def _bind_leader_account(event, team, link, user):
+    """A logged-in user scanned a leader link: make them a personal leader of the team.
+
+    No tokens are issued; their own session stays. The designation (source
+    'link') is bound to the link's current version and nonce; an existing admin
+    designation is kept as it is.
+    """
+    if _user_expired(user):
+        return jsonify({'error': 'Your account has expired; ask an organiser to renew it'}), 403
+    if get_jwt().get('impersonated_by'):
+        return jsonify({'error': 'Not while impersonating a user; designate team leaders in the admin team leaders screen instead'}), 403
+    if _throttle_hit(('leader-join', link.id), LEADER_JOIN_THROTTLE_MAX):
+        current_app.logger.warning('Leader join throttle hit for link %s', link.id)
+        return jsonify({'error': 'Too many leader joins on this link, try again in a minute'}), 429
+    if not link.tokenNonce:
+        # Legacy link, as in _join_as_leader: give it a nonce to bind to
+        link.tokenNonce = secrets.token_urlsafe(16)
+    designation = EventTeamLeaderModel.query.filter_by(
+        eventId=event.id, eventTeamId=team.id, userId=user.id).first()
+    if designation is None:
+        designation = EventTeamLeaderModel(eventId=event.id, eventTeamId=team.id, userId=user.id,
+                                           source='link', createdBy=user.id)
+        db.session.add(designation)
+    if designation.source == 'link':
+        designation.eventLinkId = link.id
+        designation.linkVersion = link.tokenVersion
+        designation.linkNonce = link.tokenNonce
+    try:
+        _ensure_account_leader_session(designation)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': 'Could not register you as team leader, try again'}), 409
+    current_app.logger.info('Event leader account bound: team %s event %s user=%s source=%s%s',
+                            team.id, event.id, user.username, designation.source, _impersonator_log())
+    return jsonify({
+        'role': 'leader',
+        'mode': 'leader-account',
+        'redirect': '/events/my-team?eventId=%d&teamId=%d' % (event.id, team.id),
+        'team': {'id': team.id, 'name': team.name, 'color': team.color},
+        'event': {'id': event.id, 'name': event.name},
+    }), 200
+
+
 def _join_as_leader(event, team, link):
     leader = team.leaderUser if team else None
     if not leader:
@@ -1236,26 +1552,81 @@ def leader_session_error(claims, identity):
 
 
 def _leader_scope():
-    """Resolve (event, team, None) for a leader session, else (None, None, error).
+    """Resolve (event, team, None) for a leader, else (None, None, error).
 
-    Event and team come only from the JWT claims set at join time; validity is
-    decided by `leader_session_error`.
+    Two kinds of leader, with the same rules from here on:
+    - a shared leader session (token with the leader claims): event and team come
+      only from the claims set at join time; validity is decided by
+      `leader_session_error`;
+    - a normal user session of a personal leader: a valid designation
+      (`_designation_valid`); the query parameters eventId and teamId pick one
+      when the user has several (400 when ambiguous, 403 when none matches).
+    Both leave the leader session ledger row (g.leader_session) and the link the
+    leader's own devices join through (g.leader_device_link_id) for the endpoint.
     """
     claims = get_jwt()
+    if claims.get('event_leader_team') is None:
+        return _personal_leader_scope(claims)
     problem = leader_session_error(claims, get_jwt_identity())
     if problem:
         return None, None, (jsonify({'error': problem[0]}), problem[1])
+    g.leader_session = EventLeaderSessionModel.query.get(claims['event_leader_session'])
+    g.leader_device_link_id = claims['event_leader_link']
     return (EventModel.query.get(claims['event_leader_event']),
             EventTeamModel.query.get(claims['event_leader_team']), None)
 
 
+def _personal_leader_scope(claims):
+    """_leader_scope for a normal user session (no leader claims): only via a valid designation."""
+    forbidden = (jsonify({'error': 'You are not a leader of a team in an open event'}), 403)
+    if claims.get('kiosk_session'):
+        return None, None, forbidden
+    try:
+        user_id = int(get_jwt_identity())
+    except (TypeError, ValueError):
+        return None, None, forbidden
+    wanted = {}
+    for key in ('eventId', 'teamId'):
+        raw = request.args.get(key)
+        if raw in (None, ''):
+            continue
+        try:
+            wanted[key] = int(raw)
+        except ValueError:
+            return None, None, (jsonify({'error': '%s must be an integer' % key}), 400)
+    matches = [d for d in EventTeamLeaderModel.query.filter_by(userId=user_id).order_by(EventTeamLeaderModel.id).all()
+               if wanted.get('eventId', d.eventId) == d.eventId and wanted.get('teamId', d.eventTeamId) == d.eventTeamId
+               and _designation_valid(d)]
+    if not matches:
+        return None, None, forbidden
+    if len(matches) > 1:
+        return None, None, (jsonify({'error': 'You lead several teams; pass eventId and teamId',
+                                     'code': 'leader_team_required'}), 400)
+    designation = matches[0]
+    g.leader_session = _ensure_account_leader_session(designation)
+    db.session.commit()
+    g.leader_device_link_id = _leader_device_link_id(designation)
+    return designation.event, designation.team, None
+
+
+def _leader_device_link_id(designation):
+    """The link a personal leader's own devices join through: the team's leader link in
+    the event, else its player link (see _session_direction for the direction)."""
+    for role in ('leader', 'player'):
+        link = EventLinkModel.query.filter_by(
+            eventId=designation.eventId, eventTeamId=designation.eventTeamId, role=role).first()
+        if link:
+            return link.id
+    return None
+
+
 def _current_leader_session():
-    """The ledger row of the current leader token (only after _leader_scope passed)."""
-    return EventLeaderSessionModel.query.get(get_jwt()['event_leader_session'])
+    """The ledger row of the current leader (only after _leader_scope passed)."""
+    return g.leader_session
 
 
 def _leader_log(leader_session):
-    return ' leaderSession=%s name=%s' % (leader_session.id, leader_session.displayName)
+    return ' leaderSession=%s name=%s%s' % (leader_session.id, leader_session.displayName, _impersonator_log())
 
 
 @api_v1.route('/events/my-team', methods=['GET'])
@@ -1309,7 +1680,7 @@ def create_my_team_enrollment():
     data = request.get_json(silent=True) or {}
     if data.get('forLeader') is True:
         # The leader's own device: joins through (and takes the direction of) the leader link
-        link = EventLinkModel.query.get(get_jwt()['event_leader_link'])
+        link = EventLinkModel.query.get(g.leader_device_link_id) if g.leader_device_link_id else None
         role = 'leader'
     else:
         link = EventLinkModel.query.filter_by(
@@ -1381,10 +1752,15 @@ def _parked_memberships(event_id):
 
 def _session_direction(session):
     """The desired direction of a device session: that of the link it joined through
-    (a leader's own device joins through the team's leader link); without a link
-    the granted direction (BOTH for legacy sessions)."""
+    (a leader's own device joins through the team's leader link; BOTH when it had to
+    join through the player link); without a link the granted direction (BOTH for
+    legacy sessions)."""
     link = EventLinkModel.query.get(session.eventLinkId) if session.eventLinkId else None
     if link and link.direction in LINK_DIRECTIONS:
+        if session.role == 'leader' and link.role != 'leader':
+            # A personal leader's own device joins through the player link when the
+            # team has no leader link in the event: never the player direction
+            return 'BOTH'
         return link.direction
     # Link deleted: keep what the device was granted
     return session.direction if session.direction in LINK_DIRECTIONS else 'BOTH'

@@ -45,7 +45,7 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 # SEEDS below) must be revisited on purpose.
 UPSTREAM_REV = '4b754g491aa1'
 
-HEAD_REV = 'e9f0a1b2c3d5'
+HEAD_REV = 'f0a1b2c3d4e6'
 
 # a5b6c7d8e9f1 adds the primary keys to the OTS group association tables and
 # merges duplicate (group, user) / (group, code) rows into one row first.
@@ -97,6 +97,8 @@ NEW_EMPTY_TABLES = {
                        'leaderSessionId'},
     'event_leader_sessions': {'id', 'eventId', 'eventTeamId', 'eventLinkId', 'userId', 'displayName',
                               'createdAt', 'revokedAt', 'revokedBy'},
+    'event_team_leaders': {'id', 'eventId', 'eventTeamId', 'userId', 'source', 'eventLinkId', 'linkVersion',
+                           'linkNonce', 'createdAt', 'createdBy'},
 }
 
 NOW = datetime(2026, 1, 15, 12, 0, 0)
@@ -655,6 +657,11 @@ def test_new_and_dropped_schema(up):
     fks = {tuple(f['constrained_columns']): f['referred_table']
            for f in insp.get_foreign_keys('event_leader_sessions')}
     assert fks == {('eventId',): 'events', ('eventTeamId',): 'event_teams'}
+    fks = {tuple(f['constrained_columns']): f['referred_table']
+           for f in insp.get_foreign_keys('event_team_leaders')}
+    assert fks == {('eventId',): 'events', ('eventTeamId',): 'event_teams', ('userId',): 'users'}
+    uniques = {tuple(u['column_names']) for u in insp.get_unique_constraints('event_team_leaders')}
+    assert ('eventId', 'eventTeamId', 'userId') in uniques
     fks = {tuple(f['constrained_columns']): f for f in insp.get_foreign_keys('events')}
     assert fks[('organizerTeamId',)]['referred_table'] == 'event_teams'
     assert fks[('organizerTeamId',)]['name'] == 'fk_events_organizerTeamId_event_teams'

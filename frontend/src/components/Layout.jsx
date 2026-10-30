@@ -11,7 +11,7 @@ import './Layout.css';
 
 function Layout() {
   const { t } = useTranslation();
-  const { user, logout, hasAnyAdminRole, hasModuleAccess, permissions, approverStatus, impersonating, stopImpersonation, isLeaderSession } = useAuth();
+  const { user, logout, hasAnyAdminRole, hasModuleAccess, permissions, approverStatus, impersonating, stopImpersonation, isLeaderSession, leaderDesignations } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -106,7 +106,7 @@ function Layout() {
             {t('layout.homepage')}
           </Link>
 
-          {permissions.roles.includes('event_leader') && (
+          {(permissions.roles.includes('event_leader') || leaderDesignations.length > 0) && (
             <Link to="/events/my-team" className="nav-link">
               {t('layout.myTeam')}
             </Link>

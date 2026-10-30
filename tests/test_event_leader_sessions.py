@@ -192,7 +192,7 @@ def test_list_and_revoke_rbac(client, db, lead, admin, reader):
     assert r.status_code == 200
     (row,) = r.get_json()['leaderSessions']
     assert row == {
-        'id': sid, 'eventId': lead['eid'], 'eventTeamId': lead['a'].id,
+        'id': sid, 'kind': 'link', 'username': None, 'eventId': lead['eid'], 'eventTeamId': lead['a'].id,
         'team': {'id': lead['a'].id, 'name': 'A'}, 'eventLinkId': lead['link'].id,
         'displayName': 'Anna', 'createdAt': row['createdAt'], 'revokedAt': None,
         'revokedBy': None, 'deviceCount': 0, 'status': 'active',

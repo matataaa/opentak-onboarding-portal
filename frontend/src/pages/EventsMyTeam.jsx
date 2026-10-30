@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { eventsAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,30 +12,41 @@ import './EventsMyTeam.css';
 export default function EventsMyTeam() {
   const { t } = useTranslation();
   const dateFormat = useDateFormat();
-  const { permissions, loading: authLoading } = useAuth();
-  const isLeader = permissions.roles.includes('event_leader');
+  const { permissions, leaderDesignations, loading: authLoading } = useAuth();
+  // Shared leader session (scope from the token) or personal leader (own account)
+  const isLeaderSessionUser = permissions.roles.includes('event_leader');
+  const [searchParams] = useSearchParams();
+  const wantedEvent = Number(searchParams.get('eventId'));
+  const wantedTeam = Number(searchParams.get('teamId'));
+  // A personal leader acts for one designation: the one in the URL, or the only one
+  const designation = isLeaderSessionUser ? null
+    : (leaderDesignations.find((d) => d.eventId === wantedEvent && d.teamId === wantedTeam)
+      || (leaderDesignations.length === 1 ? leaderDesignations[0] : null));
+  const scope = designation ? { eventId: designation.eventId, teamId: designation.teamId } : undefined;
+  const isLeader = isLeaderSessionUser || !!designation;
+  const scopeKey = [scope?.eventId ?? null, scope?.teamId ?? null];
   const [copied, setCopied] = useState(false);
   const [forLeader, setForLeader] = useState(false);
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['eventsMyTeam'],
+    queryKey: ['eventsMyTeam', ...scopeKey],
     enabled: isLeader,
-    queryFn: async () => (await eventsAPI.myTeam()).data,
+    queryFn: async () => (await eventsAPI.myTeam(scope)).data,
   });
 
   const enrollment = useMutation({
-    mutationFn: async (asLeader) => (await eventsAPI.myTeamEnrollment({ forLeader: asLeader })).data,
+    mutationFn: async (asLeader) => (await eventsAPI.myTeamEnrollment({ forLeader: asLeader }, scope)).data,
   });
 
   const accountsQuery = useQuery({
-    queryKey: ['eventsMyTeamAccounts'],
+    queryKey: ['eventsMyTeamAccounts', ...scopeKey],
     enabled: isLeader,
-    queryFn: async () => (await eventsAPI.myTeamAccounts()).data,
+    queryFn: async () => (await eventsAPI.myTeamAccounts(scope)).data,
   });
 
   const moveAccount = useMutation({
-    mutationFn: async ({ sessionId, teamId }) => (await eventsAPI.myTeamMoveAccount(sessionId, teamId)).data,
+    mutationFn: async ({ sessionId, teamId }) => (await eventsAPI.myTeamMoveAccount(sessionId, teamId, scope)).data,
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['eventsMyTeamAccounts'] }),
   });
 
@@ -51,8 +62,25 @@ export default function EventsMyTeam() {
     }).catch(() => {});
   };
 
-  if (!authLoading && !isLeader) {
+  if (!authLoading && !isLeaderSessionUser && leaderDesignations.length === 0) {
     return <Navigate to="/dashboard" replace />;
+  }
+  if (!authLoading && !isLeader) {
+    // A personal leader of several teams picks one
+    return (
+      <div className="events-my-team">
+        <h1>{t('eventsMyTeam.chooseTeam')}</h1>
+        <ul className="events-my-team-choices">
+          {leaderDesignations.map((d) => (
+            <li key={`${d.eventId}-${d.teamId}`}>
+              <Link to={`/events/my-team?eventId=${d.eventId}&teamId=${d.teamId}`}>
+                {d.teamName} · {d.eventName}{d.hq ? ` (${t('eventsMyTeam.hq')})` : ''}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
   }
   if (authLoading || isLoading) {
     return <div className="events-my-team"><p>{t('eventsMyTeam.loading')}</p></div>;
@@ -84,6 +112,9 @@ export default function EventsMyTeam() {
       <p className="events-my-team-sub">{data.event?.name}</p>
       {data.leaderName && (
         <p className="events-my-team-sub">{t('eventsMyTeam.leaderName', { name: data.leaderName })}</p>
+      )}
+      {!isLeaderSessionUser && leaderDesignations.length > 1 && (
+        <p className="events-my-team-sub"><Link to="/events/my-team">{t('eventsMyTeam.otherTeam')}</Link></p>
       )}
 
       <section className="events-my-team-card">
