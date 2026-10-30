@@ -604,7 +604,18 @@
     "reapplyHint": "Die aktuellen Einstellungen erneut speichern, um die Gerätekonten, die nicht aktualisiert werden konnten, nochmals zu versuchen",
     "hqPrintLabel": "HQ - sieht alle Teams",
     "eudsUnavailable": "Geräteinformationen konnten nicht von OpenTAK Server gelesen werden.",
-    "refresh": "Aktualisieren"
+    "refresh": "Aktualisieren",
+    "enrolledBy": "Angemeldet von {{name}}",
+    "leaderSessions": "Leiter",
+    "leaderSessionsNotice": "Alle, die über einen Leiterlink beigetreten sind. Widerrufen beendet den Zugang dieser Person, ohne den Link neu zu erzeugen; die von ihr angemeldeten Geräte bleiben offen (bei Bedarf unten schließen).",
+    "leaderSessionName": "Name",
+    "leaderSessionJoined": "Beigetreten",
+    "leaderSessionDevices": "Offene Geräte",
+    "leaderSessionsEmpty": "Noch niemand ist über einen Leiterlink beigetreten.",
+    "leaderSessionRevokedAt": "Widerrufen am {{date}}",
+    "leaderSessionRevoke": "Widerrufen",
+    "leaderSessionRevokeConfirm": "Den Leiterzugang von {{name}} widerrufen? Die von dieser Person angemeldeten Geräte bleiben offen.",
+    "leaderSessionEnded": "Beendet"
   },
   "eventsMyTeam": {
     "loading": "Laden…",
@@ -639,7 +650,9 @@
     "moveConfirm": "Dieses Gerät in ein anderes Team verschieben? Es verlässt dein Team.",
     "addToMyTeam": "Zu meinem Team hinzufügen",
     "addConfirm": "Dieses Gerät zu deinem Team hinzufügen?",
-    "actionFailed": "Die Änderung konnte nicht durchgeführt werden."
+    "actionFailed": "Die Änderung konnte nicht durchgeführt werden.",
+    "leaderName": "Leiter: {{name}}",
+    "enrolledBy": "Angemeldet von {{name}}"
   },
   "eventsShared": {
     "openInAtak": "In ATAK öffnen",
@@ -655,7 +668,10 @@
     "failed": "Dieser Link ist ungültig.",
     "sharedIntro": "Scannen Sie diesen Code in ATAK, um Ihrem Team beizutreten.",
     "scanAtak": "ATAK → Enrollment → diesen QR-Code scannen.",
-    "noEnrollment": "Derzeit ist kein Enrollment verfügbar."
+    "noEnrollment": "Derzeit ist kein Enrollment verfügbar.",
+    "leaderNameLabel": "Dein Name",
+    "leaderNameHint": "Für die Organisatoren sichtbar, damit sie sehen, wer den Leiterzugang nutzt.",
+    "leaderJoin": "Weiter"
   },
   "admin": {
     "dashboard": {

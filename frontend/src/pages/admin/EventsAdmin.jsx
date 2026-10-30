@@ -54,6 +54,7 @@ export default function EventsAdmin() {
   const [printPerPage, setPrintPerPage] = useState(1);
   const [qrLink, setQrLink] = useState(null); // {url, label} shown in the QR panel
   const [accounts, setAccounts] = useState([]);
+  const [leaderSessions, setLeaderSessions] = useState([]);
   const [eudsAvailable, setEudsAvailable] = useState(true);
   const [notice, setNotice] = useState('');
   const [linkRemaining, setLinkRemaining] = useState({}); // linkId -> open accounts left after a close
@@ -163,6 +164,19 @@ export default function EventsAdmin() {
     }
   };
 
+  const loadLeaderSessions = async (eventId) => {
+    try {
+      const r = await eventsAPI.listLeaderSessions(eventId);
+      setLeaderSessions(r.data.leaderSessions || []);
+    } catch { setLeaderSessions([]); }
+  };
+
+  // Ends one person's leader session; the link and the devices they created stay
+  const revokeLeaderSession = (s) => {
+    if (!window.confirm(t('events.leaderSessionRevokeConfirm', { name: s.displayName }))) return;
+    call(() => eventsAPI.revokeLeaderSession(openLinksFor, s.id)).then(() => loadLeaderSessions(openLinksFor));
+  };
+
   const moveAccount = (a, value) => {
     if (value === '' && !window.confirm(t('events.parkConfirm'))) return;
     call(() => eventsAPI.moveAccount(openLinksFor, a.id, value === '' ? null : Number(value)))
@@ -199,7 +213,9 @@ export default function EventsAdmin() {
     setLinkRemaining({});
     setLinkRetry({});
     setAccounts([]);
+    setLeaderSessions([]);
     loadAccounts(eventId);
+    loadLeaderSessions(eventId);
     setNewLink(null);
     setPrintSheet([]);
     setQrLink(null);
@@ -234,7 +250,8 @@ export default function EventsAdmin() {
 
   const regenerate = (l) => {
     if (!window.confirm(t('events.regenerateConfirm'))) return;
-    call(() => eventsAPI.revokeLink(l.id), (res) => { setQrLink(null); addGenerated(res.data); }).then(() => loadLinks(openLinksFor));
+    call(() => eventsAPI.revokeLink(l.id), (res) => { setQrLink(null); addGenerated(res.data); })
+      .then(() => { loadLinks(openLinksFor); loadLeaderSessions(openLinksFor); });
   };
 
   const createLink = () => {
@@ -488,7 +505,7 @@ export default function EventsAdmin() {
                         notifyHq(res.data);
                         setPrintSheet((p) => p.filter((x) => x.id !== l.id));
                         setQrLink((q) => (q?.id === l.id ? null : q));
-                      }).then(() => loadLinks(openLinksFor))}>{t('common.delete')}</button>
+                      }).then(() => { loadLinks(openLinksFor); loadLeaderSessions(openLinksFor); })}>{t('common.delete')}</button>
                       </div>
                     </td>
                   </tr>
@@ -516,6 +533,41 @@ export default function EventsAdmin() {
             </select>
           </div>
 
+          {/* People who joined through a leader link of the selected event */}
+          <h3>{t('events.leaderSessions')}</h3>
+          <p className="events-hint">{t('events.leaderSessionsNotice')}</p>
+          <div className="events-form-row">
+            <button className="btn btn-sm btn-secondary" onClick={() => loadLeaderSessions(openLinksFor)}>{t('events.refresh')}</button>
+          </div>
+          <div className="admin-table-container">
+            <table className="admin-table">
+              <thead><tr><th>{t('events.leaderSessionName')}</th><th>{t('events.team')}</th><th>{t('events.leaderSessionJoined')}</th><th>{t('events.leaderSessionDevices')}</th><th>{t('events.accountStatus')}</th>{canEdit && <th></th>}</tr></thead>
+              <tbody>
+                {leaderSessions.length === 0 && <tr><td colSpan={canEdit ? 6 : 5}>{t('events.leaderSessionsEmpty')}</td></tr>}
+                {leaderSessions.map((s) => (
+                  <tr key={s.id}>
+                    <td>{s.displayName}</td>
+                    <td>{s.team?.name || '-'}</td>
+                    <td>{formatDateTime(s.createdAt, dateFormat, { utc: true }) || '-'}</td>
+                    <td>{s.deviceCount}</td>
+                    <td>{s.status === 'revoked'
+                      ? t('events.leaderSessionRevokedAt', { date: formatDateTime(s.revokedAt, dateFormat) })
+                      : t(s.status === 'ended' ? 'events.leaderSessionEnded' : 'events.accountActive')}</td>
+                    {canEdit && (
+                      <td>
+                        {!s.revokedAt && (
+                          <div className="table-actions">
+                            <button className="btn btn-sm btn-danger" onClick={() => revokeLeaderSession(s)}>{t('events.leaderSessionRevoke')}</button>
+                          </div>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
           {/* Device accounts of the selected event */}
           <h3>{t('events.accounts')}</h3>
           <p className="events-hint">{t('events.accountsNotice')}</p>
@@ -536,12 +588,13 @@ export default function EventsAdmin() {
                       <div className="events-hint">{a.otsUsername}</div>
                     </td>
                     <td>
-                      {a.team?.name || '-'}
+                      {a.parked ? '-' : (a.team?.name || '-')}
                       {!a.parked && a.team && a.team.id === hqTeamId && <span className="badge badge-primary" style={{ marginLeft: '0.5rem' }}>{t('events.hqBadge')}</span>}
                     </td>
                     <td>
                       {a.legacy ? t('events.accountLegacy') : (a.parked ? t('events.accountParked') : t('events.accountActive'))}
                       {a.role === 'leader' && <span className="badge badge-primary" style={{ marginLeft: '0.5rem' }}>{t('events.accountLeader')}</span>}
+                      {a.leaderName && <div className="events-hint">{t('events.enrolledBy', { name: a.leaderName })}</div>}
                     </td>
                     <td>{formatDateTime(a.createdAt, dateFormat, { utc: true }) || '-'}</td>
                     {canEdit && (

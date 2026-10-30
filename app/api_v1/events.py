@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import or_
 
 from app.api_v1 import api_v1
-from app.models import db, EventTeamModel, EventModel, EventLinkModel, EventSessionModel, OTSGroupModel, UserModel, OnboardingCodeModel, SystemSettingsModel
+from app.models import db, EventTeamModel, EventModel, EventLinkModel, EventSessionModel, EventLeaderSessionModel, OTSGroupModel, UserModel, OnboardingCodeModel, SystemSettingsModel
 from app.ots import otsClient
 from app.exceptions import BadRequestError
 from app.rbac import require_role
@@ -42,11 +42,14 @@ EVENT_MAX_DEVICE_ACCOUNTS = 500
 # the per-team and per-event caps bound the total anyway
 DEVICE_THROTTLE_MAX = 30
 DEVICE_THROTTLE_WINDOW_SECONDS = 60
+# Leader joins per leader link per window (each join writes a leader session row)
+LEADER_JOIN_THROTTLE_MAX = 10
 DEVICE_USERNAME_ATTEMPTS = 3
 DEVICE_COOKIE_NAME = 'event_device_key'
 
 OTS_USERNAME_RE = re.compile(r'^[a-z0-9]{3,32}$')
 LINK_ROLES = ('leader', 'player')
+LEADER_NAME_MAX = 80
 LINK_DIRECTIONS = ('BOTH', 'IN', 'OUT')
 
 
@@ -327,6 +330,7 @@ def delete_event_team(team_id):
     # FKs do not cascade: remove children explicitly, in one transaction.
     _delete_closed_sessions(eventTeamId=team_id)
     _detach_sessions_from_links(EventLinkModel.eventTeamId == team_id)
+    EventLeaderSessionModel.query.filter_by(eventTeamId=team_id).delete(synchronize_session=False)
     EventLinkModel.query.filter_by(eventTeamId=team_id).delete(synchronize_session=False)
     db.session.delete(team)
     db.session.commit()
@@ -528,6 +532,7 @@ def delete_event(event_id):
     # FKs do not cascade: remove children explicitly, in one transaction.
     _delete_closed_sessions(eventId=event_id)
     _detach_sessions_from_links(EventLinkModel.eventId == event_id)
+    EventLeaderSessionModel.query.filter_by(eventId=event_id).delete(synchronize_session=False)
     EventLinkModel.query.filter_by(eventId=event_id).delete(synchronize_session=False)
     db.session.delete(event)
     db.session.commit()
@@ -616,8 +621,23 @@ def revoke_event_link(link_id):
     else:
         current_app.logger.warning('SECRET_KEY is weak or unset: event link QR codes cannot be re-shown later')
         raw, link.tokenHash = _generate_link_token()
+    # The new version already ends them; record it in the leader session ledger
+    _revoke_link_leader_sessions(link.id)
     db.session.commit()
     return jsonify(_link_to_dict(link, raw_token=raw)), 200
+
+
+def _revoke_link_leader_sessions(link_id):
+    """Mark the open leader sessions of a link revoked (the caller commits)."""
+    EventLeaderSessionModel.query.filter_by(eventLinkId=link_id, revokedAt=None).update(
+        {'revokedAt': datetime.now(), 'revokedBy': _actor_id()}, synchronize_session=False)
+
+
+def _actor_id():
+    try:
+        return int(get_jwt_identity())
+    except (TypeError, ValueError):
+        return None
 
 
 @api_v1.route('/events/links/<int:link_id>/url', methods=['GET'])
@@ -677,6 +697,7 @@ def delete_event_link(link_id):
     # Device sessions outlive their link (they are the OTS cleanup ledger)
     EventSessionModel.query.filter_by(eventLinkId=link.id).update(
         {'eventLinkId': None}, synchronize_session=False)
+    _revoke_link_leader_sessions(link.id)
     db.session.delete(link)
     db.session.commit()
     body = {'message': 'Link deleted'}
@@ -684,6 +705,80 @@ def delete_event_link(link_id):
         # If that was the team's last link it left the event: the organizer devices lose its group
         body['reprovisioned'], body['reprovisionFailed'] = _reprovision_organizers([event])
     return jsonify(body), 200
+
+
+# ----------------------------------------------------------------------------
+# Leader sessions: the people who joined through a leader link
+# ----------------------------------------------------------------------------
+def _leader_session_status(row, event, link):
+    """'revoked', 'ended' (what leader_session_error would refuse otherwise) or 'active'.
+
+    The shared account a session was issued for is not stored, so reassigning the
+    team's leader to another account is not detected here (only a cleared leader).
+    """
+    if row.revokedAt is not None:
+        return 'revoked'
+    team = row.team
+    if (not event or _event_window_error(event) or not link or link.role != 'leader'
+            or link.eventId != row.eventId or link.eventTeamId != row.eventTeamId
+            or not team or team.leaderUserId is None):
+        return 'ended'
+    return 'active'
+
+
+def _leader_session_to_dict(row, device_count=0, status=None):
+    return {
+        'id': row.id,
+        'eventId': row.eventId,
+        'eventTeamId': row.eventTeamId,
+        'team': {'id': row.team.id, 'name': row.team.name} if row.team else None,
+        'eventLinkId': row.eventLinkId,
+        'displayName': row.displayName,
+        'createdAt': row.createdAt.isoformat() if row.createdAt else None,
+        'revokedAt': row.revokedAt.isoformat() if row.revokedAt else None,
+        'revokedBy': row.revokedBy,
+        'deviceCount': device_count,
+        'status': status or _leader_session_status(
+            row, EventModel.query.get(row.eventId),
+            EventLinkModel.query.get(row.eventLinkId) if row.eventLinkId else None),
+    }
+
+
+@api_v1.route('/events/<int:event_id>/leader-sessions', methods=['GET'])
+@jwt_required()
+@require_role('events_admin', 'events_readonly')
+def list_event_leader_sessions(event_id):
+    event = EventModel.query.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+    rows = EventLeaderSessionModel.query.filter_by(eventId=event_id).order_by(EventLeaderSessionModel.id).all()
+    # Open device accounts each leader session created
+    counts = dict(db.session.query(EventSessionModel.leaderSessionId, db.func.count(EventSessionModel.id)).filter(
+        EventSessionModel.eventId == event_id, EventSessionModel.leaderSessionId.isnot(None),
+        EventSessionModel.closedAt.is_(None)).group_by(EventSessionModel.leaderSessionId).all())
+    links = {link.id: link for link in EventLinkModel.query.filter_by(eventId=event_id).all()}
+    return jsonify({'leaderSessions': [
+        _leader_session_to_dict(r, counts.get(r.id, 0), _leader_session_status(r, event, links.get(r.eventLinkId)))
+        for r in rows]}), 200
+
+
+@api_v1.route('/events/<int:event_id>/leader-sessions/<int:session_id>/revoke', methods=['POST'])
+@jwt_required()
+@require_role('events_admin')
+def revoke_event_leader_session(event_id, session_id):
+    """End one leader's session; the link and the devices they created stay as they are."""
+    row = EventLeaderSessionModel.query.filter_by(id=session_id, eventId=event_id).first()
+    if not row:
+        return jsonify({'error': 'Leader session not found'}), 404
+    if row.revokedAt is not None:
+        return jsonify({'error': 'Leader session is already revoked'}), 409
+    row.revokedAt = datetime.now()
+    row.revokedBy = _actor_id()
+    db.session.commit()
+    current_app.logger.info('Event leader session revoked: actor=%s event=%s%s',
+                            get_jwt_identity(), event_id, _leader_log(row))
+    count = EventSessionModel.query.filter_by(leaderSessionId=row.id, closedAt=None).count()
+    return jsonify(_leader_session_to_dict(row, count)), 200
 
 
 # ----------------------------------------------------------------------------
@@ -764,14 +859,14 @@ _device_attempts = {}
 _device_attempts_lock = threading.Lock()
 
 
-def _throttle_hit(key):
+def _throttle_hit(key, max_attempts=None):
     """Record an attempt for key; return True if the window is already full."""
     now = time.monotonic()
     with _device_attempts_lock:
         attempts = _device_attempts.setdefault(key, deque())
         while attempts and now - attempts[0] > DEVICE_THROTTLE_WINDOW_SECONDS:
             attempts.popleft()
-        if len(attempts) >= DEVICE_THROTTLE_MAX:
+        if len(attempts) >= (DEVICE_THROTTLE_MAX if max_attempts is None else max_attempts):
             return True
         attempts.append(now)
         return False
@@ -821,13 +916,15 @@ def _drop_device_row(candidate, candidate_session):
         current_app.logger.exception('Failed to drop session of %s', candidate)
 
 
-def _create_device_account(event, team, link=None, client_key=None, leader=False, role=None):
+def _create_device_account(event, team, link=None, client_key=None, leader=False, role=None,
+                           leader_session_id=None):
     """Create one OTS account (plus its session row) for a single device.
 
     The session row is written first so the DB is always the cleanup ledger for
     the OTS account. Returns (session, None) or (None, error_response). The
     password is random and never leaves this function. role='leader' marks a
-    leader's own device (link is then the leader link).
+    leader's own device (link is then the leader link); leader_session_id records
+    which leader session created it.
     """
     if not team.otsGroup or team.otsGroup.missing_in_ots:
         # Without a group the device would share its position on __ANON__
@@ -852,6 +949,7 @@ def _create_device_account(event, team, link=None, client_key=None, leader=False
             clientKeyHash=_hash_token(client_key) if client_key else None,
             eventLinkId=link.id if link else None,
             role=role,
+            leaderSessionId=leader_session_id,
         )
         try:
             db.session.add(candidate_session)
@@ -1016,6 +1114,16 @@ def _join_as_leader(event, team, link):
     leader = team.leaderUser if team else None
     if not leader:
         return jsonify({'error': 'No leader account is configured for this team'}), 409
+    # Several people share the leader account: each names themself and gets their
+    # own ledger row, so one of them can be revoked without regenerating the link.
+    display_name = (request.get_json(silent=True) or {}).get('displayName')
+    display_name = display_name.strip() if isinstance(display_name, str) else ''
+    if not display_name or len(display_name) > LEADER_NAME_MAX or not display_name.isprintable():
+        return jsonify({'error': 'displayName is required (1-%d characters)' % LEADER_NAME_MAX,
+                        'code': 'display_name_required'}), 400
+    if _throttle_hit(('leader-join', link.id), LEADER_JOIN_THROTTLE_MAX):
+        current_app.logger.warning('Leader join throttle hit for link %s', link.id)
+        return jsonify({'error': 'Too many leader joins on this link, try again in a minute'}), 429
 
     if event.validUntil:
         hard_seconds = (event.validUntil - datetime.now()).total_seconds()
@@ -1030,6 +1138,11 @@ def _join_as_leader(event, team, link):
         link.tokenNonce = secrets.token_urlsafe(16)
         db.session.commit()
 
+    leader_session = EventLeaderSessionModel(
+        eventId=event.id, eventTeamId=team.id, eventLinkId=link.id, displayName=display_name)
+    db.session.add(leader_session)
+    db.session.commit()
+
     until_epoch = int(time.time() + hard_seconds)
     claims = {
         'username': leader.username,
@@ -1039,6 +1152,7 @@ def _join_as_leader(event, team, link):
         'event_leader_link': link.id,
         'event_leader_link_version': link.tokenVersion,
         'event_leader_link_nonce': link.tokenNonce,
+        'event_leader_session': leader_session.id,
     }
     access_token = create_access_token(
         identity=str(leader.id),
@@ -1052,7 +1166,8 @@ def _join_as_leader(event, team, link):
     )
 
     current_app.logger.info(
-        'Event leader join: team %s (%s) for event %s', team.id, leader.username, event.id
+        'Event leader join: team %s (%s) for event %s leaderSession=%s name=%s',
+        team.id, leader.username, event.id, leader_session.id, display_name
     )
     return jsonify({
         'role': 'leader',
@@ -1062,6 +1177,7 @@ def _join_as_leader(event, team, link):
         'team': {'id': team.id, 'name': team.name, 'color': team.color},
         'event': {'id': event.id, 'name': event.name},
         'user': {'id': leader.id, 'username': leader.username},
+        'leaderName': display_name,
     }), 200
 
 
@@ -1072,9 +1188,11 @@ def leader_session_error(claims, identity):
     """Central revocation check for a leader session (access or refresh token).
 
     Returns None while the session is valid, else (message, 403). The feature
-    switch, the event window, the team's current leader and the leader link the
-    session came from are re-checked on every call, so deactivation, reassignment
-    and regenerating/deleting the leader link end access immediately. Used by
+    switch, the event window, the team's current leader, the leader link the
+    session came from and the session's ledger row (event_leader_sessions) are
+    re-checked on every call, so deactivation, reassignment, regenerating/deleting
+    the leader link and revoking the one session end access immediately. Tokens
+    without the event_leader_session claim (issued before the ledger) fail. Used by
     `_leader_scope` and by the leader-scope before_request hook.
     """
     if not SystemSettingsModel.get_setting('events_enabled', False):
@@ -1084,8 +1202,9 @@ def leader_session_error(claims, identity):
     link_id = claims.get('event_leader_link')
     link_version = claims.get('event_leader_link_version')
     link_nonce = claims.get('event_leader_link_nonce')
+    session_id = claims.get('event_leader_session')
     if (team_id is None or event_id is None or link_id is None or link_version is None
-            or not link_nonce):
+            or not link_nonce or session_id is None):
         return 'Forbidden', 403
 
     link = EventLinkModel.query.get(link_id)
@@ -1093,6 +1212,12 @@ def leader_session_error(claims, identity):
             or link.eventTeamId != team_id or link.tokenVersion != link_version
             or not link.tokenNonce
             or not hmac.compare_digest(link.tokenNonce.encode(), str(link_nonce).encode())):
+        return 'Forbidden', 403
+
+    leader_session = EventLeaderSessionModel.query.get(session_id)
+    if (not leader_session or leader_session.revokedAt is not None
+            or leader_session.eventId != event_id or leader_session.eventTeamId != team_id
+            or leader_session.eventLinkId != link_id):
         return 'Forbidden', 403
 
     event = EventModel.query.get(event_id)
@@ -1124,6 +1249,15 @@ def _leader_scope():
             EventTeamModel.query.get(claims['event_leader_team']), None)
 
 
+def _current_leader_session():
+    """The ledger row of the current leader token (only after _leader_scope passed)."""
+    return EventLeaderSessionModel.query.get(get_jwt()['event_leader_session'])
+
+
+def _leader_log(leader_session):
+    return ' leaderSession=%s name=%s' % (leader_session.id, leader_session.displayName)
+
+
 @api_v1.route('/events/my-team', methods=['GET'])
 @jwt_required()
 def get_my_team():
@@ -1153,6 +1287,7 @@ def get_my_team():
         'expiresAt': event.validUntil.isoformat() if event.validUntil else None,
         'playerLink': player_link,
         'atakAvailable': event.playerAccessMode == 'shared',
+        'leaderName': _current_leader_session().displayName,
     }
     if reason:
         data['reason'] = reason
@@ -1180,14 +1315,17 @@ def create_my_team_enrollment():
         link = EventLinkModel.query.filter_by(
             eventId=event.id, eventTeamId=team.id, role='player').first()
         role = None
-    session, error = _create_device_account(event, team, link, leader=True, role=role)
+    leader_session = _current_leader_session()
+    session, error = _create_device_account(event, team, link, leader=True, role=role,
+                                            leader_session_id=leader_session.id)
     if error:
         return error
     atak_info, error = _issue_device_enrollment(event, session.otsUsername)
     if error:
         _discard_device_account(session.otsUsername, session)
         return error
-    current_app.logger.info('Leader enrollment issued: team %s event %s', team.id, event.id)
+    current_app.logger.info('Leader enrollment issued: team %s event %s account=%s%s',
+                            team.id, event.id, session.otsUsername, _leader_log(leader_session))
     return jsonify({'atak': atak_info}), 200
 
 
@@ -1541,7 +1679,18 @@ def _read_eud_index(usernames):
     return index
 
 
-def _account_to_dict(session, euds=None):
+def _leader_names(sessions):
+    """{leader session id: displayName} for the leader sessions that created these devices."""
+    ids = {s.leaderSessionId for s in sessions if s.leaderSessionId}
+    if not ids:
+        return {}
+    return {row.id: row.displayName for row in
+            EventLeaderSessionModel.query.filter(EventLeaderSessionModel.id.in_(ids)).all()}
+
+
+def _account_to_dict(session, euds=None, leader_names=None):
+    if leader_names is None:
+        leader_names = _leader_names([session])
     data = {
         'id': session.id,
         'otsUsername': session.otsUsername,
@@ -1553,6 +1702,8 @@ def _account_to_dict(session, euds=None):
         'expiresAt': session.expiresAt.isoformat() if session.expiresAt else None,
         'eventLinkId': session.eventLinkId,
         'role': session.role,
+        # Who (leader session display name) created the device; None if not a leader
+        'leaderName': leader_names.get(session.leaderSessionId),
     }
     if euds is not None:
         data['euds'] = euds
@@ -1571,8 +1722,9 @@ def list_event_accounts(event_id):
         EventSessionModel.closedAt.is_(None),
     ).order_by(EventSessionModel.id).all()
     index = _read_eud_index({s.otsUsername for s in sessions if s.otsUsername}) if sessions else {}
+    names = _leader_names(sessions)
     return jsonify({
-        'accounts': [_account_to_dict(s, (index or {}).get(s.otsUsername, [])) for s in sessions],
+        'accounts': [_account_to_dict(s, (index or {}).get(s.otsUsername, []), names) for s in sessions],
         'eudsAvailable': index is not None,
     }), 200
 
@@ -1791,14 +1943,17 @@ def list_my_team_accounts():
         EventSessionModel.closedAt.is_(None),
     ).order_by(EventSessionModel.id).all()
     index = _read_eud_index({s.otsUsername for s in sessions if s.otsUsername}) if sessions else {}
+    names = _leader_names(sessions)
     accounts = []
     for s in sessions:
-        row = _account_to_dict(s, (index or {}).get(s.otsUsername, []))
+        row = _account_to_dict(s, (index or {}).get(s.otsUsername, []), names)
         row.pop('eventLinkId', None)
         row['inMyTeam'] = (not row['legacy'] and not row['parked'] and s.eventTeamId == team.id)
         if not row['inMyTeam'] and not row['parked']:
             # other teams' active accounts: callsign/team/status only
             row['euds'] = [{'callsign': e.get('callsign')} for e in row.get('euds', [])]
+        if not row['inMyTeam']:
+            row['leaderName'] = None  # who enrolled a device is only shown for the own team
         accounts.append(row)
     return jsonify({
         'accounts': accounts,
@@ -1846,7 +2001,8 @@ def move_my_team_account(session_id):
         target_team = next((t for t in _event_team_options(event) if t.id == team_id), None)
         if not target_team:
             return jsonify({'error': 'Unknown teamId'}), 400
-    response = _perform_account_move(session, target_team, log_extra=' leaderTeam=%s' % team.name)
+    response = _perform_account_move(
+        session, target_team, log_extra=' leaderTeam=%s%s' % (team.name, _leader_log(_current_leader_session())))
     body = response[0].get_json(silent=True) if isinstance(response, tuple) else None
     if body and 'account' in body:
         body['account'].pop('eventLinkId', None)

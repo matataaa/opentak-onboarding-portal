@@ -2260,6 +2260,31 @@ class EventSessionModel(db.Model):
     # memberships are keyed by name, names never change in the portal, and a
     # deleted local group row must not hide a removal.
     organizerGrant = Column(Text, nullable=True)
+    # The leader session (event_leader_sessions.id) that created this device; NULL =
+    # not created by a leader. No FK: the device ledger outlives leader sessions.
+    leaderSessionId = Column(Integer, nullable=True)
 
     event = relationship("EventModel")
+    team = relationship("EventTeamModel")
+
+
+class EventLeaderSessionModel(db.Model):
+    """One person who joined through a team's leader link (shared leader account).
+
+    The leader JWT carries this row's id (claim event_leader_session); revoking the
+    row ends that person's session without regenerating the link.
+    """
+    __tablename__ = 'event_leader_sessions'
+
+    id = Column(Integer, primary_key=True)
+    eventId = Column(Integer, ForeignKey('events.id'), nullable=False)
+    eventTeamId = Column(Integer, ForeignKey('event_teams.id'), nullable=False)
+    # No FKs: the audit trail survives link deletion; userId is for personal leader logins
+    eventLinkId = Column(Integer, nullable=True)
+    userId = Column(Integer, nullable=True)
+    displayName = Column(String(80), nullable=False)
+    createdAt = Column(DateTime, default=datetime.datetime.utcnow)
+    revokedAt = Column(DateTime, nullable=True)
+    revokedBy = Column(Integer, nullable=True)
+
     team = relationship("EventTeamModel")

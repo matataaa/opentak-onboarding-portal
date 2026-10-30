@@ -82,6 +82,9 @@ export default function EventsMyTeam() {
     <div className="events-my-team">
       <h1>{data.team?.name}</h1>
       <p className="events-my-team-sub">{data.event?.name}</p>
+      {data.leaderName && (
+        <p className="events-my-team-sub">{t('eventsMyTeam.leaderName', { name: data.leaderName })}</p>
+      )}
 
       <section className="events-my-team-card">
         <h2>{t('eventsMyTeam.playerLink')}</h2>
@@ -175,12 +178,13 @@ export default function EventsMyTeam() {
                       <div className="events-my-team-hint">{a.otsUsername}</div>
                       <div className="events-my-team-hint">{formatDateTime(a.createdAt, dateFormat, { utc: true }) || '-'}</div>
                     </td>
-                    <td>{a.team?.name || '-'}</td>
+                    <td>{a.parked ? '-' : (a.team?.name || '-')}</td>
                     <td>
                       {a.legacy
                         ? t('eventsMyTeam.statusLegacy')
                         : (a.parked ? t('eventsMyTeam.statusParked') : t('eventsMyTeam.statusActive'))}
                       {a.role === 'leader' && <span className="events-my-team-leader-tag">{t('eventsMyTeam.leaderDevice')}</span>}
+                      {a.leaderName && <div className="events-my-team-hint">{t('eventsMyTeam.enrolledBy', { name: a.leaderName })}</div>}
                     </td>
                     <td className="events-my-team-actions">
                       {!a.legacy && a.inMyTeam && (

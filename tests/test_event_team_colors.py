@@ -7,7 +7,7 @@ import pytest
 
 from app.extensions import scheduler
 from app.models import (
-    db as _db, EventModel, EventLinkModel, EventSessionModel, EventTeamModel,
+    db as _db, EventLeaderSessionModel, EventModel, EventLinkModel, EventSessionModel, EventTeamModel,
     GroupUserAssociation, OTSGroupModel, OnboardingCodeModel, SystemSettingsModel, UserModel,
 )
 from app.services import event_team_colors as etc
@@ -88,7 +88,7 @@ def events_enabled(monkeypatch):
                         staticmethod(lambda key, default=None: True))
 
 
-TABLES = (EventSessionModel, EventLinkModel, EventModel, EventTeamModel,
+TABLES = (EventLeaderSessionModel, EventSessionModel, EventLinkModel, EventModel, EventTeamModel,
           GroupUserAssociation, OTSGroupModel, OnboardingCodeModel, UserModel)
 
 
@@ -166,7 +166,8 @@ def test_desired_state_shared_leader_individual(data):
     data.session.add(EventLinkModel(eventId=event.id, eventTeamId=team.id, role='leader', tokenHash='h1'))
     data.session.flush()
     desired = etc._build_desired_state([event])
-    assert desired == {n: ('Blue', 'Team Member') for n in ('shared_acc', 'zz_player', 'zz_leader')}
+    assert desired == {'shared_acc': ('Blue', 'Team Member'), 'zz_player': ('Blue', 'Team Member'),
+                       'zz_leader': ('Blue', 'Team Lead')}
 
 
 def test_leader_without_leader_link_gets_nothing(data):
@@ -279,10 +280,31 @@ def test_leader_removal_only_deletes_expected_values(data, ots, events_enabled):
     ots.euds = [eud('L1', 'zz_leader'), eud('L2', 'zz_leader')]
     ots.profiles = {
         ('locationTeam', 'L1'): 'Red', ('atakRoleType', 'L1'): 'Team Member',
-        ('locationTeam', 'L2'): 'Blue', ('atakRoleType', 'L2'): 'Team Lead',
+        ('locationTeam', 'L2'): 'Blue', ('atakRoleType', 'L2'): 'Medic',
     }
     etc.sync_event_team_colors()
-    assert ots.profiles == {('locationTeam', 'L2'): 'Blue', ('atakRoleType', 'L2'): 'Team Lead'}
+    assert ots.profiles == {('locationTeam', 'L2'): 'Blue', ('atakRoleType', 'L2'): 'Medic'}
+
+
+def test_leader_account_keeps_hand_set_roles_it_was_never_given(data, ots, events_enabled):
+    """Shared leader accounts can be real logins: only the roles written for them are removed."""
+    make_event(data, start=-30, end=-2)
+    leader, hq_leader = make_user(data, 'zz_leader'), make_user(data, 'zz_hqleader')
+    make_team(data, leader=leader)
+    hq_team = make_team(data, name='zz_hq', color='Blue', leader=hq_leader)
+    make_event(data, start=-30, end=-3).organizerTeamId = hq_team.id
+    data.session.flush()
+    ots.euds = [eud('L1', 'zz_leader'), eud('L2', 'zz_leader'), eud('L3', 'zz_leader'),
+                eud('H1', 'zz_hqleader'), eud('H2', 'zz_hqleader')]
+    ots.profiles = {
+        ('atakRoleType', 'L1'): 'HQ',           # hand-set: this account is never HQ
+        ('atakRoleType', 'L2'): 'Team Member',  # written by the previous version
+        ('atakRoleType', 'L3'): 'Team Lead',    # written by this version
+        ('atakRoleType', 'H1'): 'HQ',           # written by this version (organizer team)
+        ('atakRoleType', 'H2'): 'Team Lead',    # hand-set: an HQ leader is written HQ
+    }
+    etc.sync_event_team_colors()
+    assert ots.profiles == {('atakRoleType', 'L1'): 'HQ', ('atakRoleType', 'H2'): 'Team Lead'}
 
 
 def test_invalid_team_colour_is_skipped(data):

@@ -15,6 +15,11 @@ info:
     Event leader sessions (tokens issued by `/events/join/{token}` for a leader link) are
     deny-by-default: they may only call the `/events/my-team*` endpoints, `/auth/refresh`,
     `/auth/me` and `/auth/permissions`. Every other endpoint returns 403.
+    Each leader join names the person (`displayName`) and creates a leader session row
+    whose id is carried in the token claim `event_leader_session`; an admin can revoke one
+    session via `/events/{id}/leader-sessions/{sessionId}/revoke`. Leader tokens issued
+    before this claim existed are no longer accepted (401/403): the leader joins again
+    through the leader link.
 
     ## Switchable modules
     The Meshtastic, radios and events modules can be turned off with the settings
@@ -464,6 +469,55 @@ components:
           type: string
           description: Only returned when the token is generated or regenerated
 
+    EventLeaderSession:
+      type: object
+      description: One person who joined through a leader link (shared leader account)
+      properties:
+        id:
+          type: integer
+        eventId:
+          type: integer
+        eventTeamId:
+          type: integer
+        team:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+        eventLinkId:
+          type: integer
+          nullable: true
+          description: The leader link joined through; kept after the link is deleted
+        displayName:
+          type: string
+          maxLength: 80
+        createdAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set by a revoke, and when the link is regenerated or deleted
+        revokedBy:
+          type: integer
+          nullable: true
+          description: Local user id of the admin who revoked it
+        deviceCount:
+          type: integer
+          description: Open device accounts this leader session created
+        status:
+          type: string
+          enum: [active, ended, revoked]
+          description: >
+            revoked = revokedAt is set; ended = the session no longer works for another
+            reason (event inactive/not open, leader link gone, or the team has no leader
+            account any more; a leader account swapped for another one is not detected);
+            else active
+
     Event:
       type: object
       properties:
@@ -846,18 +900,37 @@ paths:
         endpoint) that identifies the device; a reload with that cookie keeps the same
         account and returns a fresh enrollment string instead of creating a new account.
         A cookie issued for another link is ignored. The response never contains a
-        password.
+        password. Leader links need `displayName` (who is joining, 1-80 characters after
+        trimming); every leader join creates its own leader session (see
+        `/events/{id}/leader-sessions`), carried in the token claim `event_leader_session`.
       parameters:
         - name: token
           in: path
           required: true
           schema:
             type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                  maxLength: 80
+                  description: Required for leader links, ignored for player links
       responses:
         '200':
           description: >
             Shared player - role, mode, team, event, expiresAt, atak ({qrString, expiresAt})
-            and itak (best effort, may be null)
+            and itak (best effort, may be null). Leader - role, access_token, refresh_token,
+            expiresAt, team, event, user and leaderName
+        '400':
+          description: >
+            Leader link without a valid displayName (missing, empty, longer than 80
+            characters or with control characters): code `display_name_required`, no
+            session is created
         '403':
           description: Events disabled, event inactive, not started or ended
         '404':
@@ -868,7 +941,9 @@ paths:
             without end time, or a team without a usable OTS group: code `team_has_no_group`,
             no account is created)
         '429':
-          description: Per-team/per-event device account cap or per-link creation throttle reached
+          description: >
+            Per-team/per-event device account cap or per-link creation throttle reached;
+            for leader links more than 10 joins per minute on the link
         '500':
           description: Could not provision team access or generate the enrollment
 
@@ -1085,7 +1160,8 @@ paths:
       summary: Delete a link (events_admin only) 🔒
       description: >
         Device accounts outlive their link; they keep the groups they were granted
-        and are cleaned up as usual. When it was the team's last link in an event
+        and are cleaned up as usual. Leader sessions of the link are marked revoked
+        (the rows are kept for the audit trail). When it was the team's last link in an event
         with an organizer (HQ) team, the team leaves the event and the HQ devices
         lose its group (best effort, counted).
       security:
@@ -1149,7 +1225,8 @@ paths:
       description: >
         Open `device` accounts plus legacy `shared` accounts (`legacy: true`, read-only).
         Each account has id (session id), otsUsername, team {id, name, color}, parked,
-        createdAt, expiresAt and its euds [{callsign, uid, lastSeen}] from one OTS EUD
+        createdAt, expiresAt, role, leaderName (display name of the leader session that
+        created it, null if not created by a leader) and its euds [{callsign, uid, lastSeen}] from one OTS EUD
         listing (`eudsAvailable` is false when OTS could not be read). Never contains
         passwords or enrollment tokens.
       security:
@@ -1270,6 +1347,73 @@ paths:
         '502':
           description: Some accounts could not be closed and are still open
 
+  /events/{id}/leader-sessions:
+    get:
+      tags:
+        - Events
+      summary: List the leader sessions of an event (events_admin or events_readonly) 🔒
+      description: >
+        Everyone who joined through a leader link of this event, oldest first, including
+        revoked sessions. Not available to leader sessions (403).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Leader sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  leaderSessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EventLeaderSession'
+        '404':
+          description: Event not found
+
+  /events/{id}/leader-sessions/{sessionId}/revoke:
+    post:
+      tags:
+        - Events
+      summary: Revoke one leader session (events_admin only) 🔒
+      description: >
+        Ends that person's leader access at once (401 on `/auth/refresh`, `/auth/me`,
+        `/auth/permissions`, 403 on `/events/my-team*`) without regenerating the link, so
+        the other leaders of the team keep working. The device accounts the leader created
+        stay open; close them separately. Regenerating the leader link still ends all of
+        its sessions.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The revoked leader session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventLeaderSession'
+        '404':
+          description: Leader session not found in this event
+        '409':
+          description: Leader session is already revoked
+
   /events/my-team:
     get:
       tags:
@@ -1280,7 +1424,8 @@ paths:
         Event and team are taken from the token, never from the request. Returns 403
         for any other token, when events are disabled, when the event is not open, when
         the user is no longer the team's leader, or when the leader link the session
-        came from was regenerated or deleted. `playerLink` is null when the link is missing
+        came from was regenerated or deleted, or the leader session was revoked (or the
+        token has no `event_leader_session` claim). `playerLink` is null when the link is missing
         (an admin has to create it) or not retrievable (an admin has to regenerate it); see
         `reason`: `missing` or `notRetrievable`.
       security:
@@ -1333,6 +1478,9 @@ paths:
                     description: Present only when playerLink is null
                   atakAvailable:
                     type: boolean
+                  leaderName:
+                    type: string
+                    description: displayName of the current leader session
         '403':
           description: Not a valid leader session for an open event
 
@@ -1350,7 +1498,8 @@ paths:
         never contains a password (the qrString is a bearer enrollment token).
         With forLeader true the device is the leader's own (session role `leader`):
         it joins through the team's leader link and takes that link's direction;
-        otherwise it is a player device of the team's player link.
+        otherwise it is a player device of the team's player link. Either way the
+        device records the leader session that created it (leaderName in the account lists).
       security:
         - bearerAuth: []
       requestBody:
@@ -1432,6 +1581,11 @@ paths:
                             color: {type: string, nullable: true}
                         parked: {type: boolean}
                         inMyTeam: {type: boolean}
+                        role: {type: string, nullable: true}
+                        leaderName:
+                          type: string
+                          nullable: true
+                          description: Leader session that created it; null for every account not in the own team (other teams and parked)
                         createdAt: {type: string, nullable: true}
                         expiresAt: {type: string, nullable: true}
                         euds:

@@ -604,7 +604,18 @@
     "reapplyHint": "De huidige instellingen opnieuw opslaan om de apparaataccounts die niet konden worden bijgewerkt nogmaals te proberen",
     "hqPrintLabel": "HQ - ziet alle teams",
     "eudsUnavailable": "Apparaatgegevens konden niet uit OpenTAK Server worden gelezen.",
-    "refresh": "Vernieuwen"
+    "refresh": "Vernieuwen",
+    "enrolledBy": "Aangemeld door {{name}}",
+    "leaderSessions": "Leiders",
+    "leaderSessionsNotice": "Iedereen die via een leiderlink is binnengekomen. Intrekken beëindigt de toegang van die persoon zonder de link opnieuw te genereren; de apparaten die hij of zij heeft aangemeld blijven open (sluit ze hieronder indien nodig).",
+    "leaderSessionName": "Naam",
+    "leaderSessionJoined": "Binnengekomen",
+    "leaderSessionDevices": "Open apparaten",
+    "leaderSessionsEmpty": "Nog niemand is via een leiderlink binnengekomen.",
+    "leaderSessionRevokedAt": "Ingetrokken op {{date}}",
+    "leaderSessionRevoke": "Intrekken",
+    "leaderSessionRevokeConfirm": "De leidertoegang van {{name}} intrekken? De apparaten die hij of zij heeft aangemeld blijven open.",
+    "leaderSessionEnded": "Beëindigd"
   },
   "eventsMyTeam": {
     "loading": "Laden…",
@@ -639,7 +650,9 @@
     "moveConfirm": "Dit apparaat naar een ander team verplaatsen? Het verlaat jouw team.",
     "addToMyTeam": "Aan mijn team toevoegen",
     "addConfirm": "Dit apparaat aan je team toevoegen?",
-    "actionFailed": "De wijziging kon niet worden doorgevoerd."
+    "actionFailed": "De wijziging kon niet worden doorgevoerd.",
+    "leaderName": "Leider: {{name}}",
+    "enrolledBy": "Aangemeld door {{name}}"
   },
   "eventsShared": {
     "openInAtak": "Openen in ATAK",
@@ -655,7 +668,10 @@
     "failed": "Deze link is niet geldig.",
     "sharedIntro": "Scan deze code in ATAK om bij je team te komen.",
     "scanAtak": "ATAK → enrollment → scan deze QR-code.",
-    "noEnrollment": "Er is nu geen enrollment beschikbaar."
+    "noEnrollment": "Er is nu geen enrollment beschikbaar.",
+    "leaderNameLabel": "Je naam",
+    "leaderNameHint": "Zichtbaar voor de organisatie, zodat die ziet wie de leidertoegang gebruikt.",
+    "leaderJoin": "Doorgaan"
   },
   "admin": {
     "dashboard": {

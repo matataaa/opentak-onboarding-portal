@@ -7,7 +7,8 @@ playing in that team, using OTS device profiles (/api/profiles).
 Profiles written per EUD (eud_uid is always set; a profile without one would
 apply to every device):
 - locationTeam = team colour
-- atakRoleType = Team Member
+- atakRoleType = HQ for the event's organizer (HQ) team, Team Lead for leaders
+  (a leader's own devices and the team's shared leader account), else Team Member
 
 Who gets a colour is derived only from portal-owned data (event sessions and
 the team's leader account), never from the team's OTS group members, because
@@ -24,6 +25,11 @@ from app.ots import otsClient
 COLOR_KEY = 'locationTeam'
 ROLE_KEY = 'atakRoleType'
 ROLE_VALUE = 'Team Member'
+ROLE_LEAD = 'Team Lead'
+ROLE_HQ = 'HQ'
+# Every role this service writes: only these are removed again, so a role an
+# admin set by hand (e.g. Medic) survives moves, parking and the event's end.
+ROLE_VALUES = (ROLE_VALUE, ROLE_LEAD, ROLE_HQ)
 VALUE_CLASS = 'class java.lang.String'
 
 
@@ -35,10 +41,18 @@ def _open_events(now):
     ]
 
 
+def _role_for(event, team_id, leader):
+    """ATAK role: the organizer (HQ) team wins over leader, then Team Member."""
+    if event and event.organizerTeamId is not None and event.organizerTeamId == team_id:
+        return ROLE_HQ
+    return ROLE_LEAD if leader else ROLE_VALUE
+
+
 def _build_desired_state(events):
     """Return {username: (colour, role)} for the given open events."""
     from app.api_v1.events import TAK_TEAM_COLORS  # lazy: avoids a circular import
     event_ids = [e.id for e in events]
+    by_id = {e.id: e for e in events}
     desired = {}
 
     sessions = EventSessionModel.query.filter(
@@ -49,14 +63,21 @@ def _build_desired_state(events):
     ).all()
     for session in sessions:
         if session.otsUsername and session.team and session.team.color in TAK_TEAM_COLORS:
-            desired[session.otsUsername] = (session.team.color, ROLE_VALUE)
+            desired[session.otsUsername] = (
+                session.team.color,
+                _role_for(by_id.get(session.eventId), session.eventTeamId, session.role == 'leader'))
 
     leader_links = EventLinkModel.query.filter(
         EventLinkModel.eventId.in_(event_ids), EventLinkModel.role == 'leader'
     ).all()
-    for team in {link.team for link in leader_links if link.team}:
-        if team.leaderUser and team.color in TAK_TEAM_COLORS:
-            desired.setdefault(team.leaderUser.username, (team.color, ROLE_VALUE))
+    # An account leading several teams: the organizer (HQ) team's link comes first, so HQ wins
+    leader_links.sort(key=lambda link: (
+        by_id[link.eventId].organizerTeamId != link.eventTeamId, link.id))
+    for link in leader_links:
+        team = link.team
+        if team and team.leaderUser and team.color in TAK_TEAM_COLORS:
+            desired.setdefault(team.leaderUser.username,
+                               (team.color, _role_for(by_id.get(link.eventId), team.id, True)))
     return desired
 
 
@@ -75,13 +96,14 @@ def _delete_unwanted_device_profiles(uid, existing):
     """Remove colour/role profiles of a device EUD that no longer gets a colour.
 
     The old team colour is not known (the team may have lost its colour), so only
-    values this service can have written are deleted: a TAK team colour and the role.
+    values this service can have written are deleted: a TAK team colour and a role
+    from ROLE_VALUES.
     """
     from app.api_v1.events import TAK_TEAM_COLORS  # lazy: avoids a circular import
     if existing[COLOR_KEY].get(uid) in TAK_TEAM_COLORS:
         otsClient.delete_device_profile(COLOR_KEY, uid)
         del existing[COLOR_KEY][uid]
-    if existing[ROLE_KEY].get(uid) == ROLE_VALUE:
+    if existing[ROLE_KEY].get(uid) in ROLE_VALUES:
         otsClient.delete_device_profile(ROLE_KEY, uid)
         del existing[ROLE_KEY][uid]
 
@@ -96,12 +118,13 @@ def read_profiles():
     return existing
 
 
-def _delete_profiles(uid, existing, color):
-    """Delete the colour/role profiles of an EUD, but only those still holding the
-    value this service wrote (so values an admin set by hand are kept)."""
-    expected = {COLOR_KEY: color, ROLE_KEY: ROLE_VALUE}
-    for key, value in expected.items():
-        if existing[key].get(uid) == value:
+def _delete_profiles(uid, existing, color, roles=ROLE_VALUES):
+    """Delete the colour/role profiles of an EUD, but only those still holding a
+    value this service writes (so values an admin set by hand are kept). roles
+    narrows the role values that count as written by this service."""
+    expected = {COLOR_KEY: (color,), ROLE_KEY: roles}
+    for key, values in expected.items():
+        if existing[key].get(uid) in values:
             otsClient.delete_device_profile(key, uid)
             del existing[key][uid]
 
@@ -125,11 +148,16 @@ def sync_event_team_colors():
     unwanted_devices = _unwanted_device_usernames(events, desired) if events else set()
 
     # Leader accounts that are not (or no longer) wanted: only their own colour is removed.
-    leader_colors = {
-        t.leaderUser.username: t.color
-        for t in EventTeamModel.query.filter(EventTeamModel.leaderUserId.isnot(None)).all()
-        if t.leaderUser and t.color
-    }
+    # The shared leader accounts may be real people's logins too: only the roles written
+    # for them are removed (Team Member by earlier versions, Team Lead, HQ for organizer teams).
+    organizer_ids = {row[0] for row in EventModel.query.with_entities(EventModel.organizerTeamId).filter(
+        EventModel.organizerTeamId.isnot(None)).all()}
+    leader_colors = {}
+    for t in EventTeamModel.query.filter(EventTeamModel.leaderUserId.isnot(None)).all():
+        if t.leaderUser and t.color:
+            roles = {ROLE_VALUE, ROLE_HQ if t.id in organizer_ids else ROLE_LEAD}
+            _old, old_roles = leader_colors.get(t.leaderUser.username, (None, set()))
+            leader_colors[t.leaderUser.username] = (t.color, old_roles | roles)
 
     euds = otsClient.get_all_pages(otsClient.get_euds, sort_by='id').get('response', {}).get('results', [])
     existing = read_profiles()
@@ -151,7 +179,8 @@ def sync_event_team_colors():
             elif username in unwanted_devices:
                 _delete_unwanted_device_profiles(uid, existing)
             elif leader_colors.get(username):
-                _delete_profiles(uid, existing, leader_colors[username])
+                color, roles = leader_colors[username]
+                _delete_profiles(uid, existing, color, tuple(roles))
         except Exception as e:
             current_app.logger.error(f"Event team colour sync failed for EUD {uid} ({username}): {e}")
 

@@ -347,6 +347,7 @@ def refresh():
         claims['event_leader_link'] = jwt_data.get('event_leader_link')
         claims['event_leader_link_version'] = jwt_data.get('event_leader_link_version')
         claims['event_leader_link_nonce'] = jwt_data.get('event_leader_link_nonce')
+        claims['event_leader_session'] = jwt_data.get('event_leader_session')
         remaining = int(jwt_data.get('event_leader_until') or 0) - int(time.time())
         if remaining <= 0:
             return jsonify({'error': 'Session expired'}), 401

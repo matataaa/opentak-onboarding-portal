@@ -630,7 +630,11 @@ export const eventsAPI = {
   moveAccount: (eventId, sessionId, teamId) => api.post(`/events/${eventId}/accounts/${sessionId}/move`, { teamId }),
   closeAccount: (eventId, sessionId) => api.post(`/events/${eventId}/accounts/${sessionId}/close`),
 
-  join: (token) => axios.post(`${API_BASE_URL}/api/v1/events/join/${token}`),
+  listLeaderSessions: (eventId) => api.get(`/events/${eventId}/leader-sessions`),
+  revokeLeaderSession: (eventId, sessionId) => api.post(`/events/${eventId}/leader-sessions/${sessionId}/revoke`),
+
+  // data: { displayName } for leader links (the first call without it answers 400 display_name_required)
+  join: (token, data) => axios.post(`${API_BASE_URL}/api/v1/events/join/${token}`, data),
 
   myTeam: () => api.get('/events/my-team'),
   myTeamEnrollment: (data) => api.post('/events/my-team/enrollment', data),
