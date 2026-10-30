@@ -17,11 +17,17 @@ function saveKioskSession(data) {
   sessionStorage.setItem(KIOSK_SESSION_KEY, JSON.stringify(data));
   // Also write to localStorage so ProgramRadioModal/ConfigValidatorModal API calls work
   localStorage.setItem('access_token', data.accessToken);
+  // Drop any earlier user's session on this browser so the 401 refresh
+  // interceptor and AuthContext cannot fall back into it.
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('user');
 }
 
 function clearKioskSession() {
   sessionStorage.removeItem(KIOSK_SESSION_KEY);
   localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('user');
 }
 
 function loadKioskSession() {
