@@ -185,7 +185,10 @@
     "bothFieldsRequired": "Beide velden zijn verplicht",
     "settingPassword": "Wachtwoord instellen...",
     "setPassword": "Wachtwoord instellen",
-    "failedSetPassword": "Wachtwoord instellen mislukt"
+    "failedSetPassword": "Wachtwoord instellen mislukt",
+    "usernameTakenOnServer": "Deze gebruikersnaam is al in gebruik op de TAK-server. Neem contact op met een beheerder.",
+    "passwordAlreadySet": "Je wachtwoord is al ingesteld. Gebruik Wachtwoord wijzigen om het te wijzigen.",
+    "takServerUnreachable": "Kan geen verbinding maken met de TAK-server. Probeer het later opnieuw."
   },
   "dashboard": {
     "welcome": "Welkom, ",

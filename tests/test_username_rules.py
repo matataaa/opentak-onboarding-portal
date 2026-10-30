@@ -22,6 +22,9 @@ class FakeOTS:
     def add_user_to_group(self, *args, **kwargs):
         pass
 
+    def user_exists(self, username):
+        return False
+
 
 @pytest.fixture
 def admin_headers(db):
@@ -62,6 +65,7 @@ def test_oidc_collision_suffix_stays_within_32(app, client, db, monkeypatch):
     db.session.commit()
     UserModel.create_user(username='a' * 32, email='base@example.com')
 
+    monkeypatch.setattr(oidc, 'OTSClient', lambda *a, **k: FakeOTS())
     monkeypatch.setattr(oidc, '_fetch_discovery', lambda url: {
         'token_endpoint': 'http://idp/token', 'userinfo_endpoint': 'http://idp/userinfo'})
     monkeypatch.setattr(SystemSettingsModel, 'get_setting',

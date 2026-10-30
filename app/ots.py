@@ -244,6 +244,11 @@ class OTSClient:
         
         return self.request_handler(method="GET", endpoint=self._users, params=params)
 
+    def user_exists(self, username):
+        """True if OTS has an account with exactly this username. Errors propagate."""
+        results = self.get_users(username=username, per_page=100).get('response', {}).get('results', [])
+        return any(u.get('username') == username for u in results)
+
     def create_user(self, username, password, roles = ["user"]):
         body = {'username': username, 'password': password, 'confirm_password': password, 'roles': roles}
         return self.request_handler(method="POST", endpoint=self._user_add, body=body)

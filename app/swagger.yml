@@ -488,6 +488,43 @@ paths:
         '401':
           description: Not authenticated
 
+  /auth/set-password:
+    post:
+      tags:
+        - Authentication
+      summary: Set initial password
+      description: >
+        Set the first password for an OIDC-created user that has none yet, and create
+        their OTS account with it. Never resets an existing OTS account's password.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - newPassword
+              properties:
+                newPassword:
+                  type: string
+                  format: password
+                  minLength: 8
+      responses:
+        '200':
+          description: Password set and OTS account created
+        '400':
+          description: Invalid password, or OTS rejected the account
+        '409':
+          description: >
+            Password already set (`code`: `password_already_set`; use change-password),
+            or the username already exists on the TAK server (`code`: `username_taken_on_server`)
+        '502':
+          description: OTS returned an unexpected error
+        '503':
+          description: TAK server unreachable
+
   /auth/register:
     post:
       tags:
