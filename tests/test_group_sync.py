@@ -481,3 +481,62 @@ def test_users_update_flagged_group_direction_change_and_uncheck_make_no_ots_cal
     assert GroupUserAssociation.query.filter_by(user_id=user.id).count() == 0
     ots.add_user_to_group.assert_not_called()
     ots.remove_user_from_group.assert_not_called()
+
+
+# --- membership direction -------------------------------------------------------------
+
+@pytest.mark.parametrize('existing, code_dir, expected', [
+    ('IN', 'OUT', 'BOTH'),
+    ('BOTH', 'IN', 'BOTH'),
+    ('OUT', 'OUT', 'OUT'),
+    (None, 'IN', 'IN'),
+])
+def test_assign_ots_groups_merges_direction(db, app, ots, existing, code_dir, expected):
+    from app.api_v1.auth import assign_ots_groups
+    g = _group(db, 'gs_dir')
+    code = OnboardingCodeModel(onboardingCode='GSC_DIR', name='dir')
+    user = UserModel.create_user(username='gsu_dir_merge', email='gsu_dir_merge@example.com')
+    db.session.add(code)
+    db.session.flush()
+    db.session.add(GroupOnboardingCodeAssociation(group_id=g.id, onboardingcode_id=code.id, direction=code_dir))
+    if existing:
+        db.session.add(GroupUserAssociation(group_id=g.id, user_id=user.id, direction=existing))
+    db.session.commit()
+    assign_ots_groups('gsu_dir_merge', code, user)
+    db.session.commit()
+    assert GroupUserAssociation.query.filter_by(user_id=user.id).one().direction == expected
+
+
+def _login_with(client, monkeypatch, username, groups, memberships=None):
+    fake = MagicMock()
+    response = {'groups': [{'name': n} for n in groups], 'roles': [], 'email': 'x@example.com'}
+    if memberships is not None:
+        response['group_memberships'] = [
+            {'username': username, 'group_name': n, 'direction': d, 'active': True} for n, d in memberships]
+    fake.get_me.return_value = {'response': response}
+    monkeypatch.setattr('app.api_v1.auth.OTSClient', lambda *a, **k: fake)
+    r = client.post(f'{API}/auth/login', json={'username': username, 'password': 'pw'})
+    assert r.status_code == 200, r.get_json()
+
+
+def test_login_mirrors_ots_directions(client, db, monkeypatch):
+    g_in, g_both, g_out = _group(db, 'gs_lin'), _group(db, 'gs_lboth'), _group(db, 'gs_lout')
+    user = UserModel.create_user(username='gsu_ldir', email='gsu_ldir@example.com')
+    db.session.add(GroupUserAssociation(group_id=g_out.id, user_id=user.id, direction='BOTH'))
+    db.session.commit()
+    _login_with(client, monkeypatch, 'gsu_ldir', ['gs_lin', 'gs_lboth', 'gs_lout'], [
+        ('gs_lin', 'IN'), ('gs_lboth', 'IN'), ('gs_lboth', 'OUT'), ('gs_lout', 'OUT')])
+    db.session.expire_all()
+    dirs = {a.group_id: a.direction for a in GroupUserAssociation.query.filter_by(user_id=user.id)}
+    assert dirs == {g_in.id: 'IN', g_both.id: 'BOTH', g_out.id: 'OUT'}
+
+
+def test_login_without_memberships_keeps_old_behaviour(client, db, monkeypatch):
+    g_new, g_old = _group(db, 'gs_lnew'), _group(db, 'gs_lold')
+    user = UserModel.create_user(username='gsu_lold', email='gsu_lold@example.com')
+    db.session.add(GroupUserAssociation(group_id=g_old.id, user_id=user.id, direction='IN'))
+    db.session.commit()
+    _login_with(client, monkeypatch, 'gsu_lold', ['gs_lnew', 'gs_lold'])
+    db.session.expire_all()
+    dirs = {a.group_id: a.direction for a in GroupUserAssociation.query.filter_by(user_id=user.id)}
+    assert dirs == {g_new.id: 'BOTH', g_old.id: 'IN'}

@@ -749,6 +749,7 @@
       "searchUsers": "Benutzer zum Hinzufügen suchen...",
       "searchPlaceholder": "Gruppen suchen...",
       "membersHelp": "Aktuelle Mitglieder werden unten angezeigt. Suchen Sie, um neue Benutzer hinzuzufügen.",
+      "directionHelp": "Die Richtung bestimmt, wer wen in dieser Gruppe sieht. IN (senden): teilt die eigene Position und Marker mit der Gruppe. OUT (empfangen): sieht, was andere an die Gruppe senden. Beide: senden und empfangen. A sieht B nur, wenn A OUT und B IN in derselben Gruppe hat. Ohne ein einziges IN teilt ein Benutzer seine Position mit Benutzern, die überhaupt keiner Gruppe angehören. Geben Sie daher jedem Benutzer mindestens ein IN und ein OUT.",
       "loadingMembers": "Mitglieder werden geladen...",
       "noMembers": "Keine Mitglieder in dieser Gruppe. Suchen Sie, um Benutzer hinzuzufügen.",
       "noMatchingUsers": "Keine passenden Benutzer gefunden.",

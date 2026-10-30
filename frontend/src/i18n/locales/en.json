@@ -749,6 +749,7 @@
       "searchUsers": "Search users to add...",
       "searchPlaceholder": "Search groups...",
       "membersHelp": "Current members shown below. Search to add new users.",
+      "directionHelp": "Direction decides who sees whom in this group. IN (send): shares its position and markers with the group. OUT (receive): sees what others send to the group. Both: send and receive. A only sees B when A has OUT and B has IN on the same group. Without any IN a user shares their position with users who have no group at all, so give every user at least one IN and one OUT.",
       "loadingMembers": "Loading members...",
       "noMembers": "No members in this group. Search to add users.",
       "noMatchingUsers": "No matching users found.",

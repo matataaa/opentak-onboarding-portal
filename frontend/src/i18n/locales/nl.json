@@ -749,6 +749,7 @@
       "searchUsers": "Zoek gebruikers om toe te voegen...",
       "searchPlaceholder": "Groepen zoeken...",
       "membersHelp": "Huidige leden worden hieronder getoond. Zoek om nieuwe gebruikers toe te voegen.",
+      "directionHelp": "De richting bepaalt wie wie ziet in deze groep. IN (verzenden): deelt de eigen positie en markers met de groep. OUT (ontvangen): ziet wat anderen naar de groep sturen. Beide: verzenden en ontvangen. A ziet B alleen als A OUT heeft en B IN in dezelfde groep. Zonder enige IN deelt een gebruiker de eigen positie met gebruikers die helemaal geen groep hebben, dus geef elke gebruiker minstens één IN en één OUT.",
       "loadingMembers": "Leden laden...",
       "noMembers": "Geen leden in deze groep. Zoek om gebruikers toe te voegen.",
       "noMatchingUsers": "Geen overeenkomende gebruikers gevonden.",

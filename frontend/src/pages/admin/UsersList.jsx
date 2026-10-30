@@ -533,6 +533,7 @@ function UsersList() {
                     </div>
                   )}
                   <span className="help-text">{t('admin.users.otsGroupsHelp')}</span>
+                  <span className="help-text" style={{ display: 'block' }}>{t('admin.groups.directionHelp')}</span>
                 </div>
               </div>
 

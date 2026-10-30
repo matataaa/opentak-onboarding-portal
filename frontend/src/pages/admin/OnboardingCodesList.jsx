@@ -477,6 +477,7 @@ function OnboardingCodesList() {
                     </div>
                   )}
                   <span className="help-text">{t('admin.onboardingCodes.otsGroupsHelp')}</span>
+                  <span className="help-text" style={{ display: 'block' }}>{t('admin.groups.directionHelp')}</span>
                 </div>
 
                 <div className="form-group">
