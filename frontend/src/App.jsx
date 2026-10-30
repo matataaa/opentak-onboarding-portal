@@ -192,7 +192,10 @@ const PublicRoute = ({ children }) => {
     return <LoadingScreen />;
   }
 
-  if (user) {
+  // Admins can preview the login page (Settings > Login page) without being redirected
+  const preview = location.pathname === '/login' && new URLSearchParams(location.search).get('preview') === '1';
+
+  if (user && !preview) {
     const next = safeInternalPath(new URLSearchParams(location.search).get('next'));
     return <Navigate to={next || '/dashboard'} replace />;
   }

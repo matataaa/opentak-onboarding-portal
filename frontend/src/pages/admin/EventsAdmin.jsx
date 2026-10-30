@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { QRCodeSVG } from 'qrcode.react';
 import { eventsAPI, groupsAPI, onboardingCodesAPI } from '../../services/api';
@@ -56,6 +56,13 @@ export default function EventsAdmin() {
   const [notice, setNotice] = useState('');
   const [linkRemaining, setLinkRemaining] = useState({}); // linkId -> open accounts left after a close
   const [linkRetry, setLinkRetry] = useState({}); // linkId -> last direction save left accounts unchanged
+
+  const linksPanelRef = useRef(null);
+
+  // Bring the links panel into view when an event's links are opened
+  useEffect(() => {
+    if (openLinksFor) linksPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [openLinksFor]);
 
   const openEvent = events.find((ev) => ev.id === openLinksFor);
   const hqTeamId = openEvent?.organizerTeamId ?? null;
@@ -271,7 +278,7 @@ export default function EventsAdmin() {
           <p className="events-intro">{t('events.intro')}</p>
         </div>
       </div>
-      {error && <div className="events-error">{error}</div>}
+      {error && <div className="alert alert-error">{error}</div>}
 
       {/* Teams */}
       <section className="events-section">
@@ -286,10 +293,10 @@ export default function EventsAdmin() {
             <option value="">{t('events.noGroup')}</option>
             {groups.filter((g) => !g.missingInOts).map((g) => <option key={g.id} value={g.id}>{g.displayName || g.name}</option>)}
           </select>
-          <button onClick={createTeam} disabled={!teamForm.name}>{t('events.addTeam')}</button>
+          <button className="btn btn-sm btn-primary" onClick={createTeam} disabled={!teamForm.name}>{t('events.addTeam')}</button>
         </div>
-        <div className="events-table-wrap">
-          <table className="events-table">
+        <div className="admin-table-container">
+          <table className="admin-table">
             <thead><tr><th>{t('events.teamName')}</th><th>{t('events.color')}</th><th>{t('events.group')}</th><th>{t('events.leader')}</th><th></th></tr></thead>
             <tbody>
               {teams.map((team) => (
@@ -309,11 +316,11 @@ export default function EventsAdmin() {
                       <span className="events-leader-form">
                         <input placeholder={t('events.leaderUsername')} value={(leaderForm[team.id] || {}).username || ''} onChange={(e) => setLeaderForm((p) => ({ ...p, [team.id]: { ...(p[team.id] || {}), username: e.target.value } }))} />
                         <input type="password" placeholder={t('events.password')} value={(leaderForm[team.id] || {}).password || ''} onChange={(e) => setLeaderForm((p) => ({ ...p, [team.id]: { ...(p[team.id] || {}), password: e.target.value } }))} />
-                        <button onClick={() => setLeader(team.id)}>{t('events.setLeader')}</button>
+                        <button className="btn btn-sm btn-secondary" onClick={() => setLeader(team.id)}>{t('events.setLeader')}</button>
                       </span>
                     )}
                   </td>
-                  <td><button className="events-danger" onClick={() => call(() => eventsAPI.deleteTeam(team.id), (res) => notifyHq(res.data))}>{t('common.delete')}</button></td>
+                  <td><button className="btn btn-sm btn-danger" onClick={() => call(() => eventsAPI.deleteTeam(team.id), (res) => notifyHq(res.data))}>{t('common.delete')}</button></td>
                 </tr>
               ))}
             </tbody>
@@ -336,24 +343,36 @@ export default function EventsAdmin() {
             <option value="deactivate">{t('events.cleanupDeactivate')}</option>
             <option value="delete">{t('events.cleanupDelete')}</option>
           </select>
-          <button onClick={createEvent} disabled={!eventForm.name || (eventForm.playerAccessMode === 'shared' && !eventForm.validUntil)}>{t('events.addEvent')}</button>
+          <button className="btn btn-sm btn-primary" onClick={createEvent} disabled={!eventForm.name || (eventForm.playerAccessMode === 'shared' && !eventForm.validUntil)}>{t('events.addEvent')}</button>
         </div>
         {eventForm.playerAccessMode === 'shared' && !eventForm.validUntil && (
           <p className="events-hint">{t('events.sharedNeedsEnd')}</p>
         )}
-        <div className="events-table-wrap">
-          <table className="events-table">
+        <div className="admin-table-container">
+          <table className="admin-table">
             <thead><tr><th>{t('events.eventName')}</th><th>{t('events.validUntil')}</th><th>{t('events.playerMode')}</th><th>{t('events.cleanup')}</th><th></th></tr></thead>
             <tbody>
               {events.map((ev) => (
-                <tr key={ev.id}>
+                <tr key={ev.id} className={ev.id === openLinksFor ? 'events-row-selected' : undefined}>
                   <td>{ev.name}</td>
                   <td>{ev.validUntil ? formatDateTime(ev.validUntil, dateFormat) : t('common.never')}</td>
                   <td>{ev.playerAccessMode}</td>
                   <td>{ev.accountCleanup}</td>
                   <td>
-                    <button onClick={() => openLinks(ev.id)}>{t('events.links')}</button>
-                    <button className="events-danger" onClick={() => call(() => eventsAPI.deleteEvent(ev.id))}>{t('common.delete')}</button>
+                    <div className="table-actions">
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${ev.id === openLinksFor ? 'btn-info' : 'btn-secondary'}`}
+                        aria-expanded={ev.id === openLinksFor}
+                        aria-controls="events-links-panel"
+                        onClick={() => (ev.id === openLinksFor ? setOpenLinksFor(null) : openLinks(ev.id))}
+                      >
+                        <span aria-hidden="true">{ev.id === openLinksFor ? '▾' : '▸'}</span> {t('events.links')}
+                      </button>
+                      <button className="btn btn-sm btn-danger" onClick={() => call(() => eventsAPI.deleteEvent(ev.id), () => {
+                        if (ev.id === openLinksFor) setOpenLinksFor(null);
+                      })}>{t('common.delete')}</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -362,10 +381,13 @@ export default function EventsAdmin() {
         </div>
       </section>
 
-      {/* Links for the selected event */}
+      {/* Links for the selected event: framed panel directly under the events table */}
       {openLinksFor && (
-        <section className="events-section">
-          <h2>{t('events.linksFor')} #{openLinksFor}</h2>
+        <div id="events-links-panel" className="events-links-panel" ref={linksPanelRef}>
+          <div className="events-links-panel-header">
+            <h2>{t('events.linksFor', { name: openEvent?.name || `#${openLinksFor}` })}</h2>
+            <button type="button" className="btn btn-sm btn-secondary" onClick={() => setOpenLinksFor(null)}>{t('common.close')}</button>
+          </div>
           <div className="events-form-row">
             <label>{t('events.organizerTeam')}
               <select
@@ -389,6 +411,7 @@ export default function EventsAdmin() {
             {canEdit && (
               <button
                 type="button"
+                className="btn btn-sm btn-secondary"
                 title={t('events.reapplyHint')}
                 onClick={() => applyOrganizer({ organizerTeamId: hqTeamId, organizerDirection: openEvent?.organizerDirection || 'OUT' })}
               >
@@ -422,11 +445,11 @@ export default function EventsAdmin() {
             <select aria-label={t('events.direction')} value={linkForm.direction} onChange={(e) => setLinkForm({ ...linkForm, direction: e.target.value })}>
               {LINK_DIRECTIONS.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}
             </select>
-            <button onClick={createLink} disabled={!linkForm.teamId}>{t('events.generateLink')}</button>
+            <button className="btn btn-sm btn-primary" onClick={createLink} disabled={!linkForm.teamId}>{t('events.generateLink')}</button>
           </div>
           <p className="events-hint">{t('events.directionHint')} {t('admin.groups.directionHelp')}</p>
-          <div className="events-table-wrap">
-            <table className="events-table">
+          <div className="admin-table-container">
+            <table className="admin-table">
               <thead><tr><th>{t('events.team')}</th><th>{t('events.role')}</th><th>{t('events.direction')}</th><th>{t('events.code')}</th><th>{t('events.version')}</th><th></th></tr></thead>
               <tbody>
                 {links.map((l) => (
@@ -443,7 +466,7 @@ export default function EventsAdmin() {
                             {LINK_DIRECTIONS.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}
                           </select>
                           {linkRetry[l.id] && (
-                            <button type="button" title={t('events.reapplyHint')} onClick={() => applyDirection(l, l.direction || 'BOTH')}>
+                            <button type="button" className="btn btn-sm btn-secondary" title={t('events.reapplyHint')} onClick={() => applyDirection(l, l.direction || 'BOTH')}>
                               {t('events.reapply')}
                             </button>
                           )}
@@ -453,24 +476,38 @@ export default function EventsAdmin() {
                     <td>{l.onboardingCode?.name || l.onboardingCode?.onboardingCode || '-'}</td>
                     <td>v{l.tokenVersion}</td>
                     <td>
-                      <button onClick={() => showQr(l)} disabled={!l.retrievable} title={l.retrievable ? '' : t('events.regenerateToShowQr')}>{t('events.qrLink')}</button>
-                      <button onClick={() => regenerate(l)}>{t('events.regenerate')}</button>
-                      {canEdit && (
-                        <button className="events-danger" onClick={() => closeLinkAccounts(l)}>{linkRemaining[l.id] > 0 ? t('events.closeLinkAccountsMore', { remaining: linkRemaining[l.id] }) : t('events.closeLinkAccounts')}</button>
-                      )}
-                      <button className="events-danger" onClick={() => call(() => eventsAPI.deleteLink(l.id), (res) => {
-                      notifyHq(res.data);
-                      setPrintSheet((p) => p.filter((x) => x.id !== l.id));
-                      setQrLink((q) => (q?.id === l.id ? null : q));
-                    }).then(() => loadLinks(openLinksFor))}>{t('common.delete')}</button>
+                      <div className="table-actions">
+                        <button className="btn btn-sm btn-success" onClick={() => showQr(l)} disabled={!l.retrievable} title={l.retrievable ? '' : t('events.regenerateToShowQr')}>{t('events.qrLink')}</button>
+                        <button className="btn btn-sm btn-warning" onClick={() => regenerate(l)}>{t('events.regenerate')}</button>
+                        {canEdit && (
+                          <button className="btn btn-sm btn-danger" onClick={() => closeLinkAccounts(l)}>{linkRemaining[l.id] > 0 ? t('events.closeLinkAccountsMore', { remaining: linkRemaining[l.id] }) : t('events.closeLinkAccounts')}</button>
+                        )}
+                        <button className="btn btn-sm btn-danger" onClick={() => call(() => eventsAPI.deleteLink(l.id), (res) => {
+                        notifyHq(res.data);
+                        setPrintSheet((p) => p.filter((x) => x.id !== l.id));
+                        setQrLink((q) => (q?.id === l.id ? null : q));
+                      }).then(() => loadLinks(openLinksFor))}>{t('common.delete')}</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {qrLink && (
+            <div className="events-new-link events-qr-panel">
+              <strong>{qrLink.label}</strong>
+              {qrLink.hq && <span className="events-print-hq">{t('events.hqPrintLabel')}</span>}
+              <QRCodeSVG value={qrLink.url} size={200} level="M" />
+              <code>{qrLink.url}</code>
+              <div className="table-actions">
+                <button className="btn btn-sm btn-success" onClick={() => navigator.clipboard?.writeText(qrLink.url)}>{t('events.copyLink')}</button>
+                <button className="btn btn-sm btn-secondary" onClick={() => setQrLink(null)}>{t('common.close')}</button>
+              </div>
+            </div>
+          )}
           <div className="events-form-row">
-            <button onClick={printAll} disabled={!links.some((l) => l.retrievable)}>{t('events.printAllQrs')}</button>
+            <button className="btn btn-sm btn-secondary" onClick={printAll} disabled={!links.some((l) => l.retrievable)}>{t('events.printAllQrs')}</button>
           </div>
 
           {/* Device accounts of the selected event */}
@@ -479,10 +516,10 @@ export default function EventsAdmin() {
           {notice && <p className="events-hint">{notice}</p>}
           {!eudsAvailable && <p className="events-hint">{t('events.eudsUnavailable')}</p>}
           <div className="events-form-row">
-            <button onClick={() => loadAccounts(openLinksFor)}>{t('events.refresh')}</button>
+            <button className="btn btn-sm btn-secondary" onClick={() => loadAccounts(openLinksFor)}>{t('events.refresh')}</button>
           </div>
-          <div className="events-table-wrap">
-            <table className="events-table">
+          <div className="admin-table-container">
+            <table className="admin-table">
               <thead><tr><th>{t('events.accountCallsign')} / {t('events.accountUsername')}</th><th>{t('events.team')}</th><th>{t('events.accountStatus')}</th><th>{t('events.accountCreated')}</th>{canEdit && <th></th>}</tr></thead>
               <tbody>
                 {accounts.length === 0 && <tr><td colSpan={canEdit ? 5 : 4}>{t('events.accountsEmpty')}</td></tr>}
@@ -504,7 +541,7 @@ export default function EventsAdmin() {
                     {canEdit && (
                       <td>
                         {!a.legacy && (
-                          <>
+                          <div className="table-actions">
                             <select
                               aria-label={t('events.moveTo')}
                               value={a.parked ? '' : (a.team?.id ?? '')}
@@ -513,8 +550,8 @@ export default function EventsAdmin() {
                               <option value="">{t('events.parkNoTeam')}</option>
                               {teams.map((tm) => <option key={tm.id} value={tm.id}>{tm.id === hqTeamId ? `${tm.name} (${t('events.hqBadge')})` : tm.name}</option>)}
                             </select>
-                            <button className="events-danger" onClick={() => closeAccount(a)}>{t('events.closeAccount')}</button>
-                          </>
+                            <button className="btn btn-sm btn-danger" onClick={() => closeAccount(a)}>{t('events.closeAccount')}</button>
+                          </div>
                         )}
                       </td>
                     )}
@@ -524,23 +561,11 @@ export default function EventsAdmin() {
             </table>
           </div>
 
-          {qrLink && (
-            <div className="events-new-link events-qr-panel">
-              <strong>{qrLink.label}</strong>
-              {qrLink.hq && <span className="events-print-hq">{t('events.hqPrintLabel')}</span>}
-              <QRCodeSVG value={qrLink.url} size={200} level="M" />
-              <code>{qrLink.url}</code>
-              <div>
-                <button onClick={() => navigator.clipboard?.writeText(qrLink.url)}>{t('events.copyLink')}</button>
-                <button onClick={() => setQrLink(null)}>{t('common.close')}</button>
-              </div>
-            </div>
-          )}
           {printSheet.length > 0 && (
             <div className="events-print-sheet">
               <div className="events-print-actions no-print">
-                <button onClick={() => window.print()}>{t('events.printSheet')}</button>
-                <button onClick={() => setPrintSheet([])}>{t('events.clearSheet')}</button>
+                <button className="btn btn-sm btn-primary" onClick={() => window.print()}>{t('events.printSheet')}</button>
+                <button className="btn btn-sm btn-secondary" onClick={() => setPrintSheet([])}>{t('events.clearSheet')}</button>
               </div>
               <div className="events-print-grid">
                 {printSheet.map((item, i) => (
@@ -553,7 +578,7 @@ export default function EventsAdmin() {
               </div>
             </div>
           )}
-        </section>
+        </div>
       )}
     </div>
   );

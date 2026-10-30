@@ -1551,7 +1551,7 @@ function Settings() {
       <div className="settings-subsection">
         <div className="oidc-section-header">
           <h3>{t('admin.settings.loginPage')}</h3>
-          <a href="/login" target="_blank" rel="noopener noreferrer">{t('admin.settings.previewLoginPage')}</a>
+          <a href="/login?preview=1" target="_blank" rel="noopener noreferrer">{t('admin.settings.previewLoginPage')}</a>
         </div>
         <p className="setting-description" style={{ marginBottom: '1rem' }}>
           {t('admin.settings.loginPageHelp')}

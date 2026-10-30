@@ -453,7 +453,7 @@ function Dashboard() {
       title: t('dashboard.meshtasticChannelGroups'),
       content: (
         <>
-          <p style={{ color: '#666', marginBottom: '1rem' }}>{t('dashboard.scanToConfigureChannels')}</p>
+          <p className="step-description" style={{ color: '#666', marginBottom: '1rem' }}>{t('dashboard.scanToConfigureChannels')}</p>
           <div className="meshtastic-grid" style={{ justifyContent: 'center' }}>
             {groupsWithChannels.map((group) => {
               const slotMap = {};
