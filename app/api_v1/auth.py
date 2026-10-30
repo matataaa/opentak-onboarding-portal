@@ -123,7 +123,9 @@ def login():
     if not data or not data.get('username') or not data.get('password'):
         return jsonify({'error': 'Username and password are required'}), 400
 
-    username = data['username']
+    # OTS matches usernames case-insensitively at login, while portal usernames
+    # are stored lowercase: normalise so "Enzo" finds the existing "enzo" user
+    username = data['username'].strip().lower()
     password = data['password']
 
     try:

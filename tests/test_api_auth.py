@@ -147,3 +147,38 @@ class TestAuthRegister:
         assert response.status_code == 400
         data = response.get_json()
         assert 'error' in data
+
+
+class TestAuthLoginUsernameCase:
+    """OTS accepts the username case-insensitively; the portal must find the same user"""
+
+    def test_login_with_capitals_uses_existing_lowercase_user(self, client, db):
+        from app.models import UserModel
+
+        user = UserModel.query.filter_by(username='caseuser').first()
+        if not user:
+            user = UserModel.create_user(
+                username='caseuser',
+                email='caseuser@example.com',
+                firstname='Case',
+                lastname='User',
+                callsign='CASE'
+            )
+            db.session.commit()
+
+        with requests_mock.Mocker() as m:
+            m.post('http://localhost:8080/api/login', json={'token': 'mock-token'})
+            m.get('http://localhost:8080/api/me', json={
+                'username': 'caseuser',
+                'email': 'caseuser@example.com',
+                'roles': ['user']
+            })
+
+            response = client.post('/api/v1/auth/login', json={
+                'username': ' CaseUser ',
+                'password': 'password'
+            })
+
+        assert response.status_code == 200
+        assert response.get_json()['user']['username'] == 'caseuser'
+        assert UserModel.query.filter(db.func.lower(UserModel.username) == 'caseuser').count() == 1
