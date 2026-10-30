@@ -540,7 +540,7 @@ paths:
       tags:
         - Authentication
       summary: Change password
-      description: Change password for authenticated user
+      description: Change password for authenticated user. The current password is verified against OTS first.
       security:
         - bearerAuth: []
       requestBody:
@@ -562,8 +562,14 @@ paths:
       responses:
         '200':
           description: Password changed successfully
-        '401':
+        '400':
+          description: Missing current/new password, new password shorter than 8 characters, or the account has no password yet (use set-password)
+        '403':
           description: Current password is incorrect
+        '502':
+          description: OTS could not verify the current password or change it
+        '503':
+          description: OTS server unreachable
 
   /events:
     post:
