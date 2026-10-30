@@ -1085,6 +1085,7 @@
       "appearance": "Appearance",
       "general": "General",
       "advanced": "Advanced",
+      "modules": "Modules",
       "homepageTiles": "Homepage Tiles",
       "helpSupport": "Help & Support",
       "expandAll": "Expand all",
@@ -1274,7 +1275,15 @@
         },
         "events_enabled": {
           "label": "Events Module",
-          "description": "Enable the events module (teams, events and access links)"
+          "description": "Enable the events module (teams, events and access links). When off, the Events admin module and all event links are unavailable."
+        },
+        "meshtastic_enabled": {
+          "label": "Meshtastic Module",
+          "description": "Enable Meshtastic channels and channel groups. When off, they are hidden from the homepage and the admin menu, and radios cannot be programmed, validated or enrolled."
+        },
+        "radios_enabled": {
+          "label": "Radios Module",
+          "description": "Enable the radio inventory and radio claiming. Programming, validating and enrolling radios also needs the Meshtastic module."
         },
         "atak_installer_qr_enabled": {
           "label": "ATAK Installer QR Code",

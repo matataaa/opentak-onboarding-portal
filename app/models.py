@@ -1330,6 +1330,14 @@ class OIDCProviderModel(db.Model):
         self.role_mappings = json.dumps(mappings or {})
 
 
+# Switchable modules: module name -> (setting key, default when the row is missing)
+MODULE_SETTINGS = {
+    'meshtastic': ('meshtastic_enabled', True),
+    'radios': ('radios_enabled', True),
+    'events': ('events_enabled', False),
+}
+
+
 class SystemSettingsModel(db.Model):
     """
     Model for system-wide settings
@@ -1354,6 +1362,12 @@ class SystemSettingsModel(db.Model):
                 return setting.value.lower() == 'true'
             return setting.value
         return default
+
+    @staticmethod
+    def is_module_enabled(name):
+        """Whether a switchable module (see MODULE_SETTINGS) is enabled"""
+        key, default = MODULE_SETTINGS[name]
+        return SystemSettingsModel.get_setting(key, default) is True
 
     @staticmethod
     def set_setting(key, value, category='general', description=None):
@@ -1523,6 +1537,19 @@ class SystemSettingsModel(db.Model):
                 'value': 'false',
                 'category': 'security',
                 'description': 'Automatically create a local account when a user logs in via OIDC for the first time'
+            },
+            # Switchable modules
+            {
+                'key': 'meshtastic_enabled',
+                'value': 'true',
+                'category': 'modules',
+                'description': 'Enable the Meshtastic module (channels, channel groups and radio programming)'
+            },
+            {
+                'key': 'radios_enabled',
+                'value': 'true',
+                'category': 'modules',
+                'description': 'Enable the radios module (radio inventory, claiming and enrolment)'
             },
             # Events module
             {

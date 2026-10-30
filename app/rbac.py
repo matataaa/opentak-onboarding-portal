@@ -171,11 +171,15 @@ def require_admin():
 
 
 def get_user_admin_modules():
-    """Get list of modules the current user has access to (from database)"""
+    """Get list of modules the current user has access to (from database); disabled modules are left out"""
+    from app.models import MODULE_SETTINGS, SystemSettingsModel
+
     user_roles = get_user_roles()
     accessible_modules = []
 
     for module, required_roles in MODULE_ROLES.items():
+        if module in MODULE_SETTINGS and not SystemSettingsModel.is_module_enabled(module):
+            continue
         if any(role in user_roles for role in required_roles):
             accessible_modules.append(module)
 

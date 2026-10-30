@@ -1085,6 +1085,7 @@
       "appearance": "Erscheinungsbild",
       "general": "Allgemein",
       "advanced": "Erweitert",
+      "modules": "Module",
       "homepageTiles": "Startseiten-Kacheln",
       "helpSupport": "Hilfe & Support",
       "expandAll": "Alle ausklappen",
@@ -1274,7 +1275,15 @@
         },
         "events_enabled": {
           "label": "Events-Modul",
-          "description": "Events-Modul aktivieren (Teams, Events und Zugangslinks)"
+          "description": "Events-Modul aktivieren (Teams, Events und Zugangslinks). Wenn deaktiviert, sind das Events-Verwaltungsmodul und alle Event-Links nicht verfügbar."
+        },
+        "meshtastic_enabled": {
+          "label": "Meshtastic-Modul",
+          "description": "Meshtastic-Kanäle und Kanalgruppen aktivieren. Wenn deaktiviert, werden sie auf der Startseite und im Verwaltungsmenü ausgeblendet, und Funkgeräte können nicht programmiert, validiert oder registriert werden."
+        },
+        "radios_enabled": {
+          "label": "Funkgeräte-Modul",
+          "description": "Funkgeräte-Inventar und das Beanspruchen von Funkgeräten aktivieren. Zum Programmieren, Validieren und Registrieren von Funkgeräten wird zusätzlich das Meshtastic-Modul benötigt."
         },
         "atak_installer_qr_enabled": {
           "label": "QR-Code für ATAK-Installation",

@@ -1085,6 +1085,7 @@
       "appearance": "Uiterlijk",
       "general": "Algemeen",
       "advanced": "Geavanceerd",
+      "modules": "Modules",
       "homepageTiles": "Startpaginategels",
       "helpSupport": "Hulp & ondersteuning",
       "expandAll": "Alles uitklappen",
@@ -1274,7 +1275,15 @@
         },
         "events_enabled": {
           "label": "Events-module",
-          "description": "Schakel de events-module in (teams, events en toegangslinks)"
+          "description": "Schakel de events-module in (teams, events en toegangslinks). Indien uitgeschakeld zijn de Events-beheermodule en alle eventlinks niet beschikbaar."
+        },
+        "meshtastic_enabled": {
+          "label": "Meshtastic-module",
+          "description": "Schakel Meshtastic-kanalen en kanaalgroepen in. Indien uitgeschakeld worden ze verborgen op de startpagina en in het beheermenu, en kunnen radio's niet worden geprogrammeerd, gevalideerd of ingeschreven."
+        },
+        "radios_enabled": {
+          "label": "Radio-module",
+          "description": "Schakel de radio-inventaris en het claimen van radio's in. Voor het programmeren, valideren en registreren van radio's is ook de Meshtastic-module nodig."
         },
         "atak_installer_qr_enabled": {
           "label": "QR-code ATAK-installatie",

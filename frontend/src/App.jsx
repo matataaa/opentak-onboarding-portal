@@ -161,6 +161,28 @@ const ProtectedRoute = ({ children, adminOnly = false, allowIncomplete = false }
   return children;
 };
 
+// Switchable module route: redirects to the dashboard when the module is turned off
+const ModuleRoute = ({ module, children }) => {
+  const { data: settings, isPending } = useQuery({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      const response = await settingsAPI.get();
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  if (isPending) {
+    return null;
+  }
+
+  if (settings?.[`${module}_enabled`] === false) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+};
+
 // Public Route component (redirects to dashboard if already logged in)
 const PublicRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -261,7 +283,7 @@ function AppContent() {
               <Route path="change-password" element={<ChangePassword />} />
               <Route path="announcements" element={<AnnouncementHistory />} />
               <Route path="approvals" element={<Approvals />} />
-              <Route path="claim-radio/:nodeId" element={<ClaimRadio />} />
+              <Route path="claim-radio/:nodeId" element={<ModuleRoute module="radios"><ClaimRadio /></ModuleRoute>} />
               <Route path="events/my-team" element={<EventsMyTeam />} />
 
               {/* Admin routes */}
@@ -309,7 +331,9 @@ function AppContent() {
                 path="admin/events"
                 element={
                   <ProtectedRoute adminOnly>
-                    <EventsAdmin />
+                    <ModuleRoute module="events">
+                      <EventsAdmin />
+                    </ModuleRoute>
                   </ProtectedRoute>
                 }
               />
@@ -333,7 +357,9 @@ function AppContent() {
                 path="admin/meshtastic"
                 element={
                   <ProtectedRoute adminOnly>
-                    <MeshtasticList />
+                    <ModuleRoute module="meshtastic">
+                      <MeshtasticList />
+                    </ModuleRoute>
                   </ProtectedRoute>
                 }
               />
@@ -341,7 +367,9 @@ function AppContent() {
                 path="admin/meshtastic/groups"
                 element={
                   <ProtectedRoute adminOnly>
-                    <MeshtasticGroups />
+                    <ModuleRoute module="meshtastic">
+                      <MeshtasticGroups />
+                    </ModuleRoute>
                   </ProtectedRoute>
                 }
               />
@@ -349,7 +377,9 @@ function AppContent() {
                 path="admin/radios"
                 element={
                   <ProtectedRoute adminOnly>
-                    <RadiosList />
+                    <ModuleRoute module="radios">
+                      <RadiosList />
+                    </ModuleRoute>
                   </ProtectedRoute>
                 }
               />
@@ -357,7 +387,9 @@ function AppContent() {
                 path="admin/radios/:radioId"
                 element={
                   <ProtectedRoute adminOnly>
-                    <RadiosList />
+                    <ModuleRoute module="radios">
+                      <RadiosList />
+                    </ModuleRoute>
                   </ProtectedRoute>
                 }
               />

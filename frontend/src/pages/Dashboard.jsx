@@ -97,6 +97,7 @@ function Dashboard() {
         return [];
       }
     },
+    enabled: !!settings?.meshtastic_enabled,
     retry: false,
     placeholderData: [],
   });
@@ -113,6 +114,7 @@ function Dashboard() {
         return [];
       }
     },
+    enabled: !!settings?.meshtastic_enabled,
     retry: false,
     placeholderData: [],
   });
@@ -129,6 +131,7 @@ function Dashboard() {
         return [];
       }
     },
+    enabled: !!settings?.radios_enabled,
     placeholderData: [],
   });
 
@@ -444,7 +447,7 @@ function Dashboard() {
 
   // Step 5: Meshtastic Channel Groups (if any)
   const groupsWithChannels = (Array.isArray(meshtasticGroups) ? meshtasticGroups : []).filter(g => g.channel_count > 0 && g.showOnHomepage !== false);
-  if (groupsWithChannels.length > 0) {
+  if (settings?.meshtastic_enabled && groupsWithChannels.length > 0) {
     steps.push({
       index: stepIndex++,
       title: t('dashboard.meshtasticChannelGroups'),
@@ -504,7 +507,7 @@ function Dashboard() {
 
   // Step 6: Meshtastic Channels (individual, not in groups)
   const ungroupedChannels = (Array.isArray(meshtasticConfigs) ? meshtasticConfigs : []).filter(c => c.url && !c.group_id);
-  if (ungroupedChannels.length > 0) {
+  if (settings?.meshtastic_enabled && ungroupedChannels.length > 0) {
     steps.push({
       index: stepIndex++,
       title: t('dashboard.meshtasticChannels'),
@@ -541,7 +544,7 @@ function Dashboard() {
 
   // Step 7: Meshtastic Radios (if user has assigned radios or can register)
   const userRadios = (Array.isArray(radios) ? radios : []).filter(r => r.assignedTo === user?.id);
-  const showRadiosStep = userRadios.length > 0 || settings?.user_radio_enrollment_enabled;
+  const showRadiosStep = settings?.radios_enabled && (userRadios.length > 0 || settings?.user_radio_enrollment_enabled);
   if (showRadiosStep) {
     steps.push({
       index: stepIndex++,
