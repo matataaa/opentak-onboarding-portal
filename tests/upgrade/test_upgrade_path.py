@@ -45,7 +45,7 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 # SEEDS below) must be revisited on purpose.
 UPSTREAM_REV = '4b754g491aa1'
 
-HEAD_REV = 'b6c7d8e9f0a2'
+HEAD_REV = 'c7d8e9f0a1b3'
 
 # a5b6c7d8e9f1 adds the primary keys to the OTS group association tables and
 # merges duplicate (group, user) / (group, code) rows into one row first.
@@ -87,12 +87,13 @@ ADDED_COLUMNS = {
 NEW_EMPTY_TABLES = {
     'event_teams': {'id', 'name', 'otsGroupId', 'color', 'createdAt', 'leaderUserId'},
     'events': {'id', 'name', 'description', 'validFrom', 'validUntil', 'playerAccessMode',
-               'accountCleanup', 'active', 'createdAt', 'createdBy'},
+               'accountCleanup', 'active', 'createdAt', 'createdBy', 'organizerTeamId',
+               'organizerDirection'},
     'event_links': {'id', 'eventId', 'eventTeamId', 'role', 'tokenHash', 'tokenVersion',
-                    'createdAt', 'onboardingCodeId', 'tokenNonce'},
+                    'createdAt', 'onboardingCodeId', 'tokenNonce', 'direction'},
     'event_sessions': {'id', 'eventId', 'eventTeamId', 'otsUsername', 'mode', 'createdAt',
                        'expiresAt', 'closedAt', 'closeReason', 'parkedAt', 'clientKeyHash',
-                       'eventLinkId'},
+                       'eventLinkId', 'role', 'direction', 'otsGroupId'},
 }
 
 NOW = datetime(2026, 1, 15, 12, 0, 0)
@@ -647,6 +648,12 @@ def test_new_and_dropped_schema(up):
     assert fks.get(('eventLinkId',)) == 'event_links'
     fks = {tuple(f['constrained_columns']): f['referred_table'] for f in insp.get_foreign_keys('event_teams')}
     assert fks.get(('leaderUserId',)) == 'users'
+    fks = {tuple(f['constrained_columns']): f for f in insp.get_foreign_keys('events')}
+    assert fks[('organizerTeamId',)]['referred_table'] == 'event_teams'
+    assert fks[('organizerTeamId',)]['name'] == 'fk_events_organizerTeamId_event_teams'
+    for table, col, default in [('event_links', 'direction', 'BOTH'), ('events', 'organizerDirection', 'OUT')]:
+        c = next(c for c in insp.get_columns(table) if c['name'] == col)
+        assert not c['nullable'] and default in (c['default'] or ''), f'{table}.{col}: {c}'
     engine.dispose()
 
 

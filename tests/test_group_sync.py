@@ -417,7 +417,7 @@ def test_add_member_to_flagged_group_is_409(client, db, admin, ots):
     ots.add_user_to_group.assert_not_called()
 
 
-def test_event_join_skips_flagged_team_group(db, app, ots):
+def test_event_join_refuses_flagged_team_group(db, app, ots):
     from app.api_v1.events import _create_device_account
     g = _group(db, 'gs_jfl', missing=True)
     team = EventTeamModel(name='gs_jteam', otsGroupId=g.id)
@@ -425,8 +425,9 @@ def test_event_join_skips_flagged_team_group(db, app, ots):
     db.session.add_all([team, event])
     db.session.commit()
     session, error = _create_device_account(event, team)
-    assert error is None and session.mode == 'device'
-    ots.create_user.assert_called_once()
+    # a flagged group would leave the device on __ANON__: refused before any account exists
+    assert session is None and error[1] == 409
+    ots.create_user.assert_not_called()
     ots.add_user_to_group.assert_not_called()
 
 

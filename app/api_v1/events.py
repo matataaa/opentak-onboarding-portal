@@ -19,6 +19,7 @@ from flask import request, jsonify, current_app
 from flask_jwt_extended import (jwt_required, create_access_token, create_refresh_token,
                                 get_jwt, get_jwt_identity)
 from datetime import datetime, timedelta
+from sqlalchemy import or_
 
 from app.api_v1 import api_v1
 from app.models import db, EventTeamModel, EventModel, EventLinkModel, EventSessionModel, OTSGroupModel, UserModel, OnboardingCodeModel, SystemSettingsModel
@@ -45,6 +46,7 @@ DEVICE_COOKIE_NAME = 'event_device_key'
 
 OTS_USERNAME_RE = re.compile(r'^[a-z0-9]{3,32}$')
 LINK_ROLES = ('leader', 'player')
+LINK_DIRECTIONS = ('BOTH', 'IN', 'OUT')
 
 
 def _hash_token(token):
@@ -96,6 +98,7 @@ def _link_to_dict(link, raw_token=None):
         'eventTeamId': link.eventTeamId,
         'team': {'id': link.team.id, 'name': link.team.name} if link.team else None,
         'role': link.role,
+        'direction': link.direction,
         'tokenVersion': link.tokenVersion,
         'retrievable': _link_retrievable(link),
         'onboardingCodeId': link.onboardingCodeId,
@@ -242,6 +245,14 @@ def update_event_team(team_id):
                 return jsonify({'error': 'Unknown otsGroupId'}), 400
             if group.missing_in_ots and group.id != team.otsGroupId:
                 return jsonify({'error': f"Group '{group.name}' was not found in OpenTAK Server"}), 400
+        elif _reprovision_query(eventTeamId=team.id).count():
+            return jsonify({'error': 'Team has open device accounts; it needs an OTS group until they are closed'}), 409
+        if (data['otsGroupId'] or None) != team.otsGroupId:
+            # Legacy sessions hold the current group (or nothing): record it before it changes
+            EventSessionModel.query.filter_by(
+                eventTeamId=team.id, mode='device', closedAt=None, otsGroupId=None, direction=None).update(
+                {'otsGroupId': team.otsGroupId} if team.otsGroupId else {'direction': 'BOTH'},
+                synchronize_session=False)
         team.otsGroupId = data['otsGroupId']
     if 'leaderUserId' in data:
         if data['leaderUserId'] and not UserModel.get_user_by_id(data['leaderUserId']):
@@ -249,7 +260,13 @@ def update_event_team(team_id):
         team.leaderUserId = data['leaderUserId']
 
     db.session.commit()
-    return jsonify(_team_to_dict(team)), 200
+    body = _team_to_dict(team)
+    if 'otsGroupId' in data:
+        # Open device accounts (all events) follow the team's group; submitting
+        # the same group again retries the ones that failed before.
+        body['reprovisioned'], body['reprovisionFailed'] = _reprovision_sessions(
+            _reprovision_query(eventTeamId=team.id).all() if team.otsGroupId else [])
+    return jsonify(body), 200
 
 
 def _delete_closed_sessions(**filters):
@@ -495,6 +512,10 @@ def create_event_link(event_id):
     onboarding_code_id = data.get('onboardingCodeId')
     if onboarding_code_id and not OnboardingCodeModel.get_onboarding_code_by_id(onboarding_code_id):
         return jsonify({'error': 'Unknown onboardingCodeId'}), 400
+    # Applies to the device accounts of shared mode; stored for leader links too
+    direction = data.get('direction', 'BOTH')
+    if direction not in LINK_DIRECTIONS:
+        return jsonify({'error': 'direction must be one of %s' % (LINK_DIRECTIONS,)}), 400
 
     # Placeholder hash (unique, random) until the id is known and the token can be derived.
     raw, token_hash = _generate_link_token()
@@ -506,6 +527,7 @@ def create_event_link(event_id):
         tokenVersion=1,
         tokenNonce=secrets.token_urlsafe(16),
         onboardingCodeId=onboarding_code_id,
+        direction=direction,
     )
     db.session.add(link)
     if _key_is_strong():
@@ -549,6 +571,36 @@ def get_event_link_url(link_id):
     if not _link_retrievable(link):
         return jsonify({'error': 'This link cannot be shown again; regenerate it to get a retrievable link'}), 409
     return jsonify({'url': _link_url(_derive_link_token(link))}), 200
+
+
+@api_v1.route('/events/links/<int:link_id>', methods=['PUT'])
+@jwt_required()
+@require_role('events_admin')
+def update_event_link(link_id):
+    """Change the direction of a link; its open device accounts are re-provisioned in OTS.
+
+    The new direction is saved even when some accounts could not be updated
+    (counted in reprovisionFailed; saving again retries them); devices pick the
+    change up when they reconnect. A leader link's direction applies to the
+    leader's own devices (session role 'leader'), which join through it.
+    """
+    link = EventLinkModel.query.get(link_id)
+    if not link:
+        return jsonify({'error': 'Link not found'}), 404
+    data = request.get_json(silent=True) or {}
+    direction = data.get('direction')
+    if direction not in LINK_DIRECTIONS:
+        return jsonify({'error': 'direction must be one of %s' % (LINK_DIRECTIONS,)}), 400
+
+    if direction != link.direction:
+        link.direction = direction
+        db.session.commit()
+    # Every open account of this link whose granted groups differ, so saving the
+    # same direction again retries the ones that failed before.
+    body = _link_to_dict(link)
+    body['reprovisioned'], body['reprovisionFailed'] = _reprovision_sessions(
+        _reprovision_query(eventLinkId=link.id).all())
+    return jsonify(body), 200
 
 
 @api_v1.route('/events/links/<int:link_id>', methods=['DELETE'])
@@ -701,13 +753,18 @@ def _drop_device_row(candidate, candidate_session):
         current_app.logger.exception('Failed to drop session of %s', candidate)
 
 
-def _create_device_account(event, team, link=None, client_key=None, leader=False):
+def _create_device_account(event, team, link=None, client_key=None, leader=False, role=None):
     """Create one OTS account (plus its session row) for a single device.
 
     The session row is written first so the DB is always the cleanup ledger for
     the OTS account. Returns (session, None) or (None, error_response). The
-    password is random and never leaves this function.
+    password is random and never leaves this function. role='leader' marks a
+    leader's own device (link is then the leader link).
     """
+    if not team.otsGroup or team.otsGroup.missing_in_ots:
+        # Without a group the device would share its position on __ANON__
+        return None, (jsonify({'error': 'This team has no OpenTAK Server group configured; ask the organiser',
+                               'code': 'team_has_no_group'}), 409)
     limit_error = _device_limit_error(event, team, link, leader=leader)
     if limit_error:
         return None, limit_error
@@ -726,6 +783,7 @@ def _create_device_account(event, team, link=None, client_key=None, leader=False
             expiresAt=event.validUntil,
             clientKeyHash=_hash_token(client_key) if client_key else None,
             eventLinkId=link.id if link else None,
+            role=role,
         )
         try:
             db.session.add(candidate_session)
@@ -760,17 +818,16 @@ def _create_device_account(event, team, link=None, client_key=None, leader=False
     username = session.otsUsername
     try:
         otsClient.activate_user(username)
-        if team.otsGroup and team.otsGroup.missing_in_ots:
-            current_app.logger.warning(
-                "Event join: skipping group '%s' for %s, it was not found in OTS", team.otsGroup.name, username)
-        elif team.otsGroup:
-            for direction in ('IN', 'OUT'):
-                try:
-                    otsClient.add_user_to_group(username, team.otsGroup.name, direction)
-                except Exception:
-                    current_app.logger.exception(
-                        'Failed to add device account %s to group %s (%s)',
-                        username, team.otsGroup.name, direction)
+        # Fail closed: a device without its memberships could reach (or be seen by) the wrong groups
+        direction = _session_direction(session)
+        target = _desired_memberships(session, team, direction)
+        if target is None:
+            raise RuntimeError('Team %s has no usable OTS group' % team.id)
+        _prepare_memberships(event.id, target)
+        if not _apply_group_change(username, set(), target):
+            raise RuntimeError('Could not add device account %s to its groups' % username)
+        session.otsGroupId, session.direction = team.otsGroupId, direction
+        db.session.commit()
         return session, None
     except Exception:
         db.session.rollback()
@@ -1046,9 +1103,16 @@ def create_my_team_enrollment():
     if not event.validUntil:
         return jsonify({'error': 'This event has no end time configured'}), 409
 
-    link = EventLinkModel.query.filter_by(
-        eventId=event.id, eventTeamId=team.id, role='player').first()
-    session, error = _create_device_account(event, team, link, leader=True)
+    data = request.get_json(silent=True) or {}
+    if data.get('forLeader') is True:
+        # The leader's own device: joins through (and takes the direction of) the leader link
+        link = EventLinkModel.query.get(get_jwt()['event_leader_link'])
+        role = 'leader'
+    else:
+        link = EventLinkModel.query.filter_by(
+            eventId=event.id, eventTeamId=team.id, role='player').first()
+        role = None
+    session, error = _create_device_account(event, team, link, leader=True, role=role)
     if error:
         return error
     atak_info, error = _issue_device_enrollment(event, session.otsUsername)
@@ -1109,18 +1173,72 @@ def _parked_memberships(event_id):
     return {(_parked_group_name(event_id), 'OUT'), (_parked_in_group_name(event_id), 'IN')}
 
 
+def _session_direction(session):
+    """The desired direction of a device session: that of the link it joined through
+    (a leader's own device joins through the team's leader link); without a link
+    the granted direction (BOTH for legacy sessions)."""
+    link = EventLinkModel.query.get(session.eventLinkId) if session.eventLinkId else None
+    if link and link.direction in LINK_DIRECTIONS:
+        return link.direction
+    # Link deleted: keep what the device was granted
+    return session.direction if session.direction in LINK_DIRECTIONS else 'BOTH'
+
+
 def session_group_memberships(session):
-    """The (group name, direction) pairs a device session currently holds in OTS."""
+    """The (group name, direction) pairs a device session was granted in OTS.
+
+    Computed from the granted state stored on the session (parked, otsGroupId,
+    direction), never from the current link or team config, so it is the source
+    of every change and of the close job. Both NULL = legacy: BOTH and the
+    team's current group; a direction without a group = granted nothing.
+    missing_in_ots is ignored on purpose: a stale flag must not
+    skip a removal, and removing from a vanished group is harmless.
+    """
     if session.parkedAt:
         return _parked_memberships(session.eventId)
-    return _team_memberships(session.team)
+    if session.otsGroupId:
+        group = OTSGroupModel.query.get(session.otsGroupId)
+    elif session.direction is None:
+        group = session.team.otsGroup if session.team else None
+    else:
+        return set()
+    if not group:
+        return set()
+    return _group_memberships(group, session.eventId, session.direction or 'BOTH')
 
 
-def _team_memberships(team):
+def _desired_memberships(session, team, direction):
+    """Target memberships of a non-parked device session in team; None if it has no usable group."""
     group = team.otsGroup if team else None
-    if group and not group.missing_in_ots:
-        return {(group.name, 'IN'), (group.name, 'OUT')}
-    return set()
+    if not group or group.missing_in_ots:
+        return None
+    return _group_memberships(group, session.eventId, direction)
+
+
+def _group_memberships(group, event_id, direction='BOTH'):
+    """Memberships of a device in a team group for a link direction.
+
+    A one-way device still holds both an IN and an OUT membership: the unused
+    side goes to a parked sink group (nobody has IN on evt<E>_parked, nobody
+    has OUT on evt<E>_parked_in), so it never falls back to __ANON__.
+    """
+    if direction == 'IN':
+        return {(group.name, 'IN'), (_parked_group_name(event_id), 'OUT')}
+    if direction == 'OUT':
+        return {(group.name, 'OUT'), (_parked_in_group_name(event_id), 'IN')}
+    return {(group.name, 'IN'), (group.name, 'OUT')}
+
+
+def _prepare_memberships(event_id, memberships):
+    """Create the parked groups in OTS when the memberships use them (raises on failure).
+
+    Returns True if they were ensured.
+    """
+    sinks = (_parked_group_name(event_id), _parked_in_group_name(event_id))
+    if not any(name in sinks for name, _ in memberships):
+        return False
+    _ensure_parked_groups(event_id)
+    return True
 
 
 def _ensure_group(name, description):
@@ -1171,7 +1289,8 @@ def _apply_group_change(username, source, target):
     OTS can change state and still return an error) is reverted best-effort and
     False is returned. Calls are idempotent. Reverts re-add removed memberships
     first; added ones are only removed once all re-adds worked, so a failed
-    revert leaves the device in both groups rather than in none.
+    revert leaves the device in both groups rather than in none. A remove that
+    answers 404 (the group no longer exists in OTS) counts as done.
     """
     pending = []
     try:
@@ -1180,7 +1299,13 @@ def _apply_group_change(username, source, target):
             otsClient.add_user_to_group(username, pair[0], pair[1])
         for pair in sorted(source - target):
             pending.append(('remove', pair))
-            otsClient.remove_user_from_group(username, pair[0], pair[1])
+            try:
+                otsClient.remove_user_from_group(username, pair[0], pair[1])
+            except Exception as e:
+                from app.api_v1.groups import _ots_status_code
+                if _ots_status_code(e) != 404:
+                    raise
+                pending.pop()  # group is gone, so is the membership: nothing to revert
         return True
     except Exception:
         current_app.logger.exception('Group change for %s failed, reverting', username)
@@ -1205,6 +1330,56 @@ def _apply_group_change(username, source, target):
                 current_app.logger.exception(
                     'Could not revert add of %s in group %s (%s)', username, pair[0], pair[1])
     return False
+
+
+def _reprovision_query(**filters):
+    """Open, unparked, unexpired device sessions (expired ones belong to the close job)."""
+    return EventSessionModel.query.filter_by(mode='device', closedAt=None, parkedAt=None, **filters).filter(
+        or_(EventSessionModel.expiresAt.is_(None), EventSessionModel.expiresAt >= datetime.now())
+    ).order_by(EventSessionModel.id)
+
+
+def _reprovision_sessions(sessions):
+    """Bring device sessions from their granted to their desired groups in OTS, best effort.
+
+    Desired = the session's link direction in its team's current group. Returns
+    (reprovisioned, failed); sessions already in place are not counted, so
+    calling this again retries only the failed ones. A failed session keeps its
+    old memberships and granted state (see _apply_group_change).
+    """
+    done, failed = 0, 0
+    prepared = set()
+    for session in sessions:
+        username = session.otsUsername
+        direction = _session_direction(session)
+        group_id = session.team.otsGroupId if session.team else None
+        source = session_group_memberships(session)
+        target = _desired_memberships(session, session.team, direction)
+        if target == source:
+            if (session.otsGroupId, session.direction) != (group_id, direction):
+                session.otsGroupId, session.direction = group_id, direction
+                db.session.commit()
+            continue
+        if target is not None:
+            try:
+                if session.eventId not in prepared and _prepare_memberships(session.eventId, target):
+                    prepared.add(session.eventId)
+                if _apply_group_change(username, source, target):
+                    try:
+                        session.otsGroupId, session.direction = group_id, direction
+                        db.session.commit()
+                        done += 1
+                        continue
+                    except Exception:
+                        db.session.rollback()
+                        current_app.logger.exception('Could not save the new groups of %s, reverting', username)
+                        _apply_group_change(username, target, source)
+            except Exception:
+                db.session.rollback()
+                current_app.logger.exception('Could not re-provision the OTS groups of %s', username)
+        failed += 1
+        current_app.logger.error('Re-provisioning the OTS groups of %s failed; it keeps its old groups', username)
+    return done, failed
 
 
 def _read_eud_index(usernames):
@@ -1237,6 +1412,7 @@ def _account_to_dict(session, euds=None):
         'createdAt': session.createdAt.isoformat() if session.createdAt else None,
         'expiresAt': session.expiresAt.isoformat() if session.expiresAt else None,
         'eventLinkId': session.eventLinkId,
+        'role': session.role,
     }
     if euds is not None:
         data['euds'] = euds
@@ -1288,14 +1464,18 @@ def _perform_account_move(session, target_team, log_extra=''):
 
     username = session.otsUsername
     source = session_group_memberships(session)
+    direction = _session_direction(session)
     if target_team is None:
-        try:
-            target = _ensure_parked_groups(session.eventId)
-        except Exception:
-            current_app.logger.exception('Could not prepare parked group for event %s', session.eventId)
-            return jsonify({'error': 'Could not create the parked groups in OpenTAK Server'}), 502
+        target = _parked_memberships(session.eventId)
     else:
-        target = _team_memberships(target_team)
+        target = _desired_memberships(session, target_team, direction)
+        if target is None:
+            return jsonify({'error': 'This team has no usable OTS group'}), 400
+    try:
+        _prepare_memberships(session.eventId, target)
+    except Exception:
+        current_app.logger.exception('Could not prepare parked group for event %s', session.eventId)
+        return jsonify({'error': 'Could not create the parked groups in OpenTAK Server'}), 502
 
     from_name = 'parked' if was_parked else (session.team.name if session.team else None)
     if not _apply_group_change(username, source, target):
@@ -1307,6 +1487,7 @@ def _perform_account_move(session, target_team, log_extra=''):
         else:
             session.parkedAt = None
             session.eventTeamId = target_team.id
+            session.otsGroupId, session.direction = target_team.otsGroupId, direction
         db.session.commit()
     except Exception:
         db.session.rollback()

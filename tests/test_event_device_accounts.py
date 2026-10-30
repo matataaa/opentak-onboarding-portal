@@ -271,11 +271,21 @@ def test_group_added_in_and_out(client, ots, world):
     assert kinds.index('activate') < kinds.index('add')
 
 
-def test_missing_group_skipped(client, ots, world, db):
+def test_missing_group_refuses_join(client, ots, world, db):
     world['team'].otsGroup.ots_missing_since = datetime.datetime(2026, 1, 1)
     db.session.commit()
-    assert _join(client, world).status_code == 200
-    assert ots.group_adds == []
+    r = _join(client, world)
+    assert r.status_code == 409 and r.get_json()['code'] == 'team_has_no_group'
+    assert ots.users == [] and ots.group_adds == []
+    assert EventSessionModel.query.filter_by(mode='device').count() == 0
+
+
+def test_team_without_group_refuses_join(client, ots, world, db):
+    world['team'].otsGroupId = None
+    db.session.commit()
+    r = _join(client, world)
+    assert r.status_code == 409 and r.get_json()['code'] == 'team_has_no_group'
+    assert ots.users == [] and EventSessionModel.query.count() == 0
 
 
 def test_username_collision_retries_then_fails(client, ots, world):

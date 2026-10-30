@@ -402,6 +402,55 @@ components:
               items:
                 $ref: '#/components/schemas/AnnouncementEmailRecipient'
 
+    EventLink:
+      type: object
+      properties:
+        id:
+          type: integer
+        eventId:
+          type: integer
+        eventTeamId:
+          type: integer
+        team:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+        role:
+          type: string
+          enum: [leader, player]
+        direction:
+          type: string
+          enum: [BOTH, IN, OUT]
+          description: >
+            How the device accounts of this link take part in their team's OTS group:
+            BOTH (send and receive), IN (send only) or OUT (receive only). The other
+            side goes to the event's parked sink group, so the device never falls back
+            to __ANON__. A player link's direction applies to the shared-mode devices that
+            join through it, a leader link's to the leader's own devices.
+        tokenVersion:
+          type: integer
+        retrievable:
+          type: boolean
+        onboardingCodeId:
+          type: integer
+          nullable: true
+        onboardingCode:
+          type: object
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        token:
+          type: string
+          description: Only returned when the token is generated or regenerated
+        url:
+          type: string
+          description: Only returned when the token is generated or regenerated
+
 paths:
   /auth/login:
     post:
@@ -677,11 +726,209 @@ paths:
         '404':
           description: Invalid or revoked link
         '409':
-          description: Misconfigured link (no leader account, no registration code, or shared event without end time)
+          description: >
+            Misconfigured link (no leader account, no registration code, shared event
+            without end time, or a team without a usable OTS group: code `team_has_no_group`,
+            no account is created)
         '429':
           description: Per-team/per-event device account cap or per-link creation throttle reached
         '500':
           description: Could not provision team access or generate the enrollment
+
+  /events/teams/{id}:
+    put:
+      tags:
+        - Events
+      summary: Update a team (events_admin only) 🔒
+      description: >
+        All fields are optional. When otsGroupId is submitted, every open, unparked,
+        unexpired device account of the team (in all events) whose granted group
+        differs is moved to the team's group in OTS, best effort per account;
+        submitting the same group again retries the failed ones.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                color:
+                  type: string
+                  nullable: true
+                  description: A TAK team colour
+                otsGroupId:
+                  type: integer
+                  nullable: true
+                leaderUserId:
+                  type: integer
+                  nullable: true
+      responses:
+        '200':
+          description: >
+            The team; with otsGroupId in the body also reprovisioned (accounts moved)
+            and reprovisionFailed (accounts that kept their old group)
+        '400':
+          description: Invalid input or unknown group/user
+        '404':
+          description: Team not found
+        '409':
+          description: Name already in use, or clearing the group while the team has open device accounts
+
+  /events/{id}/links:
+    get:
+      tags:
+        - Events
+      summary: List the access links of an event (events_admin or events_readonly) 🔒
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The links
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  links:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EventLink'
+        '404':
+          description: Event not found
+    post:
+      tags:
+        - Events
+      summary: Create an access link for a team and role (events_admin only) 🔒
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [teamId, role]
+              properties:
+                teamId:
+                  type: integer
+                role:
+                  type: string
+                  enum: [leader, player]
+                onboardingCodeId:
+                  type: integer
+                  nullable: true
+                direction:
+                  type: string
+                  enum: [BOTH, IN, OUT]
+                  default: BOTH
+      responses:
+        '201':
+          description: Link created (includes the raw token and url once)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventLink'
+        '400':
+          description: Missing teamId/role, unknown team or onboarding code, or invalid direction
+        '404':
+          description: Event not found
+        '409':
+          description: A link for this team and role already exists
+
+  /events/links/{id}:
+    put:
+      tags:
+        - Events
+      summary: Change the group direction of a link (events_admin only) 🔒
+      description: >
+        The new direction is saved and every open, unexpired device account of the
+        link (also those moved to another team; parked ones are unaffected) whose
+        granted groups differ is re-provisioned in OTS right away, best effort per
+        account. Accounts that could not be updated keep their old groups and are
+        counted in reprovisionFailed; saving the same direction again retries them.
+        OTS failures never fail the request. A leader link's direction applies to the
+        leader's own devices. Devices pick up the change when they reconnect.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [direction]
+              properties:
+                direction:
+                  type: string
+                  enum: [BOTH, IN, OUT]
+      responses:
+        '200':
+          description: Link updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EventLink'
+                  - type: object
+                    properties:
+                      reprovisioned:
+                        type: integer
+                        description: Open accounts whose OTS groups were changed
+                      reprovisionFailed:
+                        type: integer
+                        description: Open accounts that kept their old OTS groups
+        '400':
+          description: direction missing or not one of BOTH, IN, OUT
+        '404':
+          description: Link not found
+    delete:
+      tags:
+        - Events
+      summary: Delete a link (events_admin only) 🔒
+      description: >
+        Device accounts outlive their link; they keep the groups they were granted
+        and are cleaned up as usual.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Link deleted
+        '404':
+          description: Link not found
 
   /events/links/{id}/url:
     get:
@@ -922,8 +1169,21 @@ paths:
         team (500 per event) and throttled to 10 attempts per minute for leader presses
         (separate from the player link throttle); both return 429. The response
         never contains a password (the qrString is a bearer enrollment token).
+        With forLeader true the device is the leader's own (session role `leader`):
+        it joins through the team's leader link and takes that link's direction;
+        otherwise it is a player device of the team's player link.
       security:
         - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                forLeader:
+                  type: boolean
+                  default: false
       responses:
         '200':
           description: ATAK enrollment
@@ -944,7 +1204,9 @@ paths:
         '403':
           description: Not a valid leader session for an open event
         '409':
-          description: Event is in individual mode or has no end time
+          description: >
+            Event is in individual mode or has no end time, or the team has no usable
+            OTS group (code `team_has_no_group`)
         '429':
           description: Device account cap or creation throttle reached
         '500':

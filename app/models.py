@@ -2172,6 +2172,10 @@ class EventModel(db.Model):
     active = Column(Boolean, nullable=False, default=True)
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
     createdBy = Column(Integer, ForeignKey('users.id'), nullable=True)
+    # Organizer (HQ) team and how it takes part in the event's team groups
+    organizerTeamId = Column(Integer, ForeignKey('event_teams.id', name='fk_events_organizerTeamId_event_teams'),
+                             nullable=True)
+    organizerDirection = Column(String(4), nullable=False, default='OUT', server_default='OUT')  # BOTH | IN | OUT
 
 
 class EventLinkModel(db.Model):
@@ -2189,6 +2193,9 @@ class EventLinkModel(db.Model):
     # For individual player mode: the onboarding code this link registers with.
     # Lives on the link (per event+team), so reusable teams get a per-event code.
     onboardingCodeId = Column(Integer, ForeignKey('onboardingcodes.id'), nullable=True)
+    # How the device accounts of this link take part in their team's OTS group:
+    # BOTH, IN (send only) or OUT (receive only)
+    direction = Column(String(4), nullable=False, default='BOTH', server_default='BOTH')
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
 
     event = relationship("EventModel")
@@ -2214,6 +2221,13 @@ class EventSessionModel(db.Model):
     parkedAt = Column(DateTime, nullable=True)
     clientKeyHash = Column(String(128), nullable=True)
     eventLinkId = Column(Integer, ForeignKey('event_links.id'), nullable=True)
+    # Special device sessions, e.g. 'leader' for a leader's own device (NULL = player)
+    role = Column(String(20), nullable=True)
+    # What the device account was granted in OTS: direction (BOTH | IN | OUT) and
+    # team group. Both NULL = legacy: BOTH and the team's current group;
+    # a direction without a group = granted nothing.
+    direction = Column(String(4), nullable=True)
+    otsGroupId = Column(Integer, nullable=True)
 
     event = relationship("EventModel")
     team = relationship("EventTeamModel")

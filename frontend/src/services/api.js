@@ -622,6 +622,7 @@ export const eventsAPI = {
   createLink: (eventId, data) => api.post(`/events/${eventId}/links`, data),
   getLinkUrl: (linkId) => api.get(`/events/links/${linkId}/url`),
   revokeLink: (linkId) => api.post(`/events/links/${linkId}/revoke`),
+  updateLink: (linkId, data) => api.put(`/events/links/${linkId}`, data),
   deleteLink: (linkId) => api.delete(`/events/links/${linkId}`),
   closeLinkSessions: (linkId) => api.post(`/events/links/${linkId}/close-sessions`),
 
@@ -632,7 +633,7 @@ export const eventsAPI = {
   join: (token) => axios.post(`${API_BASE_URL}/api/v1/events/join/${token}`),
 
   myTeam: () => api.get('/events/my-team'),
-  myTeamEnrollment: () => api.post('/events/my-team/enrollment'),
+  myTeamEnrollment: (data) => api.post('/events/my-team/enrollment', data),
   myTeamAccounts: () => api.get('/events/my-team/accounts'),
   myTeamMoveAccount: (sessionId, teamId) => api.post(`/events/my-team/accounts/${sessionId}/move`, { teamId }),
 };

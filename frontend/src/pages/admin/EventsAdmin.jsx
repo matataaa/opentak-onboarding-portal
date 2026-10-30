@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { QRCodeSVG } from 'qrcode.react';
 import { eventsAPI, groupsAPI, onboardingCodesAPI } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNotification } from '../../contexts/NotificationContext';
 import { formatDateTime, useDateFormat } from '../../utils/formatDate';
 import '../../components/AdminTable.css';
 import './EventsAdmin.css';
@@ -13,10 +14,18 @@ const TAK_TEAM_COLORS = [
   'Dark Blue', 'Blue', 'Cyan', 'Teal', 'Green', 'Dark Green', 'Brown',
 ];
 
+// How the device accounts of a link take part in their team's OTS group.
+const LINK_DIRECTIONS = [
+  ['BOTH', 'events.directionBoth'],
+  ['IN', 'events.directionIn'],
+  ['OUT', 'events.directionOut'],
+];
+
 export default function EventsAdmin() {
   const { t } = useTranslation();
   const dateFormat = useDateFormat();
   const { hasRole } = useAuth();
+  const { showSuccess, showWarning } = useNotification();
   const canEdit = hasRole('events_admin') || hasRole('administrator');
   const [teams, setTeams] = useState([]);
   const [events, setEvents] = useState([]);
@@ -32,7 +41,7 @@ export default function EventsAdmin() {
   });
   const [openLinksFor, setOpenLinksFor] = useState(null);
   const [links, setLinks] = useState([]);
-  const [linkForm, setLinkForm] = useState({ teamId: '', role: 'leader', onboardingCodeId: '' });
+  const [linkForm, setLinkForm] = useState({ teamId: '', role: 'leader', onboardingCodeId: '', direction: 'BOTH' });
   const [printSheet, setPrintSheet] = useState([]);
   const [qrLink, setQrLink] = useState(null); // {url, label} shown in the QR panel
   const [accounts, setAccounts] = useState([]);
@@ -131,7 +140,7 @@ export default function EventsAdmin() {
   };
 
   const closeLinkAccounts = async (l) => {
-    if (!window.confirm(t('events.closeLinkAccountsConfirm'))) return;
+    if (!window.confirm(t(l.role === 'leader' ? 'events.closeLeaderLinkAccountsConfirm' : 'events.closeLinkAccountsConfirm'))) return;
     setError('');
     let data;
     try {
@@ -193,12 +202,24 @@ export default function EventsAdmin() {
   };
 
   const createLink = () => {
-    const payload = { teamId: Number(linkForm.teamId), role: linkForm.role };
+    const payload = { teamId: Number(linkForm.teamId), role: linkForm.role, direction: linkForm.direction };
     if (linkForm.role === 'player' && linkForm.onboardingCodeId) payload.onboardingCodeId = Number(linkForm.onboardingCodeId);
     call(
       () => eventsAPI.createLink(openLinksFor, payload),
       (res) => addGenerated(res.data),
     ).then(() => loadLinks(openLinksFor));
+  };
+
+  const changeDirection = (l, direction) => {
+    if (!window.confirm(t('events.directionChangeConfirm'))) return;
+    call(() => eventsAPI.updateLink(l.id, { direction }), (res) => {
+      const { reprovisioned = 0, reprovisionFailed = 0 } = res.data;
+      if (reprovisionFailed > 0) {
+        showWarning(t('events.directionReprovisionFailed', { done: reprovisioned, failed: reprovisionFailed }), 12000);
+      } else {
+        showSuccess(t('events.directionReprovisioned', { done: reprovisioned }));
+      }
+    }).then(() => loadLinks(openLinksFor));
   };
 
   return (
@@ -325,16 +346,27 @@ export default function EventsAdmin() {
                 {codes.map((c) => <option key={c.id} value={c.id}>{c.name || c.onboardingCode}</option>)}
               </select>
             )}
+            <select aria-label={t('events.direction')} value={linkForm.direction} onChange={(e) => setLinkForm({ ...linkForm, direction: e.target.value })}>
+              {LINK_DIRECTIONS.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}
+            </select>
             <button onClick={createLink} disabled={!linkForm.teamId}>{t('events.generateLink')}</button>
           </div>
+          <p className="events-hint">{t('events.directionHint')} {t('admin.groups.directionHelp')}</p>
           <div className="events-table-wrap">
             <table className="events-table">
-              <thead><tr><th>{t('events.team')}</th><th>{t('events.role')}</th><th>{t('events.code')}</th><th>{t('events.version')}</th><th></th></tr></thead>
+              <thead><tr><th>{t('events.team')}</th><th>{t('events.role')}</th><th>{t('events.direction')}</th><th>{t('events.code')}</th><th>{t('events.version')}</th><th></th></tr></thead>
               <tbody>
                 {links.map((l) => (
                   <tr key={l.id}>
                     <td>{l.team?.name}</td>
                     <td>{l.role}</td>
+                    <td>
+                      {canEdit ? (
+                        <select aria-label={t('events.direction')} value={l.direction || 'BOTH'} onChange={(e) => changeDirection(l, e.target.value)}>
+                          {LINK_DIRECTIONS.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}
+                        </select>
+                      ) : t((LINK_DIRECTIONS.find(([value]) => value === l.direction) || LINK_DIRECTIONS[0])[1])}
+                    </td>
                     <td>{l.onboardingCode?.name || l.onboardingCode?.onboardingCode || '-'}</td>
                     <td>v{l.tokenVersion}</td>
                     <td>
@@ -379,6 +411,7 @@ export default function EventsAdmin() {
                     <td>{a.team?.name || '-'}</td>
                     <td>
                       {a.legacy ? t('events.accountLegacy') : (a.parked ? t('events.accountParked') : t('events.accountActive'))}
+                      {a.role === 'leader' && <span className="badge badge-primary" style={{ marginLeft: '0.5rem' }}>{t('events.accountLeader')}</span>}
                     </td>
                     <td>{formatDateTime(a.createdAt, dateFormat, { utc: true }) || '-'}</td>
                     {canEdit && (
