@@ -209,6 +209,15 @@
   z-index: 10;
 }
 
+/* On phones the card fills the width; keep the selector above it instead of over it */
+@media (max-width: 767px) {
+  .auth-lang-select--floating {
+    position: static;
+    display: block;
+    margin: 0.5rem 0.75rem 0.5rem auto;
+  }
+}
+
 .auth-layout__header-lang {
   margin-left: auto;
 }
