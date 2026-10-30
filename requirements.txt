@@ -9,6 +9,8 @@ APScheduler==3.10.4
 email-validator==1.1.2
 Flask-APScheduler==1.12.4
 Flask-SQLAlchemy==3.0.3
+# 2.1 maps postgresql:// to psycopg3, which is not installed.
+SQLAlchemy==2.0.55
 Flask-Migrate==4.0.7
 # PostgreSQL driver (used when SQLALCHEMY_DATABASE_URI points at PostgreSQL;
 # the binary wheel avoids needing libpq build tools in the image).

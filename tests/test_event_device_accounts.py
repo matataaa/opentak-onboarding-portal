@@ -158,11 +158,11 @@ def world(db):
 
 
 def _forget(client, w):
-    client.delete_cookie('localhost', events_mod.DEVICE_COOKIE_NAME, path=w['url'])
+    client.delete_cookie(events_mod.DEVICE_COOKIE_NAME, domain='localhost', path=w['url'])
 
 
 def _forget_cookie_only(client, w):
-    client.delete_cookie('localhost', events_mod.DEVICE_COOKIE_NAME, path=w['url'])
+    client.delete_cookie(events_mod.DEVICE_COOKIE_NAME, domain='localhost', path=w['url'])
 
 
 def _join(client, w):
