@@ -95,6 +95,8 @@ function RadiosList() {
   });
 
   const claimRadioEnabled = settingsData?.claim_radio_enabled || false;
+  // Validating/programming needs the Meshtastic module (channel configs)
+  const meshtasticEnabled = settingsData?.meshtastic_enabled !== false;
 
   const copyClaimUrl = async (radio) => {
     try {
@@ -598,24 +600,28 @@ function RadiosList() {
                     <div className="table-actions">
                       {radio.radioType === 'meshtastic' && (
                         <>
-                          <button
-                            className="btn btn-sm btn-secondary"
-                            onClick={() => {
-                              setValidatingRadio(radio);
-                              setShowValidateModal(true);
-                            }}
-                          >
-                            {t('common.validate')}
-                          </button>
-                          <button
-                            className="btn btn-sm btn-primary"
-                            onClick={() => {
-                              setProgrammingRadio(radio);
-                              setShowProgramModal(true);
-                            }}
-                          >
-                            {t('common.program')}
-                          </button>
+                          {meshtasticEnabled && (
+                            <>
+                              <button
+                                className="btn btn-sm btn-secondary"
+                                onClick={() => {
+                                  setValidatingRadio(radio);
+                                  setShowValidateModal(true);
+                                }}
+                              >
+                                {t('common.validate')}
+                              </button>
+                              <button
+                                className="btn btn-sm btn-primary"
+                                onClick={() => {
+                                  setProgrammingRadio(radio);
+                                  setShowProgramModal(true);
+                                }}
+                              >
+                                {t('common.program')}
+                              </button>
+                            </>
+                          )}
                           {canEdit && (
                             <button
                               className="btn btn-sm btn-danger"
@@ -816,7 +822,7 @@ function RadiosList() {
 
               <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  {editing && editing.radioType === 'meshtastic' && (
+                  {meshtasticEnabled && editing && editing.radioType === 'meshtastic' && (
                     <>
                       <button
                         type="button"

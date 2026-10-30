@@ -16,6 +16,19 @@ info:
     deny-by-default: they may only call the `/events/my-team*` endpoints, `/auth/refresh`,
     `/auth/me` and `/auth/permissions`. Every other endpoint returns 403.
 
+    ## Switchable modules
+    The Meshtastic, radios and events modules can be turned off with the settings
+    `meshtastic_enabled`, `radios_enabled` (both default on) and `events_enabled`
+    (default off). While a module is off, every endpoint under its path prefix
+    (`/meshtastic*`, `/radios*`, `/events*`) returns 403 for every caller, including
+    administrators, API keys and anonymous requests:
+    ```
+    {"error": "The meshtastic module is disabled", "code": "MODULE_DISABLED"}
+    ```
+    `/radios/enroll`, `/radios/{id}/program-config` and `/radios/{id}/compare-config`
+    also need the Meshtastic module. `/settings`, `/admin/settings*` and `/auth/*` are
+    never affected, and disabled modules are left out of `/auth/permissions`.
+
     ## Admin Endpoints
     Endpoints marked with 🔒 require the 'administrator' role.
   version: 1.0.0
@@ -2480,6 +2493,30 @@ paths:
                     type: boolean
                   forgot_password_enabled:
                     type: boolean
+                  meshtastic_enabled:
+                    type: boolean
+                    description: Meshtastic module enabled (default true)
+                  radios_enabled:
+                    type: boolean
+                    description: Radios module enabled (default true)
+                  events_enabled:
+                    type: boolean
+                    description: Events module enabled (default false)
+                  meshtastic_homepage_icon_enabled:
+                    type: boolean
+                    description: Effective value, false while the Meshtastic module is off
+                  claim_radio_enabled:
+                    type: boolean
+                    description: Effective value, false while the radios module is off
+                  user_program_radio_enabled:
+                    type: boolean
+                    description: Effective value, false while the radios or Meshtastic module is off
+                  user_validate_radio_enabled:
+                    type: boolean
+                    description: Effective value, false while the radios or Meshtastic module is off
+                  user_radio_enrollment_enabled:
+                    type: boolean
+                    description: Effective value, false while the radios or Meshtastic module is off
                   login_layout:
                     type: string
                     enum: [classic, centered, split]

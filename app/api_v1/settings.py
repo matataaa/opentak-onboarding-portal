@@ -19,6 +19,9 @@ LOGIN_ENUM_SETTINGS = {
     'login_overlay_strength': ('none', 'light', 'medium', 'strong'),
     'date_format': ('eu', 'us', 'iso'),
     'kiosk_language': ('', 'en', 'nl', 'de'),
+    'meshtastic_enabled': ('true', 'false'),
+    'radios_enabled': ('true', 'false'),
+    'events_enabled': ('true', 'false'),
 }
 
 
@@ -37,6 +40,9 @@ def _validate_setting_value(key, value):
         return 'login_background_path can only be changed through /api/v1/admin/login-background'
     if key in LOGIN_ENUM_SETTINGS:
         allowed = LOGIN_ENUM_SETTINGS[key]
+        # JSON booleans are stored as 'true'/'false'
+        if isinstance(value, bool):
+            value = str(value).lower()
         if value not in allowed:
             return f'{key} must be one of: {", ".join(allowed)}'
         return None
@@ -75,7 +81,10 @@ def get_settings():
         "logo_path": "string",
         "generate_atak_qr_code": boolean,
         "ots_hostname": "string",
-        "meshtastic_homepage_icon_enabled": boolean
+        "meshtastic_homepage_icon_enabled": boolean,
+        "meshtastic_enabled": boolean,
+        "radios_enabled": boolean,
+        "events_enabled": boolean
     }
     """
     # Helper function to get boolean setting from DB
@@ -98,6 +107,11 @@ def get_settings():
     brand_name_enabled = get_bool_setting('brand_name_enabled', True)
     brand_name_value = get_str_setting('brand_name_value', 'My OTS Portal')
 
+    # Switchable modules; the fine-grained flags below are effective (module AND setting)
+    meshtastic_enabled = SystemSettingsModel.is_module_enabled('meshtastic')
+    radios_enabled = SystemSettingsModel.is_module_enabled('radios')
+    events_enabled = SystemSettingsModel.is_module_enabled('events')
+
     settings = {
         # Brand name - only show if enabled
         'brand_name': brand_name_value if brand_name_enabled else 'My OTS Portal',
@@ -109,7 +123,7 @@ def get_settings():
         'generate_itak_qr_code': get_bool_setting('generate_itak_qr_code', True),
         'ots_hostname': current_app.config.get('OTS_HOSTNAME', ''),
         'ots_url': current_app.config.get('OTS_URL', ''),
-        'meshtastic_homepage_icon_enabled': get_bool_setting('meshtastic_homepage_icon_enabled', True),
+        'meshtastic_homepage_icon_enabled': meshtastic_enabled and get_bool_setting('meshtastic_homepage_icon_enabled', True),
         'atak_homepage_icon_enabled': get_bool_setting('atak_homepage_icon_enabled', True),
         'itak_homepage_icon_enabled': get_bool_setting('itak_homepage_icon_enabled', True),
         'truststore_homepage_icon_enabled': get_bool_setting('truststore_homepage_icon_enabled', False),
@@ -136,11 +150,15 @@ def get_settings():
         'login_glass_enabled': get_bool_setting('login_glass_enabled', True),
         'login_header_bar_enabled': get_bool_setting('login_header_bar_enabled', False),
         'login_hero_texts': _parse_login_hero_texts(get_str_setting('login_hero_texts', '')),
-        # Radio settings
-        'claim_radio_enabled': get_bool_setting('claim_radio_enabled', False),
-        'user_program_radio_enabled': get_bool_setting('user_program_radio_enabled', False),
-        'user_validate_radio_enabled': get_bool_setting('user_validate_radio_enabled', False),
-        'user_radio_enrollment_enabled': get_bool_setting('user_radio_enrollment_enabled', False),
+        # Modules
+        'meshtastic_enabled': meshtastic_enabled,
+        'radios_enabled': radios_enabled,
+        'events_enabled': events_enabled,
+        # Radio settings (programming, validation and enrolment also need Meshtastic)
+        'claim_radio_enabled': radios_enabled and get_bool_setting('claim_radio_enabled', False),
+        'user_program_radio_enabled': radios_enabled and meshtastic_enabled and get_bool_setting('user_program_radio_enabled', False),
+        'user_validate_radio_enabled': radios_enabled and meshtastic_enabled and get_bool_setting('user_validate_radio_enabled', False),
+        'user_radio_enrollment_enabled': radios_enabled and meshtastic_enabled and get_bool_setting('user_radio_enrollment_enabled', False),
         # OIDC / SSO
         'oidc_enabled': get_bool_setting('oidc_enabled', False),
         'oidc_auto_create_user': get_bool_setting('oidc_auto_create_user', False),
@@ -223,7 +241,7 @@ def get_admin_settings():
 
         # Get settings by category
         settings_by_category = {}
-        categories = ['notifications', 'registration', 'email', 'security', 'qr_enrollment', 'branding', 'radios', 'kiosk', 'appearance', 'general']
+        categories = ['notifications', 'registration', 'email', 'security', 'qr_enrollment', 'branding', 'radios', 'kiosk', 'appearance', 'modules', 'general']
 
         for category in categories:
             settings = SystemSettingsModel.get_category_settings(category)
