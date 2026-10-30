@@ -16,6 +16,19 @@ info:
     deny-by-default: they may only call the `/events/my-team*` endpoints, `/auth/refresh`,
     `/auth/me` and `/auth/permissions`. Every other endpoint returns 403.
 
+    ## Switchable modules
+    The Meshtastic, radios and events modules can be turned off with the settings
+    `meshtastic_enabled`, `radios_enabled` (both default on) and `events_enabled`
+    (default off). While a module is off, every endpoint under its path prefix
+    (`/meshtastic*`, `/radios*`, `/events*`) returns 403 for every caller, including
+    administrators, API keys and anonymous requests:
+    ```
+    {"error": "The meshtastic module is disabled", "code": "MODULE_DISABLED"}
+    ```
+    `/radios/enroll`, `/radios/{id}/program-config` and `/radios/{id}/compare-config`
+    also need the Meshtastic module. `/settings`, `/admin/settings*` and `/auth/*` are
+    never affected, and disabled modules are left out of `/auth/permissions`.
+
     ## Admin Endpoints
     Endpoints marked with 🔒 require the 'administrator' role.
   version: 1.0.0
@@ -402,6 +415,115 @@ components:
               items:
                 $ref: '#/components/schemas/AnnouncementEmailRecipient'
 
+    EventLink:
+      type: object
+      properties:
+        id:
+          type: integer
+        eventId:
+          type: integer
+        eventTeamId:
+          type: integer
+        team:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+        role:
+          type: string
+          enum: [leader, player]
+        direction:
+          type: string
+          enum: [BOTH, IN, OUT]
+          description: >
+            How the device accounts of this link take part in their team's OTS group:
+            BOTH (send and receive), IN (send only) or OUT (receive only). The other
+            side goes to the event's parked sink group, so the device never falls back
+            to __ANON__. A player link's direction applies to the shared-mode devices that
+            join through it, a leader link's to the leader's own devices.
+        tokenVersion:
+          type: integer
+        retrievable:
+          type: boolean
+        onboardingCodeId:
+          type: integer
+          nullable: true
+        onboardingCode:
+          type: object
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        token:
+          type: string
+          description: Only returned when the token is generated or regenerated
+        url:
+          type: string
+          description: Only returned when the token is generated or regenerated
+
+    Event:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        validFrom:
+          type: string
+          format: date-time
+          nullable: true
+        validUntil:
+          type: string
+          format: date-time
+          nullable: true
+        playerAccessMode:
+          type: string
+          enum: [shared, individual]
+        accountCleanup:
+          type: string
+          enum: [deactivate, delete]
+        active:
+          type: boolean
+        organizerTeamId:
+          type: integer
+          nullable: true
+          description: >
+            The organizer (HQ) team: a team with a link in this event. Its shared-mode
+            device accounts get organizerDirection on the group of every other team of
+            the event (teams with a link and a usable OTS group), next to their own
+            team group membership. In individual mode it has no effect (set HQ up via
+            its onboarding code).
+        organizerDirection:
+          type: string
+          enum: [BOTH, IN, OUT]
+          default: OUT
+          description: >
+            How HQ devices take part in the other teams' groups. OUT (default) = HQ
+            sees every team, the teams do not see HQ; BOTH = the teams also see HQ
+            (orders); IN = HQ only sends to the teams. Teams never see each other.
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ReprovisionCounts:
+      type: object
+      properties:
+        reprovisioned:
+          type: integer
+          description: Open device accounts whose OTS groups were changed
+        reprovisionFailed:
+          type: integer
+          description: >
+            Open device accounts that kept their old OTS groups (OTS failure); they are
+            retried by saving again
+
 paths:
   /auth/login:
     post:
@@ -615,20 +737,54 @@ paths:
       summary: Create an event (events_admin only) 🔒
       description: >
         An event with playerAccessMode `shared` requires `validUntil`; the device
-        accounts it creates expire with the event.
+        accounts it creates expire with the event. organizerTeamId can only be set
+        with PUT once the team has a link in the event.
       security:
         - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string}
+                description: {type: string, nullable: true}
+                validFrom: {type: string, format: date-time, nullable: true}
+                validUntil: {type: string, format: date-time, nullable: true}
+                playerAccessMode: {type: string, enum: [shared, individual], default: individual}
+                accountCleanup: {type: string, enum: [deactivate, delete], default: deactivate}
+                active: {type: boolean, default: true}
+                organizerDirection: {type: string, enum: [BOTH, IN, OUT], default: OUT}
+                organizerTeamId:
+                  type: integer
+                  nullable: true
+                  description: Must be null (or absent) here
       responses:
         '201':
           description: Event created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
         '400':
-          description: Invalid input, or playerAccessMode `shared` without validUntil
+          description: >
+            Invalid input, playerAccessMode `shared` without validUntil, invalid
+            organizerDirection, or an organizerTeamId
 
   /events/{id}:
     put:
       tags:
         - Events
       summary: Update an event (events_admin only) 🔒
+      description: >
+        All fields are optional. When organizerTeamId or organizerDirection is
+        submitted, the open, unparked, unexpired device accounts of the old and new
+        organizer (HQ) team are re-provisioned in OTS right away, best effort per
+        account (organizerTeamId null removes the organizer memberships). OTS
+        failures never fail the request; submitting the same values again retries
+        the accounts that failed (the periodic event job also retries them).
       security:
         - bearerAuth: []
       parameters:
@@ -637,11 +793,41 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: {type: string}
+                description: {type: string, nullable: true}
+                validFrom: {type: string, format: date-time, nullable: true}
+                validUntil: {type: string, format: date-time, nullable: true}
+                playerAccessMode: {type: string, enum: [shared, individual]}
+                accountCleanup: {type: string, enum: [deactivate, delete]}
+                active: {type: boolean}
+                organizerTeamId:
+                  type: integer
+                  nullable: true
+                  description: A team with a link in this event and a usable OTS group, or null
+                organizerDirection: {type: string, enum: [BOTH, IN, OUT]}
       responses:
         '200':
-          description: Event updated
+          description: >
+            Event updated; with organizerTeamId or organizerDirection in the body also
+            the reprovision counts
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Event'
+                  - $ref: '#/components/schemas/ReprovisionCounts'
         '400':
-          description: Invalid input, or the result would be a shared event without validUntil
+          description: >
+            Invalid input, the result would be a shared event without validUntil,
+            organizerDirection not one of BOTH, IN, OUT, or organizerTeamId not a team
+            with a link in this event and a usable OTS group
         '404':
           description: Event not found
 
@@ -677,11 +863,250 @@ paths:
         '404':
           description: Invalid or revoked link
         '409':
-          description: Misconfigured link (no leader account, no registration code, or shared event without end time)
+          description: >
+            Misconfigured link (no leader account, no registration code, shared event
+            without end time, or a team without a usable OTS group: code `team_has_no_group`,
+            no account is created)
         '429':
           description: Per-team/per-event device account cap or per-link creation throttle reached
         '500':
           description: Could not provision team access or generate the enrollment
+
+  /events/teams/{id}:
+    put:
+      tags:
+        - Events
+      summary: Update a team (events_admin only) 🔒
+      description: >
+        All fields are optional. When otsGroupId is submitted, every open, unparked,
+        unexpired device account of the team (in all events) whose granted group
+        differs is moved to the team's group in OTS, best effort per account, and
+        the organizer (HQ) devices of every event the team takes part in follow
+        the new group too; submitting the same group again retries the failed ones.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                color:
+                  type: string
+                  nullable: true
+                  description: A TAK team colour
+                otsGroupId:
+                  type: integer
+                  nullable: true
+                leaderUserId:
+                  type: integer
+                  nullable: true
+      responses:
+        '200':
+          description: >
+            The team; with otsGroupId in the body also reprovisioned (accounts moved)
+            and reprovisionFailed (accounts that kept their old group)
+        '400':
+          description: Invalid input or unknown group/user
+        '404':
+          description: Team not found
+        '409':
+          description: Name already in use, or clearing the group while the team has open device accounts
+    delete:
+      tags:
+        - Events
+      summary: Delete a team and its links (events_admin only) 🔒
+      description: >
+        The team leaves every event it has links in; the organizer (HQ) devices of
+        those events lose its group (best effort, counted).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: >
+            Team deleted; reprovisioned/reprovisionFailed are included when organizer
+            devices of an event were affected
+        '404':
+          description: Team not found
+        '409':
+          description: >
+            The team has open sessions, or it is the organizer (HQ) team of an event
+            (choose another organizer team for that event first)
+
+  /events/{id}/links:
+    get:
+      tags:
+        - Events
+      summary: List the access links of an event (events_admin or events_readonly) 🔒
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: The links
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  links:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EventLink'
+        '404':
+          description: Event not found
+    post:
+      tags:
+        - Events
+      summary: Create an access link for a team and role (events_admin only) 🔒
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [teamId, role]
+              properties:
+                teamId:
+                  type: integer
+                role:
+                  type: string
+                  enum: [leader, player]
+                onboardingCodeId:
+                  type: integer
+                  nullable: true
+                direction:
+                  type: string
+                  enum: [BOTH, IN, OUT]
+                  default: BOTH
+      responses:
+        '201':
+          description: >
+            Link created (includes the raw token and url once). When the event has an
+            organizer (HQ) team, its devices are re-provisioned (a team new to the event
+            is added to them) and reprovisioned/reprovisionFailed are included.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EventLink'
+                  - $ref: '#/components/schemas/ReprovisionCounts'
+        '400':
+          description: Missing teamId/role, unknown team or onboarding code, or invalid direction
+        '404':
+          description: Event not found
+        '409':
+          description: A link for this team and role already exists
+
+  /events/links/{id}:
+    put:
+      tags:
+        - Events
+      summary: Change the group direction of a link (events_admin only) 🔒
+      description: >
+        The new direction is saved and every open, unexpired device account of the
+        link (also those moved to another team; parked ones are unaffected) whose
+        granted groups differ is re-provisioned in OTS right away, best effort per
+        account. Accounts that could not be updated keep their old groups and are
+        counted in reprovisionFailed; saving the same direction again retries them
+        (the periodic event job also retries them).
+        OTS failures never fail the request. A leader link's direction applies to the
+        leader's own devices. Devices pick up the change when they reconnect.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [direction]
+              properties:
+                direction:
+                  type: string
+                  enum: [BOTH, IN, OUT]
+      responses:
+        '200':
+          description: Link updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EventLink'
+                  - type: object
+                    properties:
+                      reprovisioned:
+                        type: integer
+                        description: Open accounts whose OTS groups were changed
+                      reprovisionFailed:
+                        type: integer
+                        description: Open accounts that kept their old OTS groups
+        '400':
+          description: direction missing or not one of BOTH, IN, OUT
+        '404':
+          description: Link not found
+    delete:
+      tags:
+        - Events
+      summary: Delete a link (events_admin only) 🔒
+      description: >
+        Device accounts outlive their link; they keep the groups they were granted
+        and are cleaned up as usual. When it was the team's last link in an event
+        with an organizer (HQ) team, the team leaves the event and the HQ devices
+        lose its group (best effort, counted).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: >
+            Link deleted; reprovisioned/reprovisionFailed are included when the event
+            has an organizer team
+        '404':
+          description: Link not found
+        '409':
+          description: >
+            The last link of the event's organizer (HQ) team; choose another organizer
+            team first
 
   /events/links/{id}/url:
     get:
@@ -756,7 +1181,8 @@ paths:
         and nothing changes locally (502). Moving to the current team (or parking a parked
         account) is a 200 no-op. Sending switches to the new team immediately; receiving
         from the new team starts after the device reconnects (restart ATAK or toggle its
-        connection).
+        connection). Moving into the event's organizer (HQ) team adds the organizer
+        memberships on the other teams' groups; moving out (or parking) removes them.
       security:
         - bearerAuth: []
       parameters:
@@ -922,8 +1348,21 @@ paths:
         team (500 per event) and throttled to 10 attempts per minute for leader presses
         (separate from the player link throttle); both return 429. The response
         never contains a password (the qrString is a bearer enrollment token).
+        With forLeader true the device is the leader's own (session role `leader`):
+        it joins through the team's leader link and takes that link's direction;
+        otherwise it is a player device of the team's player link.
       security:
         - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                forLeader:
+                  type: boolean
+                  default: false
       responses:
         '200':
           description: ATAK enrollment
@@ -944,7 +1383,9 @@ paths:
         '403':
           description: Not a valid leader session for an open event
         '409':
-          description: Event is in individual mode or has no end time
+          description: >
+            Event is in individual mode or has no end time, or the team has no usable
+            OTS group (code `team_has_no_group`)
         '429':
           description: Device account cap or creation throttle reached
         '500':
@@ -962,7 +1403,8 @@ paths:
         from one OpenTAK Server listing; eudsAvailable is false when it could not
         be read. inMyTeam is true for active accounts of the leader's own team.
         For active accounts of other teams only the EUD callsign is returned
-        (no uid, no lastSeen). teams lists the event's teams that can be moved to.
+        (no uid, no lastSeen). teams lists the event's teams that can be moved to
+        (never the organizer (HQ) team).
       security:
         - bearerAuth: []
       responses:
@@ -1026,7 +1468,8 @@ paths:
         account to the own team (teamId = own team). Accounts active in another
         team cannot be pulled; that team must park or move them first. Anything
         else is 403 (other team to own team, other to other, other to park,
-        parked to another team, parked to park). Rules use the account's current state and the team in the leader
+        parked to another team, parked to park). Moving into the event's organizer
+        (HQ) team is 400: only an admin can do that. Rules use the account's current state and the team in the leader
         token. Groups are added before removed and reverted on failure. Sending
         switches immediately; receiving after the device reconnects.
       security:
@@ -1073,7 +1516,7 @@ paths:
                       createdAt: {type: string, nullable: true}
                       expiresAt: {type: string, nullable: true}
         '400':
-          description: Invalid or unknown teamId
+          description: Invalid or unknown teamId, or the event's organizer (HQ) team
         '403':
           description: Not a valid leader session, or the move is not allowed for a leader
         '404':
@@ -2050,6 +2493,30 @@ paths:
                     type: boolean
                   forgot_password_enabled:
                     type: boolean
+                  meshtastic_enabled:
+                    type: boolean
+                    description: Meshtastic module enabled (default true)
+                  radios_enabled:
+                    type: boolean
+                    description: Radios module enabled (default true)
+                  events_enabled:
+                    type: boolean
+                    description: Events module enabled (default false)
+                  meshtastic_homepage_icon_enabled:
+                    type: boolean
+                    description: Effective value, false while the Meshtastic module is off
+                  claim_radio_enabled:
+                    type: boolean
+                    description: Effective value, false while the radios module is off
+                  user_program_radio_enabled:
+                    type: boolean
+                    description: Effective value, false while the radios or Meshtastic module is off
+                  user_validate_radio_enabled:
+                    type: boolean
+                    description: Effective value, false while the radios or Meshtastic module is off
+                  user_radio_enrollment_enabled:
+                    type: boolean
+                    description: Effective value, false while the radios or Meshtastic module is off
                   login_layout:
                     type: string
                     enum: [classic, centered, split]

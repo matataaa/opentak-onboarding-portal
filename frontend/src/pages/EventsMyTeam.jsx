@@ -15,6 +15,7 @@ export default function EventsMyTeam() {
   const { permissions, loading: authLoading } = useAuth();
   const isLeader = permissions.roles.includes('event_leader');
   const [copied, setCopied] = useState(false);
+  const [forLeader, setForLeader] = useState(false);
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
@@ -24,7 +25,7 @@ export default function EventsMyTeam() {
   });
 
   const enrollment = useMutation({
-    mutationFn: async () => (await eventsAPI.myTeamEnrollment()).data,
+    mutationFn: async (asLeader) => (await eventsAPI.myTeamEnrollment({ forLeader: asLeader })).data,
   });
 
   const accountsQuery = useQuery({
@@ -102,10 +103,14 @@ export default function EventsMyTeam() {
       {data.atakAvailable && (
         <section className="events-my-team-card">
           <h2>{t('eventsMyTeam.atakEnrollment')}</h2>
+          <label className="events-my-team-for-leader">
+            <input type="checkbox" checked={forLeader} onChange={(e) => setForLeader(e.target.checked)} />
+            {' '}{t('eventsMyTeam.forLeader')}
+          </label>
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => { enrollment.reset(); enrollment.mutate(); }}
+            onClick={() => { enrollment.reset(); enrollment.mutate(forLeader); }}
             disabled={enrollment.isPending}
           >
             {enrollment.isPending ? t('eventsMyTeam.generating') : t('eventsMyTeam.showAtak')}
@@ -175,6 +180,7 @@ export default function EventsMyTeam() {
                       {a.legacy
                         ? t('eventsMyTeam.statusLegacy')
                         : (a.parked ? t('eventsMyTeam.statusParked') : t('eventsMyTeam.statusActive'))}
+                      {a.role === 'leader' && <span className="events-my-team-leader-tag">{t('eventsMyTeam.leaderDevice')}</span>}
                     </td>
                     <td className="events-my-team-actions">
                       {!a.legacy && a.inMyTeam && (

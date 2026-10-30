@@ -368,7 +368,7 @@ function AnnouncementsList() {
 
                 <div className="form-group">
                   <label>{t('admin.announcements.contentLabel')}</label>
-                  <div style={{ background: 'white', borderRadius: '4px' }}>
+                  <div className="announcement-editor">
                     <ReactQuill
                       theme="snow"
                       value={formData.content}

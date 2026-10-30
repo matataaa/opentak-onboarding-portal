@@ -16,3 +16,5 @@
 .events-my-team-own { background: rgba(128, 128, 128, 0.08); }
 .events-my-team-hint { font-size: 0.8rem; opacity: 0.7; word-break: break-all; }
 .events-my-team-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.events-my-team-for-leader { display: block; margin-bottom: 0.75rem; }
+.events-my-team-leader-tag { margin-left: 0.5rem; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.8em; border: 1px solid currentColor; }

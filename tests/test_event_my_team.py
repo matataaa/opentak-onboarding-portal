@@ -9,7 +9,7 @@ import pytest
 from flask_jwt_extended import create_access_token
 
 from app.api_v1 import events as events_mod
-from app.models import (EventLinkModel, EventModel, EventSessionModel, EventTeamModel,
+from app.models import (EventLinkModel, EventModel, EventSessionModel, EventTeamModel, OTSGroupModel,
                         SystemSettingsModel, UserModel, UserRoleModel)
 
 STRONG = 'a-strong-secret-key-for-tests-0123456789'
@@ -69,7 +69,11 @@ def _user(db, name):
 
 
 def _team(db, name, leader, event, mode_link=True, retrievable=True):
-    team = EventTeamModel(name=name, leaderUserId=leader.id)
+    # Device accounts need a usable team group
+    group = OTSGroupModel.query.filter_by(name='mt_' + name).first() or OTSGroupModel(name='mt_' + name)
+    db.session.add(group)
+    db.session.flush()
+    team = EventTeamModel(name=name, leaderUserId=leader.id, otsGroupId=group.id)
     db.session.add(team)
     db.session.commit()
     link = None

@@ -352,8 +352,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   const hasModuleAccess = (moduleName) => {
-    // Check if user has access to a specific admin module (from database RBAC)
-    return permissions.modules.includes(moduleName) || permissions.roles.includes('administrator');
+    // Check if user has access to a specific admin module (from database RBAC).
+    // No administrator short-circuit: the server leaves disabled modules out of the list.
+    return permissions.modules.includes(moduleName);
   };
 
   const hasAnyAdminRole = () => {

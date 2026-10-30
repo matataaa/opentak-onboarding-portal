@@ -219,10 +219,12 @@ function Kiosk() {
     }
 
     // Fetch user's assigned radios only
-    kioskApi.get('/radios').then(res => {
-      const list = res.data?.radios || [];
-      setRadios(list.filter(r => r.radioType === 'meshtastic' && r.assignedTo === kioskUser.id));
-    }).catch(() => {});
+    if (settings?.radios_enabled) {
+      kioskApi.get('/radios').then(res => {
+        const list = res.data?.radios || [];
+        setRadios(list.filter(r => r.radioType === 'meshtastic' && r.assignedTo === kioskUser.id));
+      }).catch(() => {});
+    }
 
     // Start countdown timer using absolute expiry time
     // (setInterval is throttled in background tabs, so we must compare against real clock)

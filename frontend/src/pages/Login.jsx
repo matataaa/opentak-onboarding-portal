@@ -18,6 +18,8 @@ function Login() {
   const { login, oidcLogin } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  // Preview mode (opened from Settings): render as for an anonymous visitor, never sign in
+  const preview = searchParams.get('preview') === '1';
 
   const { data: settings } = useQuery({
     queryKey: ['settings'],
@@ -53,6 +55,7 @@ function Login() {
 
   // Handle OIDC callback and magic link token
   useEffect(() => {
+    if (preview) return;
     const oidcToken = searchParams.get('oidc_token');
     const oidcRefresh = searchParams.get('oidc_refresh');
     const oidcError = searchParams.get('oidc_error');
@@ -119,6 +122,7 @@ function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (preview) return;
     setError('');
     setLoading(true);
 
@@ -140,6 +144,7 @@ function Login() {
   };
 
   const handleOIDCLogin = (providerId) => {
+    if (preview) return;
     // Full page navigation to the backend OIDC authorize endpoint
     window.location.href = `${API_BASE_URL}/api/v1/auth/oidc/${providerId}/authorize`;
   };
@@ -156,6 +161,12 @@ function Login() {
         <h3>{t('auth.login')}</h3>
 
         <form onSubmit={handleSubmit} className="auth-form">
+          {preview && (
+            <div className="alert alert-info">
+              {t('auth.previewSignInDisabled')}
+            </div>
+          )}
+
           {error && (
             <div className="alert alert-error">
               {error}
@@ -189,7 +200,7 @@ function Login() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || preview}
             className="btn btn-primary btn-block"
           >
             {loading ? t('auth.loggingIn') : t('auth.login')}
@@ -225,7 +236,7 @@ function Login() {
                   gap: '0.5rem',
                 }}
                 onClick={() => handleOIDCLogin(provider.id)}
-                disabled={loading}
+                disabled={loading || preview}
               >
                 {provider.icon_url && (
                   <img src={`${API_BASE_URL}${provider.icon_url}`} alt="" style={{ width: 20, height: 20, objectFit: 'contain' }} />
@@ -249,7 +260,7 @@ function Login() {
                 type="button"
                 className="btn btn-block btn-secondary"
                 onClick={() => setShowMagicLink(true)}
-                disabled={loading}
+                disabled={loading || preview}
               >
                 {t('auth.emailLoginLink')}
               </button>

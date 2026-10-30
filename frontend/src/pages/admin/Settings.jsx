@@ -23,6 +23,7 @@ const GROUPS = [
   { id: 'help_support', titleKey: 'admin.settings.helpSupport' },
   { id: 'radios', titleKey: 'admin.settings.radiosSection' },
   { id: 'kiosk', titleKey: 'admin.settings.kioskEnrollment' },
+  { id: 'modules', titleKey: 'admin.settings.modules' },
   { id: 'advanced', titleKey: 'admin.settings.advanced' },
   { id: 'general', titleKey: 'admin.settings.general' },
 ];
@@ -51,8 +52,11 @@ const SETTING_GROUP_OVERRIDES = {
   help_email_value: 'help_support',
   kiosk_default_theme: 'kiosk',
   forgot_password_enabled: 'advanced',
-  events_enabled: 'advanced',
+  events_enabled: 'modules',
 };
+
+// Module switches: the admin menu (from /auth/permissions) changes when one is toggled
+const MODULE_SETTING_KEYS = ['meshtastic_enabled', 'radios_enabled', 'events_enabled'];
 
 // Branding settings rendered in the "Login page" subsection
 const LOGIN_PAGE_SETTING_KEYS = [
@@ -1112,7 +1116,7 @@ function OIDCProviderModal({ provider, roles, onSave, onClose, saving, error: ex
 
 function Settings() {
   const { t } = useTranslation();
-  const { hasRole } = useAuth();
+  const { hasRole, updateUser } = useAuth();
   const canEdit = hasRole('settings_admin') || hasRole('administrator');
   const queryClient = useQueryClient();
 
@@ -1325,6 +1329,10 @@ function Settings() {
       setSuccess(t('admin.settings.settingUpdated'));
       fetchSettings();
       queryClient.invalidateQueries({ queryKey: ['settings'] });
+      const toggled = Object.values(settings).flat().find((s) => s.id === settingId);
+      if (MODULE_SETTING_KEYS.includes(toggled?.key)) {
+        updateUser();
+      }
 
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -1543,7 +1551,7 @@ function Settings() {
       <div className="settings-subsection">
         <div className="oidc-section-header">
           <h3>{t('admin.settings.loginPage')}</h3>
-          <a href="/login" target="_blank" rel="noopener noreferrer">{t('admin.settings.previewLoginPage')}</a>
+          <a href="/login?preview=1" target="_blank" rel="noopener noreferrer">{t('admin.settings.previewLoginPage')}</a>
         </div>
         <p className="setting-description" style={{ marginBottom: '1rem' }}>
           {t('admin.settings.loginPageHelp')}

@@ -1330,6 +1330,14 @@ class OIDCProviderModel(db.Model):
         self.role_mappings = json.dumps(mappings or {})
 
 
+# Switchable modules: module name -> (setting key, default when the row is missing)
+MODULE_SETTINGS = {
+    'meshtastic': ('meshtastic_enabled', True),
+    'radios': ('radios_enabled', True),
+    'events': ('events_enabled', False),
+}
+
+
 class SystemSettingsModel(db.Model):
     """
     Model for system-wide settings
@@ -1354,6 +1362,12 @@ class SystemSettingsModel(db.Model):
                 return setting.value.lower() == 'true'
             return setting.value
         return default
+
+    @staticmethod
+    def is_module_enabled(name):
+        """Whether a switchable module (see MODULE_SETTINGS) is enabled"""
+        key, default = MODULE_SETTINGS[name]
+        return SystemSettingsModel.get_setting(key, default) is True
 
     @staticmethod
     def set_setting(key, value, category='general', description=None):
@@ -1523,6 +1537,19 @@ class SystemSettingsModel(db.Model):
                 'value': 'false',
                 'category': 'security',
                 'description': 'Automatically create a local account when a user logs in via OIDC for the first time'
+            },
+            # Switchable modules
+            {
+                'key': 'meshtastic_enabled',
+                'value': 'true',
+                'category': 'modules',
+                'description': 'Enable the Meshtastic module (channels, channel groups and radio programming)'
+            },
+            {
+                'key': 'radios_enabled',
+                'value': 'true',
+                'category': 'modules',
+                'description': 'Enable the radios module (radio inventory, claiming and enrolment)'
             },
             # Events module
             {
@@ -2172,6 +2199,10 @@ class EventModel(db.Model):
     active = Column(Boolean, nullable=False, default=True)
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
     createdBy = Column(Integer, ForeignKey('users.id'), nullable=True)
+    # Organizer (HQ) team and how it takes part in the event's team groups
+    organizerTeamId = Column(Integer, ForeignKey('event_teams.id', name='fk_events_organizerTeamId_event_teams'),
+                             nullable=True)
+    organizerDirection = Column(String(4), nullable=False, default='OUT', server_default='OUT')  # BOTH | IN | OUT
 
 
 class EventLinkModel(db.Model):
@@ -2189,6 +2220,9 @@ class EventLinkModel(db.Model):
     # For individual player mode: the onboarding code this link registers with.
     # Lives on the link (per event+team), so reusable teams get a per-event code.
     onboardingCodeId = Column(Integer, ForeignKey('onboardingcodes.id'), nullable=True)
+    # How the device accounts of this link take part in their team's OTS group:
+    # BOTH, IN (send only) or OUT (receive only)
+    direction = Column(String(4), nullable=False, default='BOTH', server_default='BOTH')
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
 
     event = relationship("EventModel")
@@ -2214,6 +2248,18 @@ class EventSessionModel(db.Model):
     parkedAt = Column(DateTime, nullable=True)
     clientKeyHash = Column(String(128), nullable=True)
     eventLinkId = Column(Integer, ForeignKey('event_links.id'), nullable=True)
+    # Special device sessions, e.g. 'leader' for a leader's own device (NULL = player)
+    role = Column(String(20), nullable=True)
+    # What the device account was granted in OTS: direction (BOTH | IN | OUT) and
+    # team group. Both NULL = legacy: BOTH and the team's current group;
+    # a direction without a group = granted nothing.
+    direction = Column(String(4), nullable=True)
+    otsGroupId = Column(Integer, nullable=True)
+    # Organizer (HQ) memberships granted on the other teams' groups: JSON list of
+    # [group name, IN|OUT] pairs; NULL = none. Names, not ids like otsGroupId: OTS
+    # memberships are keyed by name, names never change in the portal, and a
+    # deleted local group row must not hide a removal.
+    organizerGrant = Column(Text, nullable=True)
 
     event = relationship("EventModel")
     team = relationship("EventTeamModel")

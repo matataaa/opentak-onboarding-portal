@@ -462,6 +462,7 @@ function GroupsList() {
                         onChange={(e) => setMemberSearch(e.target.value)}
                       />
                       <span className="help-text">{t('admin.groups.membersHelp')}</span>
+                      <span className="help-text" style={{ display: 'block' }}>{t('admin.groups.directionHelp')}</span>
                     </div>
 
                     {membersLoading ? (

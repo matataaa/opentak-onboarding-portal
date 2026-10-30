@@ -30,6 +30,7 @@
 
 .dashboard-header {
   margin-bottom: 2rem;
+  text-align: center;
 }
 
 .dashboard-header h1 {
@@ -1130,6 +1131,11 @@
 
 .step-card.collapsible.collapsed .step-header {
   border-bottom: none;
+}
+
+/* Captions above the centered QR codes of a step */
+.step-card .step-description {
+  text-align: center;
 }
 
 /* Step Navigation */

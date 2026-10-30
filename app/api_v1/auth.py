@@ -66,7 +66,13 @@ def assign_ots_groups(username, onboarding_code, user=None):
                     db.session.add(user_assoc)
                     current_app.logger.info(f"assign_ots_groups: created local GroupUserAssociation for user {user.id} -> group {group.id}")
                 else:
-                    current_app.logger.info(f"assign_ots_groups: local association already exists for user {user.id} -> group {group.id}")
+                    # OTS adds memberships additively, so keep the union of both directions
+                    merged = existing.direction if existing.direction == assoc.direction else 'BOTH'
+                    if merged != existing.direction:
+                        current_app.logger.info(f"assign_ots_groups: direction for user {user.id} -> group {group.id} {existing.direction} -> {merged}")
+                        existing.direction = merged
+                    else:
+                        current_app.logger.info(f"assign_ots_groups: local association already exists for user {user.id} -> group {group.id}")
             except Exception as e:
                 current_app.logger.error(f"assign_ots_groups: FAILED to create local association: {str(e)}")
 
@@ -190,6 +196,17 @@ def login():
         from app.models import OTSGroupModel
         from app.api_v1.events import EVENT_GROUP_RE
         ots_groups_data = ots_data.get('groups', [])
+        # group_memberships carries the direction per membership (older OTS versions lack it)
+        ots_memberships = ots_data.get('group_memberships')
+        ots_directions = None
+        if isinstance(ots_memberships, list):
+            ots_directions = {}
+            for membership in ots_memberships:
+                if not isinstance(membership, dict) or membership.get('direction') not in ('IN', 'OUT'):
+                    continue
+                name = membership.get('group_name')
+                seen = ots_directions.get(name)
+                ots_directions[name] = membership['direction'] if seen in (None, membership['direction']) else 'BOTH'
         if ots_groups_data:
             current_app.logger.info(f"Login: User {username} - OTS groups: {ots_groups_data}")
             for group_data in ots_groups_data:
@@ -205,11 +222,18 @@ def login():
                 if group.missing_in_ots:
                     # OTS reports the group again, so it exists
                     group.ots_missing_since = None
+                ots_direction = ots_directions.get(group_name) if ots_directions is not None else None
                 if group and group not in user.ots_groups:
                     from app.models import GroupUserAssociation
-                    login_assoc = GroupUserAssociation(group_id=group.id, user_id=user.id, direction='BOTH')
+                    login_assoc = GroupUserAssociation(group_id=group.id, user_id=user.id, direction=ots_direction or 'BOTH')
                     db.session.add(login_assoc)
                     current_app.logger.info(f"Login: Added group {group_name} to user {username}")
+                elif group and ots_direction:
+                    from app.models import GroupUserAssociation
+                    login_assoc = GroupUserAssociation.query.filter_by(group_id=group.id, user_id=user.id).first()
+                    if login_assoc and login_assoc.direction != ots_direction:
+                        current_app.logger.info(f"Login: Direction of group {group_name} for user {username} {login_assoc.direction} -> {ots_direction}")
+                        login_assoc.direction = ots_direction
 
         # Commit the changes
         db.session.commit()

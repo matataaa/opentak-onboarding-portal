@@ -282,7 +282,8 @@ def close_expired_event_sessions():
     only the session is closed. Leader accounts are persistent shared logins,
     not EventSessions, so they are untouched here.
     Afterwards the per-event parked OTS group is removed for events that have no
-    open device session left (best-effort).
+    open device session left (best-effort), and open device accounts whose live
+    group change failed are re-provisioned (reconcile_device_sessions).
     """
     print('Closing expired event sessions...')
     with scheduler.app.app_context():
@@ -328,4 +329,16 @@ def close_expired_event_sessions():
             from app.api_v1.events import cleanup_parked_group  # lazy: avoids a circular import
             for event_id in closed_event_ids:
                 cleanup_parked_group(event_id)
+
+        # Heal device accounts whose live group change failed (best effort, idempotent)
+        try:
+            from app.api_v1.events import reconcile_device_sessions  # lazy: avoids a circular import
+            done, failed = reconcile_device_sessions()
+            if done or failed:
+                current_app.logger.info(
+                    f"Event device group reconcile: {done} re-provisioned, {failed} failed (retried next run)")
+        except Exception as e:
+            db.session.rollback()
+            print(f"Event device group reconcile failed: {e}")
+            current_app.logger.exception("Event device group reconcile failed")
     return

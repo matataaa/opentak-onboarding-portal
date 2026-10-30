@@ -8,7 +8,7 @@ import pytest
 from flask_jwt_extended import create_access_token
 
 from app.models import (EventLinkModel, EventModel, EventSessionModel, EventTeamModel,
-                        UserModel, UserRoleModel)
+                        SystemSettingsModel, UserModel, UserRoleModel)
 
 
 @pytest.fixture
@@ -27,11 +27,14 @@ def admin_headers(db):
 @pytest.fixture(autouse=True)
 def _clean_events(db):
     """The endpoints commit, so remove leftovers to keep other tests isolated."""
+    old_enabled = SystemSettingsModel.get_setting('events_enabled', False)
+    SystemSettingsModel.set_setting('events_enabled', True)
     yield
     db.session.rollback()
     for model in (EventSessionModel, EventLinkModel, EventModel, EventTeamModel):
         model.query.delete()
     db.session.commit()
+    SystemSettingsModel.set_setting('events_enabled', old_enabled)
 
 
 def _event(db, name):
