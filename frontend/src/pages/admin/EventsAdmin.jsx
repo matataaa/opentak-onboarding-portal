@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { QRCodeSVG } from 'qrcode.react';
 import { eventsAPI, groupsAPI, onboardingCodesAPI } from '../../services/api';
@@ -50,6 +51,7 @@ export default function EventsAdmin() {
   const [links, setLinks] = useState([]);
   const [linkForm, setLinkForm] = useState({ teamId: '', role: 'leader', onboardingCodeId: '', direction: 'BOTH' });
   const [printSheet, setPrintSheet] = useState([]);
+  const [printPerPage, setPrintPerPage] = useState(1);
   const [qrLink, setQrLink] = useState(null); // {url, label} shown in the QR panel
   const [accounts, setAccounts] = useState([]);
   const [eudsAvailable, setEudsAvailable] = useState(true);
@@ -508,6 +510,10 @@ export default function EventsAdmin() {
           )}
           <div className="events-form-row">
             <button className="btn btn-sm btn-secondary" onClick={printAll} disabled={!links.some((l) => l.retrievable)}>{t('events.printAllQrs')}</button>
+            <select value={printPerPage} onChange={(e) => setPrintPerPage(Number(e.target.value))} aria-label={t('events.printLayout')}>
+              <option value={1}>{t('events.printOnePerPage')}</option>
+              <option value={2}>{t('events.printTwoPerPage')}</option>
+            </select>
           </div>
 
           {/* Device accounts of the selected event */}
@@ -576,6 +582,19 @@ export default function EventsAdmin() {
                   </div>
                 ))}
               </div>
+              {/* Printed copy: a direct child of <body> so pages break cleanly */}
+              {createPortal(
+                <div className={`events-print-root per-page-${printPerPage}`}>
+                  {printSheet.map((item, i) => (
+                    <div key={i} className="events-print-page-card">
+                      <div className="events-print-label">{item.label}</div>
+                      {item.hq && <div className="events-print-label events-print-hq">{t('events.hqPrintLabel')}</div>}
+                      <QRCodeSVG value={item.url} size={512} level="M" marginSize={2} />
+                    </div>
+                  ))}
+                </div>,
+                document.body
+              )}
             </div>
           )}
         </div>
