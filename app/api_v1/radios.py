@@ -70,6 +70,16 @@ def require_admin_role():
     return None
 
 
+RADIO_TYPES = ('meshtastic', 'other')
+
+
+def invalid_radio_type(data):
+    """400 response if the request sets radioType to a value outside RADIO_TYPES"""
+    if 'radioType' in data and data['radioType'] not in RADIO_TYPES:
+        return jsonify({'error': 'Invalid radio type'}), 400
+    return None
+
+
 def check_radio_duplicates(data, exclude_id=None):
     """
     Check for duplicate radio fields (name, shortName, longName, mac).
@@ -201,6 +211,10 @@ def create_radio():
         if not data.get(field):
             return jsonify({'error': f'{field} is required'}), 400
 
+    type_error = invalid_radio_type(data)
+    if type_error:
+        return type_error
+
     # Check for duplicates (name, shortName, longName, mac)
     duplicate_error = check_radio_duplicates(data)
     if duplicate_error:
@@ -251,6 +265,10 @@ def update_radio(radio_id):
         return jsonify({'error': 'Radio not found'}), 404
 
     data = request.get_json()
+
+    type_error = invalid_radio_type(data)
+    if type_error:
+        return type_error
 
     # Check for duplicates (excluding this radio)
     duplicate_error = check_radio_duplicates(data, exclude_id=radio_id)
@@ -450,6 +468,10 @@ def enroll_radio():
 
     if not data.get('name'):
         return jsonify({'error': 'Radio name is required'}), 400
+
+    type_error = invalid_radio_type(data)
+    if type_error:
+        return type_error
 
     # Check for duplicates (name, shortName, longName, mac)
     duplicate_error = check_radio_duplicates(data)

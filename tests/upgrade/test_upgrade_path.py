@@ -45,11 +45,11 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 # SEEDS below) must be revisited on purpose.
 UPSTREAM_REV = '4b754g491aa1'
 
-# The association tables have no primary key at the moment, so duplicate
-# (group, user) / (group, code) rows survive the upgrade. A later migration that
-# adds a primary key is expected to merge such rows into one row with direction
-# BOTH: flip this to True in that change.
-EXPECT_DUPLICATES_MERGED = False
+HEAD_REV = 'b6c7d8e9f0a2'
+
+# a5b6c7d8e9f1 adds the primary keys to the OTS group association tables and
+# merges duplicate (group, user) / (group, code) rows into one row first.
+EXPECT_DUPLICATES_MERGED = True
 
 # Same environment tests/conftest.py provides (app/settings.py reads it at import).
 BASE_ENV = {
@@ -68,7 +68,8 @@ BASE_ENV = {
 
 # Tables that intentionally lose data between UPSTREAM_REV and head.
 #   approver_onboardingcode_association: table dropped (f4a5b6c7d8e0)
-#   group_*_association: rows with a NULL FK deleted (f4a5b6c7d8e0)
+#   group_*_association: rows with a NULL FK deleted (f4a5b6c7d8e0), duplicate
+#     pairs merged (a5b6c7d8e9f1)
 #   system_settings: zerotier_icon row deleted (e3f4a5b6c7d9)
 DROPPED_TABLES = {'approver_onboardingcode_association'}
 # column dropped (f4a5b6c7d8e0)
@@ -263,6 +264,13 @@ def seed_announcements(s):
     s.ins('announcements', 'ann1', title='Welcome', content='Welcome to the portal', target_type='all',
           status='sent', scheduled_at=None, sent_at=NOW, send_email=True, created_by=s.ids['user1'],
           created_at=NOW, updated_at=NOW)
+    # values outside the CHECK constraints added by b6c7d8e9f0a2 (no constraint upstream)
+    s.ins('announcements', 'ann2', title='Bad target', content='x', target_type='everyone',
+          status='pending', scheduled_at=None, sent_at=None, send_email=False, created_by=s.ids['user1'],
+          created_at=NOW, updated_at=NOW)
+    s.ins('announcements', 'ann3', title='Bad status', content='x', target_type='roles',
+          status='pending', scheduled_at=None, sent_at=None, send_email=False, created_by=s.ids['user1'],
+          created_at=NOW, updated_at=NOW)
 
 
 def seed_announcement_reads(s):
@@ -294,6 +302,14 @@ def seed_radios(s):
           softwareVersion='2.5.0', model='V3', vendor='Heltec', shortName='H1', longName='Heltec One',
           assignedTo=s.ids['user2'], owner=s.ids['user1'], mac='AA:BB:CC:DD:EE:01', role='CLIENT',
           publicKey='pub==', privateKey='priv==', createdAt=NOW, updatedAt=NOW)
+    s.ins('radios', name='LoRa 2', platform='other', radioType='lora', description=None,
+          softwareVersion=None, model=None, vendor=None, shortName='L2', longName='LoRa Two',
+          assignedTo=None, owner=None, mac='AA:BB:CC:DD:EE:02', role=None,
+          publicKey=None, privateKey=None, createdAt=NOW, updatedAt=NOW)
+    s.ins('radios', name='T-Beam 3', platform='meshtastic', radioType='meshtastic', description=None,
+          softwareVersion=None, model=None, vendor=None, shortName='T3', longName='T-Beam Three',
+          assignedTo=None, owner=None, mac='AA:BB:CC:DD:EE:03', role=None,
+          publicKey=None, privateKey=None, createdAt=NOW, updatedAt=NOW)
 
 
 def seed_one_time_tokens(s):
@@ -343,10 +359,18 @@ def seed_ots_group_associations(s):
     s.ins('group_user_association', group_id=i['ogroup1'], user_id=i['user1'], direction='OUT')
     s.ins('group_user_association', group_id=i['ogroup2'], user_id=i['user2'], direction='BOTH')
     s.ins('group_user_association', group_id=i['ogroup2'], user_id=None, direction='BOTH')  # NULL FK
-    # two rows for the same (group, code) pair
+    # OUT twice -> OUT; BOTH + IN -> BOTH
+    s.ins('group_user_association', group_id=i['ogroup1'], user_id=i['user3'], direction='OUT')
+    s.ins('group_user_association', group_id=i['ogroup1'], user_id=i['user3'], direction='OUT')
+    s.ins('group_user_association', group_id=i['ogroup2'], user_id=i['user3'], direction='BOTH')
+    s.ins('group_user_association', group_id=i['ogroup2'], user_id=i['user3'], direction='IN')
+    # two rows for the same (group, code) pair: IN + OUT -> BOTH
     s.ins('group_onboardingcode_association', group_id=i['ogroup1'], onboardingcode_id=i['code1'], direction='BOTH')
     s.ins('group_onboardingcode_association', group_id=i['ogroup1'], onboardingcode_id=i['code2'], direction='IN')
     s.ins('group_onboardingcode_association', group_id=i['ogroup1'], onboardingcode_id=i['code2'], direction='OUT')
+    # IN twice -> IN
+    s.ins('group_onboardingcode_association', group_id=i['ogroup2'], onboardingcode_id=i['code1'], direction='IN')
+    s.ins('group_onboardingcode_association', group_id=i['ogroup2'], onboardingcode_id=i['code1'], direction='IN')
     s.ins('group_onboardingcode_association', group_id=None, onboardingcode_id=i['code1'], direction='BOTH')  # NULL FK
 
 
@@ -398,6 +422,39 @@ def snapshot(engine, skip=()):
             rows = conn.execute(sa.select(*[table.c[c] for c in cols])).all()
             snap[name] = (cols, [dict(zip(cols, r)) for r in rows])
     return snap
+
+
+OTS_GROUP_ASSOCIATIONS = {'group_user_association': 'user_id',
+                          'group_onboardingcode_association': 'onboardingcode_id'}
+
+
+def merge_direction(directions):
+    """a5b6c7d8e9f1's merge rule for the rows of one (group, x) pair."""
+    kinds = set(directions)
+    return kinds.pop() if kinds in ({'IN'}, {'OUT'}) else 'BOTH'
+
+
+def expected_after(table, rows):
+    """The pre-upgrade rows of `table` as the migrations should leave them."""
+    if table in OTS_GROUP_ASSOCIATIONS:
+        col = OTS_GROUP_ASSOCIATIONS[table]
+        pairs = {}
+        for r in rows:
+            if r['group_id'] is not None and r[col] is not None:  # NULL FK rows deleted
+                pairs.setdefault((r['group_id'], r[col]), []).append(r['direction'])
+        return [{'group_id': g, col: x, 'direction': merge_direction(d)} for (g, x), d in pairs.items()]
+    out = []
+    for r in rows:
+        r = dict(r)
+        if table == 'announcements':
+            if r['target_type'] not in ('all', 'roles', 'users'):
+                r['target_type'], r['status'] = 'users', 'draft'
+            if r['status'] not in ('draft', 'scheduled', 'sent'):
+                r['status'] = 'draft'
+        elif table == 'radios' and r['radioType'] not in ('meshtastic', 'other'):
+            r['radioType'] = 'other'
+        out.append(r)
+    return out
 
 
 def counts(snap):
@@ -464,7 +521,7 @@ def rows_by(snap, table, col):
 
 def test_single_head_and_alembic_version(up):
     heads = current_heads(up.url)
-    assert heads == ['f4a5b6c7d8e0'], heads
+    assert heads == [HEAD_REV], heads
     engine = sa.create_engine(up.url)
     with engine.connect() as c:
         assert [r[0] for r in c.execute(sa.text('SELECT version_num FROM alembic_version'))] == heads
@@ -492,30 +549,27 @@ def test_row_counts_preserved_except_documented_losses(up):
             assert table not in after, f'{table} should have been dropped'
         elif table not in lossy:
             assert after[table] == n, f'{table}: {n} rows before, {after[table]} after'
-    # documented losses, exact
-    assert before['group_user_association'] == 4 and after['group_user_association'] == 3  # NULL-FK row
-    assert before['group_onboardingcode_association'] == 4 and after['group_onboardingcode_association'] == 3
+    # documented losses, exact: one NULL-FK row each, plus the merged duplicates
+    assert before['group_user_association'] == 8 and after['group_user_association'] == 4
+    assert before['group_onboardingcode_association'] == 6 and after['group_onboardingcode_association'] == 3
     assert before['system_settings'] == 2 and after['system_settings'] == 1  # zerotier_icon
     assert {r['key'] for r in up.after['system_settings'][1]} == {'site_name'}
 
 
 def test_surviving_rows_are_value_identical(up):
-    """Every pre-existing column on every surviving row is unchanged (except documented drops)."""
+    """Every pre-existing column on every surviving row is unchanged (except documented
+    drops, merges and normalised values: see expected_after)."""
     def key(row):
         return tuple(sorted((k, repr(v)) for k, v in row.items()))
     for table, (cols, rows) in up.before.items():
         if table in DROPPED_TABLES:
             continue
         keep = [c for c in cols if c not in DROPPED_COLUMNS.get(table, ())]
-        pre = Counter(key({c: r[c] for c in keep}) for r in rows)
+        pre = Counter(key({c: r[c] for c in keep}) for r in expected_after(table, rows))
         post_cols, post_rows = up.after[table]
         post = Counter(key({c: r[c] for c in keep}) for r in post_rows)
         if table == 'system_settings':
             pre = Counter({k: v for k, v in pre.items() if "'zerotier_icon'" not in dict(k)['key']})
-        elif table in ('group_user_association', 'group_onboardingcode_association'):
-            pre = Counter({k: v for k, v in pre.items()
-                           if all(dict(k)[c] != repr(None) for c in ('group_id', 'user_id', 'onboardingcode_id')
-                                  if c in dict(k))})
         assert post == pre, f'{table}: surviving rows differ\nlost: {pre - post}\ngained: {post - pre}'
 
 
@@ -532,14 +586,25 @@ def test_key_values(up):
     assert {r['name'] for r in a['user_roles'][1]} == {'administrator', 'member', 'approver'}
     assert {r['name'] for r in a['ots_groups'][1]} == {'Alpha', 'Bravo'}
     gu = Counter((r['group_id'], r['user_id'], r['direction']) for r in a['group_user_association'][1])
-    assert gu == Counter({(i['ogroup1'], i['user1'], 'IN'): 1, (i['ogroup1'], i['user1'], 'OUT'): 1,
-                          (i['ogroup2'], i['user2'], 'BOTH'): 1})
-    ann = a['announcements'][1][0]
-    assert ann['status'] == 'sent' and ann['target_type'] == 'all' and ann['title'] == 'Welcome'
+    assert gu == Counter({(i['ogroup1'], i['user1'], 'BOTH'): 1, (i['ogroup2'], i['user2'], 'BOTH'): 1,
+                          (i['ogroup1'], i['user3'], 'OUT'): 1, (i['ogroup2'], i['user3'], 'BOTH'): 1})
+    go = Counter((r['group_id'], r['onboardingcode_id'], r['direction'])
+                 for r in a['group_onboardingcode_association'][1])
+    assert go == Counter({(i['ogroup1'], i['code1'], 'BOTH'): 1, (i['ogroup1'], i['code2'], 'BOTH'): 1,
+                          (i['ogroup2'], i['code1'], 'IN'): 1})
+    anns = rows_by(a, 'announcements', 'title')
+    assert anns['Welcome']['status'] == 'sent' and anns['Welcome']['target_type'] == 'all'
+    # invalid values normalised by b6c7d8e9f0a2
+    assert (anns['Bad target']['target_type'], anns['Bad target']['status']) == ('users', 'draft')
+    assert (anns['Bad status']['target_type'], anns['Bad status']['status']) == ('roles', 'draft')
     assert rows_by(a, 'system_settings', 'key')['site_name']['value'] == 'My TAK Portal'
     assert a['api_keys'][1][0]['key_hash'] == 'h' * 64
     assert a['oidc_providers'][1][0]['client_id'] == 'portal'
-    assert a['radios'][1][0]['mac'] == 'AA:BB:CC:DD:EE:01'
+    radios = rows_by(a, 'radios', 'mac')
+    assert radios['AA:BB:CC:DD:EE:01']['name'] == 'Heltec 1'
+    assert radios['AA:BB:CC:DD:EE:01']['radioType'] == 'other'  # was 'heltec_v3'
+    assert radios['AA:BB:CC:DD:EE:02']['radioType'] == 'other'  # was 'lora'
+    assert radios['AA:BB:CC:DD:EE:03']['radioType'] == 'meshtastic'
     # a NULL FK on a non-OTS-group association table is not touched
     assert any(r['role_id'] is None for r in a['user_role_association'][1])
 
@@ -552,8 +617,8 @@ def test_duplicate_association_rows(up):
     go = [r for r in up.after['group_onboardingcode_association'][1]
           if (r['group_id'], r['onboardingcode_id']) == (i['ogroup1'], i['code2'])]
     if EXPECT_DUPLICATES_MERGED:
-        assert [r['direction'] for r in gu] == ['BOTH']
-        assert [r['direction'] for r in go] == ['BOTH']
+        assert [r['direction'] for r in gu] == ['BOTH']  # IN + OUT
+        assert [r['direction'] for r in go] == ['BOTH']  # IN + OUT
     else:
         assert sorted(r['direction'] for r in gu) == ['IN', 'OUT']
         assert sorted(r['direction'] for r in go) == ['IN', 'OUT']
@@ -583,6 +648,89 @@ def test_new_and_dropped_schema(up):
     fks = {tuple(f['constrained_columns']): f['referred_table'] for f in insp.get_foreign_keys('event_teams')}
     assert fks.get(('leaderUserId',)) == 'users'
     engine.dispose()
+
+
+CHECK_CONSTRAINTS = {
+    'announcements': {'check_announcement_target_type', 'check_announcement_status'},
+    'radios': {'check_radio_type'},
+}
+
+
+def assert_constraints(url, ids):
+    """Primary keys and CHECK constraints exist and reject bad rows."""
+    engine = sa.create_engine(url)
+    insp = sa.inspect(engine)
+    for table, col in OTS_GROUP_ASSOCIATIONS.items():
+        assert insp.get_pk_constraint(table)['constrained_columns'] == ['group_id', col], table
+    for table, names in CHECK_CONSTRAINTS.items():
+        assert names <= {c['name'] for c in insp.get_check_constraints(table)}, table
+    meta = sa.MetaData()
+    meta.reflect(engine, only=['group_user_association', 'group_onboardingcode_association',
+                               'announcements', 'radios'])
+    t = meta.tables
+    ann = dict(title='t', content='c', target_type='all', status='draft', send_email=False,
+               created_by=ids['user1'], created_at=NOW, updated_at=NOW)
+    radio = dict(name='r', platform='p', radioType='other')
+    bad = [
+        t['group_user_association'].insert().values(group_id=ids['ogroup1'], user_id=ids['user1'], direction='IN'),
+        t['group_onboardingcode_association'].insert().values(
+            group_id=ids['ogroup1'], onboardingcode_id=ids['code1'], direction='IN'),
+        t['announcements'].insert().values(**{**ann, 'target_type': 'everyone'}),
+        t['announcements'].insert().values(**{**ann, 'status': 'pending'}),
+        t['radios'].insert().values(**{**radio, 'radioType': 'lora'}),
+    ]
+    for stmt in bad:
+        with pytest.raises(sa.exc.IntegrityError):
+            with engine.begin() as c:
+                c.execute(stmt)
+    with engine.begin() as c:  # valid values still go in (rolled back below)
+        c.execute(t['announcements'].insert().values(**ann))
+        c.execute(t['radios'].insert().values(**radio))
+        c.execute(sa.text("DELETE FROM announcements WHERE title = 't'"))
+        c.execute(sa.text("DELETE FROM radios WHERE name = 'r'"))
+    engine.dispose()
+
+
+def test_primary_keys_and_check_constraints(backend, make_db):
+    up = build_upgrade(make_db, backend)  # own database: inserts are attempted
+    assert_constraints(up.url, up.ids)
+
+
+CREATE_ALL = textwrap.dedent('''
+    from app import app
+    from app.models import db
+    with app.app_context():
+        db.create_all()
+''')
+
+
+def test_create_all_stamped_database(backend, make_db):
+    """docker-entrypoint.sh may stamp a create_all database: the new steps must be no-ops."""
+    url = make_db(backend)
+    _run(url, [sys.executable, '-c', CREATE_ALL])
+    flask_db(url, 'stamp', 'f4a5b6c7d8e0')
+    flask_db(url, 'upgrade', 'head')
+    engine = sa.create_engine(url)
+    with engine.begin() as c:
+        meta = sa.MetaData()
+        meta.reflect(c)
+        s = Seeder(c, meta)
+        s.ins('users', 'user1', username='alice', email='alice@example.org')
+        s.ins('ots_groups', 'ogroup1', name='Alpha', active=True)
+        s.ins('onboardingcodes', 'code1', name='c', onboardingCode='C-1', uses=0, maxUses=1,
+              autoApprove=False, requireApproval=False)
+        s.ins('group_user_association', group_id=s.ids['ogroup1'], user_id=s.ids['user1'], direction='BOTH')
+        s.ins('group_onboardingcode_association', group_id=s.ids['ogroup1'],
+              onboardingcode_id=s.ids['code1'], direction='BOTH')
+        ids = s.ids
+    engine.dispose()
+    assert_constraints(url, ids)
+    assert flask_db(url, 'check', check=False).returncode == 0
+    flask_db(url, 'downgrade', 'f4a5b6c7d8e0')
+    flask_db(url, 'upgrade', 'head')
+    assert_constraints(url, ids)
+    proc = flask_db(url, 'check', check=False)
+    assert proc.returncode == 0, f'flask db check:\n{proc.stdout}\n{proc.stderr}'
 
 
 ORM_SMOKE = textwrap.dedent('''
@@ -644,3 +792,4 @@ def test_round_trip(backend, make_db):
         assert counts(again)[table] == n, f'{table} after re-upgrade'
     proc = flask_db(up.url, 'check', check=False)
     assert proc.returncode == 0, f'flask db check after round trip:\n{proc.stdout}\n{proc.stderr}'
+    assert_constraints(up.url, up.ids)
