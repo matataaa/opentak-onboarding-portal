@@ -201,7 +201,7 @@ class UserRoleModel(db.Model):
 class UserModel(db.Model):
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(primary_key=True,nullable=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(unique=True,nullable=True)
     email: Mapped[str] = mapped_column(unique=True,nullable=True)
     firstName: Mapped[str] = mapped_column(nullable=True)
@@ -743,8 +743,8 @@ class MeshtasticChannelGroup(db.Model):
     showOnHomepage: Mapped[bool] = mapped_column(nullable=True, default=True)
     # YAML config for radio device settings (supports placeholders: ${shortName}, ${longName}, ${mac}, ${callsign})
     yamlConfig: Mapped[str] = mapped_column(db.Text, nullable=True)
-    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
-    updated_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow, nullable=True)
+    updated_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=True)
 
     # DEPRECATED: Old direct relationship - kept for migration
     channels = relationship("MeshtasticModel", back_populates="group", order_by="MeshtasticModel.slot_number", foreign_keys="MeshtasticModel.group_id")
