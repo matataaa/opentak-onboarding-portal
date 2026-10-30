@@ -5,7 +5,7 @@ import { radiosAPI } from '../services/api';
 import { meshtasticSerial } from '../services/meshtasticSerial';
 import './EnrollRadioModal.css';
 
-function EnrollRadioModal({ onClose, onSuccess }) {
+function EnrollRadioModal({ onClose, onSuccess, apiClient }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
@@ -37,7 +37,7 @@ function EnrollRadioModal({ onClose, onSuccess }) {
   const browserSupport = meshtasticSerial.getBrowserSupport();
 
   const enrollMutation = useMutation({
-    mutationFn: (data) => radiosAPI.enroll(data),
+    mutationFn: (data) => radiosAPI.enroll(data, apiClient),
     onSuccess: () => {
       queryClient.invalidateQueries(['radios']);
       queryClient.invalidateQueries(['userRadios']);

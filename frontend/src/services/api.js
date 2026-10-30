@@ -258,8 +258,8 @@ export const meshtasticAPI = {
 
 // Meshtastic Channel Groups API
 export const meshtasticGroupsAPI = {
-  getAll: () =>
-    api.get('/meshtastic/groups'),
+  getAll: (client = api) =>
+    client.get('/meshtastic/groups'),
 
   // Admin endpoint - returns ALL groups without role filtering
   getAllAdmin: () =>
@@ -360,15 +360,15 @@ export const radiosAPI = {
   claimByNodeId: (nodeId) =>
     api.post(`/radios/claim-by-node/${encodeURIComponent(nodeId)}`),
 
-  enroll: (data) =>
-    api.post('/radios/enroll', data),
+  enroll: (data, client = api) =>
+    client.post('/radios/enroll', data),
 
   delete: (id) =>
     api.delete(`/radios/${id}`),
 
   // Get programming config for Meshtastic radio
-  getProgramConfig: (id, { channelGroupId, channelId }) =>
-    api.post(`/radios/${id}/program-config`, {
+  getProgramConfig: (id, { channelGroupId, channelId }, client = api) =>
+    client.post(`/radios/${id}/program-config`, {
       channel_group_id: channelGroupId,
       channel_id: channelId
     }),
