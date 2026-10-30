@@ -71,6 +71,7 @@ COPY --from=frontend-builder /frontend/dist ./frontend/dist
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY docker-backup-sqlite.py /app/docker-backup-sqlite.py
 
 # Create necessary directories and set permissions
 RUN mkdir -p /app/data_packages /app/instance && \

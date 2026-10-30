@@ -91,6 +91,21 @@ sudo venv/bin/flask db upgrade
 sudo systemctl start opentak-portal
 ```
 
+### Backups and failed migrations
+
+The update script copies a SQLite database to `instance/db.sqlite.pre-update-<UTC timestamp>`
+before migrating; when updating manually, copy `instance/db.sqlite` yourself first. For
+PostgreSQL, take a dump before updating:
+`pg_dump -Fc -h <host> -U <user> <dbname> > portal-backup.dump`.
+
+If the migration fails, the update script stops and leaves the service stopped, printing the
+restore steps. To roll back: restore the backup (`cp` the SQLite copy back over
+`instance/db.sqlite`, or `pg_restore --clean --if-exists -d <dbname> portal-backup.dump`),
+`sudo git checkout <previous-commit>`, reinstall requirements, rebuild the frontend,
+`sudo chown -R opentak-portal:opentak-portal /opt/opentak-onboarding-portal` and start the
+service (run `sudo git checkout main` before the next update). `flask db stamp` only changes the recorded revision without migrating; use it
+only if you know exactly which schema the database has.
+
 ## Uninstalling
 
 ```bash
@@ -122,8 +137,10 @@ flask run --debug
 ```
 
 ### Database issues
+Back up the database first (see [Backups and failed migrations](#backups-and-failed-migrations)), then:
 ```bash
 cd /opt/opentak-onboarding-portal
 source venv/bin/activate
+flask db current
 flask db upgrade
 ```
