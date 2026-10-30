@@ -2001,8 +2001,6 @@ paths:
                     type: boolean
                   truststore_homepage_icon_enabled:
                     type: boolean
-                  zerotier_icon:
-                    type: boolean
                   enable_repo:
                     type: boolean
                   enable_claim_radio:
@@ -2023,6 +2021,16 @@ paths:
                     example: medium
                   login_glass_enabled:
                     type: boolean
+                  date_format:
+                    type: string
+                    enum: [eu, us, iso]
+                    description: Portal-wide date/time format (eu = 31-10-2026 14:30, us = 10/31/2026 2:30 PM, iso = 2026-10-31 14:30)
+                    example: eu
+                  kiosk_language:
+                    type: string
+                    enum: ['', en, nl, de]
+                    description: Fixed UI language for the kiosk screen (/kiosk); empty = follow the browser
+                    example: ''
                   login_header_bar_enabled:
                     type: boolean
                   login_hero_texts:

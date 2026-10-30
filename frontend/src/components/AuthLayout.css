@@ -18,6 +18,7 @@
   inset: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   background-color: var(--bg-page);

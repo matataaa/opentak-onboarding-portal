@@ -1,8 +1,12 @@
+import { useTranslation } from 'react-i18next';
+
 function PackagesList() {
+  const { t } = useTranslation();
+
   return (
     <div>
-      <h1>Packages Management</h1>
-      <p>ATAK package CRUD interface coming soon. Use API at /api/v1/packages</p>
+      <h1>{t('admin.packages.title')}</h1>
+      <p>{t('admin.packages.comingSoon')}</p>
     </div>
   );
 }

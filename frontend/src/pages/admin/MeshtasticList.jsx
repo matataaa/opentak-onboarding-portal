@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { meshtasticAPI } from '../../services/api';
+import { formatDateTime, useDateFormat } from '../../utils/formatDate';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import Pagination from '../../components/Pagination';
@@ -9,6 +10,7 @@ import '../../components/AdminTable.css';
 
 function MeshtasticList() {
   const { t } = useTranslation();
+  const dateFormat = useDateFormat();
   const queryClient = useQueryClient();
   const { showError, showSuccess, confirm } = useNotification();
   const { hasRole } = useAuth();
@@ -126,7 +128,7 @@ function MeshtasticList() {
       <div className="admin-header">
         <div>
           <h1>{t('admin.meshtastic.title')}</h1>
-          <p style={{ color: '#666', fontSize: '0.9rem', marginTop: '0.25rem' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
             {t('admin.meshtastic.subtitle')} <a href="/admin/meshtastic/groups">{t('admin.meshtastic.manageGroups')}</a>
           </p>
         </div>
@@ -167,7 +169,7 @@ function MeshtasticList() {
                   <td>{config.description || '-'}</td>
                   <td>
                     {config.synced_at ? (
-                      <span className="badge badge-success" title={t('admin.meshtastic.lastSynced', { date: new Date(config.synced_at).toLocaleString() })}>
+                      <span className="badge badge-success" title={t('admin.meshtastic.lastSynced', { date: formatDateTime(config.synced_at, dateFormat) })}>
                         {t('admin.meshtastic.otsSynced')}
                       </span>
                     ) : config.url ? (

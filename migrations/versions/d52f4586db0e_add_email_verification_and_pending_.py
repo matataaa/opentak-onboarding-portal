@@ -72,14 +72,17 @@ def downgrade():
     op.drop_column('users', 'emailVerified')
 
     with op.batch_alter_table('radios', schema=None) as batch_op:
+        # PostgreSQL needs an explicit cast; non-numeric values become NULL.
         batch_op.alter_column('vendor',
                    existing_type=sa.String(),
                    type_=sa.INTEGER(),
-                   existing_nullable=True)
+                   existing_nullable=True,
+                   postgresql_using="CASE WHEN vendor ~ '^[0-9]+$' THEN vendor::integer END")
         batch_op.alter_column('model',
                    existing_type=sa.String(),
                    type_=sa.INTEGER(),
-                   existing_nullable=True)
+                   existing_nullable=True,
+                   postgresql_using="CASE WHEN model ~ '^[0-9]+$' THEN model::integer END")
 
     with op.batch_alter_table('onboardingcodes', schema=None) as batch_op:
         batch_op.add_column(sa.Column('onboardContact', sa.INTEGER(), nullable=True))

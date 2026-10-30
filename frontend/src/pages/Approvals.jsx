@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { approvalsAPI } from '../services/api';
+import { formatDateTime, useDateFormat } from '../utils/formatDate';
 import { useNotification } from '../contexts/NotificationContext';
 import { useAuth } from '../contexts/AuthContext';
 import './Approvals.css';
 
 function Approvals() {
   const { t } = useTranslation();
+  const dateFormat = useDateFormat();
   const queryClient = useQueryClient();
   const { showSuccess, showError, confirm } = useNotification();
   const { refreshApproverStatus } = useAuth();
@@ -73,8 +75,7 @@ function Approvals() {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleString();
+    return formatDateTime(dateString, dateFormat);
   };
 
   const getTimeRemaining = (expiresAt) => {

@@ -6,11 +6,12 @@ import { QRCodeSVG } from 'qrcode.react';
 import { eventsAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import EnrollmentLink from '../components/EnrollmentLink';
-import { formatUtc } from '../utils/formatUtc';
+import { formatDateTime, useDateFormat } from '../utils/formatDate';
 import './EventsMyTeam.css';
 
 export default function EventsMyTeam() {
   const { t } = useTranslation();
+  const dateFormat = useDateFormat();
   const { permissions, loading: authLoading } = useAuth();
   const isLeader = permissions.roles.includes('event_leader');
   const [copied, setCopied] = useState(false);
@@ -167,7 +168,7 @@ export default function EventsMyTeam() {
                     <td>
                       {(a.euds || []).map((e) => e.callsign).filter(Boolean).join(', ') || '-'}
                       <div className="events-my-team-hint">{a.otsUsername}</div>
-                      <div className="events-my-team-hint">{formatUtc(a.createdAt)}</div>
+                      <div className="events-my-team-hint">{formatDateTime(a.createdAt, dateFormat, { utc: true }) || '-'}</div>
                     </td>
                     <td>{a.team?.name || '-'}</td>
                     <td>

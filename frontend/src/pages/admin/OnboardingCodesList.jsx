@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { onboardingCodesAPI, rolesAPI, usersAPI, groupsAPI } from '../../services/api';
+import { formatDate, useDateFormat } from '../../utils/formatDate';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import Pagination from '../../components/Pagination';
@@ -9,6 +10,7 @@ import '../../components/AdminTable.css';
 
 function OnboardingCodesList() {
   const { t } = useTranslation();
+  const dateFormat = useDateFormat();
   const queryClient = useQueryClient();
   const { showError, confirm } = useNotification();
   const { hasRole } = useAuth();
@@ -275,7 +277,7 @@ function OnboardingCodesList() {
                   <td><code>{code.onboardingCode}</code></td>
                   <td>{code.uses} / {code.maxUses || '∞'}</td>
                   <td>{code.onboardContact?.username || '-'}</td>
-                  <td>{code.expiryDate ? new Date(code.expiryDate).toLocaleDateString() : t('common.never')}</td>
+                  <td>{code.expiryDate ? formatDate(code.expiryDate, dateFormat) : t('common.never')}</td>
                   <td>
                     {code.roles?.map(role => (
                       <span key={role.id} className="badge badge-primary">{role.displayName || role.name}</span>

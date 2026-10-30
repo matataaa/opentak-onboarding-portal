@@ -16,7 +16,6 @@
     "perPage": "Pro Seite",
     "all": "Alle",
     "pageInfo": "Seite {{page}} von {{totalPages}} ({{total}} gesamt)",
-    "noResults": "Keine Ergebnisse für Ihre Suche.",
     "search": "Suchen",
     "actions": "Aktionen",
     "name": "Name",
@@ -191,8 +190,8 @@
   "dashboard": {
     "welcome": "Willkommen, ",
     "user": "Benutzer",
-    "editProfile": "PROFIL BEARBEITEN",
-    "changePassword": "PASSWORT ÄNDERN",
+    "editProfile": "Profil bearbeiten",
+    "changePassword": "Passwort ändern",
     "introText": "Dieses Portal hilft Ihnen, Ihren ATAK-Client einzurichten und einsatzbereit zu machen. Falls Sie ATAK noch nicht haben, können Sie es über die Symbole unten herunterladen. Sobald Sie ATAK haben, können Sie die Profile herunterladen und importieren.",
     "getStarted": "Erste Schritte mit ATAK",
     "collapseAll": "Alle einklappen",
@@ -236,8 +235,8 @@
     "registerRadio": "+ Funkgerät registrieren",
     "compareConfig": "Funkgerät-Konfiguration mit Ziel vergleichen",
     "programConfig": "Funkgerät mit Konfiguration programmieren",
-    "helpLink": "HILFE / INSTALLATIONSANLEITUNG",
-    "helpEmail": "SUPPORT KONTAKTIEREN"
+    "helpLink": "Hilfe / Installationsanleitung",
+    "helpEmail": "Support kontaktieren"
   },
   "profile": {
     "title": "Benutzerprofil",
@@ -268,23 +267,23 @@
   },
   "claimRadio": {
     "featureDisabled": "Funktion deaktiviert",
-    "claimingDisabled": "Die Funkgerät-Beanspruchung ist auf diesem Portal nicht aktiviert.",
+    "claimingDisabled": "Die Übernahme von Funkgeräten ist auf diesem Portal nicht aktiviert.",
     "goToDashboard": "Zum Dashboard",
     "radioNotFound": "Funkgerät nicht gefunden",
-    "radioNotFoundDesc": "Das Funkgerät, das Sie beanspruchen möchten, existiert nicht oder Sie haben keinen Zugriff darauf.",
+    "radioNotFoundDesc": "Das Funkgerät, das Sie übernehmen möchten, existiert nicht oder Sie haben keinen Zugriff darauf.",
     "alreadyAssigned": "Bereits zugewiesen",
     "alreadyAssignedDesc": "Dieses Funkgerät ist bereits jemandem zugewiesen.",
-    "radioClaimed": "Funkgerät beansprucht!",
+    "radioClaimed": "Funkgerät übernommen!",
     "nowOwner": "Sie sind jetzt der Besitzer von ",
     "redirectingToDashboard": "Weiterleitung zum Dashboard...",
-    "title": "Funkgerät beanspruchen",
+    "title": "Funkgerät übernehmen",
     "model": "Modell: ",
     "nodeId": "Knoten-ID: ",
     "shortName": "Kurzname: ",
     "longName": "Langname: ",
-    "claimDesc": "Durch die Beanspruchung dieses Funkgeräts wird es Ihnen zugewiesen. Dies ermöglicht Ihnen, dieses Funkgerät von Ihrem Dashboard aus anzuzeigen und zu verwalten.",
-    "claiming": "Beanspruchen...",
-    "claimButton": "Dieses Funkgerät beanspruchen"
+    "claimDesc": "Wenn Sie dieses Funkgerät übernehmen, wird es Ihnen zugewiesen. Dies ermöglicht Ihnen, dieses Funkgerät von Ihrem Dashboard aus anzuzeigen und zu verwalten.",
+    "claiming": "Wird übernommen...",
+    "claimButton": "Dieses Funkgerät übernehmen"
   },
   "kiosk": {
     "title": "Kiosk-Registrierung",
@@ -309,7 +308,20 @@
     "loggedIn": "Sie sind jetzt am Kiosk angemeldet!",
     "canClosePage": "Sie können diese Seite schließen.",
     "sessionExpired": "Diese Kiosk-Sitzung ist abgelaufen oder nicht mehr verfügbar.",
-    "scanAgain": "Bitte scannen Sie den QR-Code am Kiosk erneut."
+    "scanAgain": "Bitte scannen Sie den QR-Code am Kiosk erneut.",
+    "loading": "Wird geladen...",
+    "tryAgain": "Erneut versuchen",
+    "failedLoadSettings": "Kiosk-Einstellungen konnten nicht geladen werden.",
+    "failedCreateSession": "Kiosk-Sitzung konnte nicht erstellt werden.",
+    "logoAlt": "Logo",
+    "welcome": "Willkommen, {{name}}",
+    "noRadios": "Ihnen sind noch keine Funkgeräte zugewiesen.",
+    "registerRadio": "Funkgerät registrieren",
+    "validate": "Validieren",
+    "program": "Programmieren",
+    "username": "Benutzername",
+    "name": "Name",
+    "callsign": "Rufzeichen"
   },
   "announcements": {
     "title": "Ankündigungsverlauf",
@@ -370,7 +382,7 @@
     "darkMode": "Dunkler Modus",
     "viewingAs": "Ansicht als ",
     "loggedInAs": " — angemeldet als ",
-    "stopImpersonating": "Identitätswechsel beenden"
+    "stopImpersonating": "Zurück zum eigenen Konto"
   },
   "notifications": {
     "announcements": "Ankündigungen",
@@ -480,7 +492,7 @@
     "resetting": "Zurücksetzen...",
     "factoryResetConfirm": "Dies wird ALLE Einstellungen auf \"{{name}}\" löschen und die Werkseinstellungen wiederherstellen.\n\nDas Gerät wird neu gestartet. Sind Sie sicher?",
     "factoryResetTitle": "Funkgerät auf Werkseinstellungen zurücksetzen",
-    "copyClaimUrl": "Beanspruchungs-URL kopieren",
+    "copyClaimUrl": "Übernahme-URL kopieren",
     "slot": "Slot",
     "notRead": "(nicht gelesen)",
     "failedToRegister": "Radio-Registrierung fehlgeschlagen"
@@ -650,7 +662,7 @@
       "callsign": "Rufzeichen",
       "roles": "Rollen",
       "expiryDate": "Ablaufdatum",
-      "impersonate": "Identität annehmen",
+      "impersonate": "Anmelden als",
       "editUser": "Benutzer bearbeiten",
       "createUser": "Benutzer erstellen",
       "usernameLabel": "Benutzername *",
@@ -672,8 +684,8 @@
       "rolesNotLoaded": "Rollendaten nicht geladen. Bitte versuchen Sie es erneut.",
       "deleteConfirm": "Sind Sie sicher, dass Sie den Benutzer \"{{username}}\" löschen möchten?",
       "deleteUser": "Benutzer löschen",
-      "impersonateConfirm": "Identität von Benutzer \"{{username}}\" annehmen? Sie sehen das Portal als dieser Benutzer.",
-      "impersonateUser": "Benutzer-Identität annehmen",
+      "impersonateConfirm": "Als \"{{username}}\" anmelden? Sie sehen das Portal wie dieser Benutzer.",
+      "impersonateUser": "Als Benutzer anmelden",
       "userCreated": "Benutzer erfolgreich erstellt",
       "userUpdatedPassword": "Benutzer aktualisiert und Passwort zurückgesetzt",
       "userUpdated": "Benutzer erfolgreich aktualisiert",
@@ -1011,7 +1023,7 @@
       "learnFromUsbHelp": "Verbinden Sie ein Meshtastic-Funkgerät per USB, um Geräteinformationen automatisch auszufüllen",
       "deviceInfoLoaded": "Geräteinformationen geladen!",
       "limitedInfo": "Verbunden, aber nur begrenzte Informationen verfügbar.",
-      "failedRead": "Lesen vom Funkgerät fehlgeschlagen",
+      "failedRead": "Lesen vom Funkgerät fehlgeschlagen: {{error}}",
       "nameLabel": "Name *",
       "descriptionLabel": "Beschreibung",
       "modelLabel": "Modell",
@@ -1037,7 +1049,8 @@
       "failedDelete": "Funkgerät konnte nicht gelöscht werden",
       "failedLoadDetails": "Funkgerät-Details konnten nicht geladen werden",
       "noNodeId": "Funkgerät hat keine Knoten-ID (MAC-Adresse nicht gesetzt)",
-      "failedCopyUrl": "URL konnte nicht in die Zwischenablage kopiert werden"
+      "failedCopyUrl": "URL konnte nicht in die Zwischenablage kopiert werden",
+      "factoryResetFailed": "Zurücksetzen auf Werkseinstellungen fehlgeschlagen: {{error}}"
     },
     "settings": {
       "title": "Einstellungen",
@@ -1129,6 +1142,14 @@
       "loginPageHelp": "Darstellung der Anmeldeseite und der weiteren Anmeldeseiten. Hintergrund, Überlagerung, Glaseffekt, Kopfleiste und die Akzentfarbe auf Schaltflächen gelten nur für die Layouts Zentriert und Geteilt.",
       "loginPageContrastHint": "Tipp: Eine helle Akzentfarbe oder die Überlagerung \"Keine\" über einem hellen Bild kann Text und Schaltflächen schwer lesbar machen. Prüfen Sie die Vorschau.",
       "previewLoginPage": "Vorschau der Anmeldeseite",
+      "dateFormatOption": {
+        "eu": "EU — 31-10-2026 14:30",
+        "us": "US — 10/31/2026 2:30 PM",
+        "iso": "ISO — 2026-10-31 14:30"
+      },
+      "kioskLanguageOption": {
+        "visitor": "Browser folgen"
+      },
       "loginLayoutOption": {
         "classic": "Klassisch",
         "centered": "Zentriert",
@@ -1217,17 +1238,13 @@
           "label": "TrustStore-Download-Kachel",
           "description": "TrustStore-Download-Symbol im Dashboard anzeigen"
         },
-        "zerotier_icon": {
-          "label": "ZeroTier-Download-Kachel",
-          "description": "ZeroTier-Download-Symbol im Dashboard anzeigen"
-        },
         "meshtastic_homepage_icon_enabled": {
           "label": "Meshtastic-Download-Kachel",
           "description": "Meshtastic-Download-Symbol im Dashboard anzeigen"
         },
         "claim_radio_enabled": {
-          "label": "Funkgerät-Beanspruchung",
-          "description": "Benutzern erlauben, Funkgeräte ohne Besitzer über eine Beanspruchungs-URL zu beanspruchen"
+          "label": "Funkgerät-Übernahme",
+          "description": "Benutzern erlauben, Funkgeräte ohne Besitzer über eine Übernahme-URL zu übernehmen"
         },
         "user_program_radio_enabled": {
           "label": "Funkgeräte-Programmierung durch Benutzer",
@@ -1353,9 +1370,17 @@
           "label": "Standarddesign",
           "description": "Standarddesign für das Portal (hell oder dunkel)"
         },
+        "date_format": {
+          "label": "Datumsformat",
+          "description": "Datums- und Uhrzeitformat, das im gesamten Portal verwendet wird"
+        },
         "kiosk_default_theme": {
           "label": "Kiosk-Standarddesign",
           "description": "Standarddesign für den Kiosk-Bildschirm (hell oder dunkel)"
+        },
+        "kiosk_language": {
+          "label": "Kiosk-Sprache",
+          "description": "Feste Oberflächensprache für den Kiosk-Bildschirm (/kiosk). „Browser folgen“ verwendet die Sprache des Browsers. Laden Sie die Kiosk-Seite nach einer Änderung neu."
         }
       }
     },

@@ -31,11 +31,11 @@ const SETTING_GROUP_OVERRIDES = {
   brand_name_enabled: 'branding',
   brand_name_value: 'branding',
   default_theme: 'branding',
+  date_format: 'branding',
   atak_homepage_icon_enabled: 'homepage_tiles',
   itak_homepage_icon_enabled: 'homepage_tiles',
   truststore_homepage_icon_enabled: 'homepage_tiles',
   meshtastic_homepage_icon_enabled: 'homepage_tiles',
-  zerotier_icon: 'homepage_tiles',
   open_in_atak_enabled: 'homepage_tiles',
   atak_installer_qr_enabled: 'homepage_tiles',
   atak_installer_qr_url: 'homepage_tiles',
@@ -1114,6 +1114,7 @@ function Settings() {
   const { t } = useTranslation();
   const { hasRole } = useAuth();
   const canEdit = hasRole('settings_admin') || hasRole('administrator');
+  const queryClient = useQueryClient();
 
   const [settings, setSettings] = useState({});
   const [logoSettings, setLogoSettings] = useState(null);
@@ -1323,6 +1324,7 @@ function Settings() {
 
       setSuccess(t('admin.settings.settingUpdated'));
       fetchSettings();
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
 
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -1343,6 +1345,7 @@ function Settings() {
 
       setSuccess(t('admin.settings.settingUpdated'));
       fetchSettings();
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
 
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -1424,7 +1427,7 @@ function Settings() {
   const colorSettingKeys = ['primary_color', 'accent_color'];
 
   // Dropdown setting keys (rendered with <select>)
-  const dropdownSettingKeys = ['default_theme', 'kiosk_default_theme', 'login_layout', 'login_overlay_strength'];
+  const dropdownSettingKeys = ['default_theme', 'kiosk_default_theme', 'kiosk_language', 'date_format', 'login_layout', 'login_overlay_strength'];
   const dropdownOptions = {
     default_theme: [
       { value: 'light', label: t('admin.settings.light') },
@@ -1434,6 +1437,15 @@ function Settings() {
       { value: 'light', label: t('admin.settings.light') },
       { value: 'dark', label: t('admin.settings.dark') },
     ],
+    kiosk_language: [
+      { value: '', label: t('admin.settings.kioskLanguageOption.visitor') },
+      { value: 'en', label: 'English' },
+      { value: 'nl', label: 'Nederlands' },
+      { value: 'de', label: 'Deutsch' },
+    ],
+    date_format: ['eu', 'us', 'iso'].map(value => (
+      { value, label: t(`admin.settings.dateFormatOption.${value}`) }
+    )),
     login_layout: ['classic', 'centered', 'split'].map(value => (
       { value, label: t(`admin.settings.loginLayoutOption.${value}`) }
     )),
@@ -1445,7 +1457,7 @@ function Settings() {
   // Get regular (non-paired) settings from a category
   const getRegularSettings = (categorySettings, processedKeys) => {
     // Settings managed by dedicated components (not shown as toggles)
-    const managedSettings = ['custom_logo_path', 'logo_display_mode', 'login_background_path', 'login_hero_texts', ...colorSettingKeys, ...dropdownSettingKeys];
+    const managedSettings = ['custom_logo_enabled', 'custom_logo_path', 'logo_display_mode', 'login_background_path', 'login_hero_texts', ...colorSettingKeys, ...dropdownSettingKeys];
     return categorySettings?.filter(s => !processedKeys.has(s.key) && !managedSettings.includes(s.key)) || [];
   };
 

@@ -201,7 +201,7 @@ class UserRoleModel(db.Model):
 class UserModel(db.Model):
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(primary_key=True,nullable=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(unique=True,nullable=True)
     email: Mapped[str] = mapped_column(unique=True,nullable=True)
     firstName: Mapped[str] = mapped_column(nullable=True)
@@ -743,8 +743,8 @@ class MeshtasticChannelGroup(db.Model):
     showOnHomepage: Mapped[bool] = mapped_column(nullable=True, default=True)
     # YAML config for radio device settings (supports placeholders: ${shortName}, ${longName}, ${mac}, ${callsign})
     yamlConfig: Mapped[str] = mapped_column(db.Text, nullable=True)
-    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
-    updated_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    created_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow, nullable=True)
+    updated_at: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=True)
 
     # DEPRECATED: Old direct relationship - kept for migration
     channels = relationship("MeshtasticModel", back_populates="group", order_by="MeshtasticModel.slot_number", foreign_keys="MeshtasticModel.group_id")
@@ -896,7 +896,7 @@ class RadioModel(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column()
     platform: Mapped[str] = mapped_column()
-    radioType = Column(String, CheckConstraint("radioType IN ('meshtastic', 'other')", name="check_radio_type"), nullable=False, default="meshtastic")
+    radioType = Column(String, CheckConstraint("\"radioType\" IN ('meshtastic', 'other')", name="check_radio_type"), nullable=False, default="meshtastic")
     description: Mapped[str] = mapped_column(nullable=True)
     softwareVersion: Mapped[str] = mapped_column(nullable=True)
     model: Mapped[str] = mapped_column(nullable=True)
@@ -1482,12 +1482,6 @@ class SystemSettingsModel(db.Model):
                 'description': 'Show TrustStore download icon on the dashboard'
             },
             {
-                'key': 'zerotier_icon',
-                'value': 'false',
-                'category': 'general',
-                'description': 'Show ZeroTier download icon on the dashboard'
-            },
-            {
                 'key': 'meshtastic_homepage_icon_enabled',
                 'value': 'true',
                 'category': 'general',
@@ -1728,6 +1722,18 @@ class SystemSettingsModel(db.Model):
                 'value': 'dark',
                 'category': 'appearance',
                 'description': 'Default theme for the kiosk screen (light or dark)'
+            },
+            {
+                'key': 'kiosk_language',
+                'value': '',
+                'category': 'kiosk',
+                'description': 'Fixed UI language for the kiosk screen (empty = follow the browser). Reload the kiosk page after changing it.'
+            },
+            {
+                'key': 'date_format',
+                'value': 'eu',
+                'category': 'appearance',
+                'description': 'Date and time format used across the portal (eu, us or iso)'
             },
         ]
 

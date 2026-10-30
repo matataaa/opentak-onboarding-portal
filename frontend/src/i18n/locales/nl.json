@@ -16,7 +16,6 @@
     "perPage": "Per pagina",
     "all": "Alle",
     "pageInfo": "Pagina {{page}} van {{totalPages}} ({{total}} totaal)",
-    "noResults": "Geen resultaten voor je zoekopdracht.",
     "search": "Zoeken",
     "actions": "Acties",
     "name": "Naam",
@@ -191,8 +190,8 @@
   "dashboard": {
     "welcome": "Welkom, ",
     "user": "gebruiker",
-    "editProfile": "PROFIEL BEWERKEN",
-    "changePassword": "WACHTWOORD WIJZIGEN",
+    "editProfile": "Profiel bewerken",
+    "changePassword": "Wachtwoord wijzigen",
     "introText": "Dit portaal is ontworpen om je te helpen je ATAK-client in te stellen en klaar te maken voor gebruik. Als je ATAK nog niet hebt, kun je het downloaden via de onderstaande pictogrammen. Zodra je ATAK hebt, kun je de profielen downloaden en importeren.",
     "getStarted": "Aan de slag met ATAK",
     "collapseAll": "Alles inklappen",
@@ -236,8 +235,8 @@
     "registerRadio": "+ Radio registreren",
     "compareConfig": "Radioconfiguratie vergelijken met doel",
     "programConfig": "Radio programmeren met configuratie",
-    "helpLink": "HULP / INSTALLATIE-INSTRUCTIES",
-    "helpEmail": "CONTACT SUPPORT"
+    "helpLink": "Hulp / installatie-instructies",
+    "helpEmail": "Contact opnemen met support"
   },
   "profile": {
     "title": "Gebruikersprofiel",
@@ -309,7 +308,20 @@
     "loggedIn": "Je bent nu ingelogd op de kiosk!",
     "canClosePage": "Je kunt deze pagina sluiten.",
     "sessionExpired": "Deze kiosksessie is verlopen of niet meer beschikbaar.",
-    "scanAgain": "Scan de QR-code op de kiosk opnieuw."
+    "scanAgain": "Scan de QR-code op de kiosk opnieuw.",
+    "loading": "Laden...",
+    "tryAgain": "Opnieuw proberen",
+    "failedLoadSettings": "Laden van kioskinstellingen mislukt.",
+    "failedCreateSession": "Aanmaken van kiosksessie mislukt.",
+    "logoAlt": "Logo",
+    "welcome": "Welkom, {{name}}",
+    "noRadios": "Er zijn nog geen radio's aan je toegewezen.",
+    "registerRadio": "Radio registreren",
+    "validate": "Valideren",
+    "program": "Programmeren",
+    "username": "Gebruikersnaam",
+    "name": "Naam",
+    "callsign": "Roepnaam"
   },
   "announcements": {
     "title": "Aankondigingsgeschiedenis",
@@ -370,7 +382,7 @@
     "darkMode": "Donkere modus",
     "viewingAs": "Bekijken als ",
     "loggedInAs": " — ingelogd als ",
-    "stopImpersonating": "Stop imitatie"
+    "stopImpersonating": "Terug naar eigen account"
   },
   "notifications": {
     "announcements": "Aankondigingen",
@@ -650,7 +662,7 @@
       "callsign": "Roepnaam",
       "roles": "Rollen",
       "expiryDate": "Vervaldatum",
-      "impersonate": "Imiteren",
+      "impersonate": "Inloggen als",
       "editUser": "Gebruiker bewerken",
       "createUser": "Gebruiker aanmaken",
       "usernameLabel": "Gebruikersnaam *",
@@ -672,8 +684,8 @@
       "rolesNotLoaded": "Rolgegevens niet geladen. Probeer het opnieuw.",
       "deleteConfirm": "Weet je zeker dat je gebruiker \"{{username}}\" wilt verwijderen?",
       "deleteUser": "Gebruiker verwijderen",
-      "impersonateConfirm": "Gebruiker \"{{username}}\" imiteren? Je ziet het portaal als deze gebruiker.",
-      "impersonateUser": "Gebruiker imiteren",
+      "impersonateConfirm": "Inloggen als \"{{username}}\"? Je ziet het portaal zoals deze gebruiker.",
+      "impersonateUser": "Inloggen als gebruiker",
       "userCreated": "Gebruiker succesvol aangemaakt",
       "userUpdatedPassword": "Gebruiker bijgewerkt en wachtwoord gereset",
       "userUpdated": "Gebruiker succesvol bijgewerkt",
@@ -1011,7 +1023,7 @@
       "learnFromUsbHelp": "Sluit een Meshtastic-radio aan via USB om apparaatinfo automatisch in te vullen",
       "deviceInfoLoaded": "Apparaatinfo geladen!",
       "limitedInfo": "Verbonden maar beperkte informatie beschikbaar.",
-      "failedRead": "Lezen van radio mislukt",
+      "failedRead": "Lezen van radio mislukt: {{error}}",
       "nameLabel": "Naam *",
       "descriptionLabel": "Beschrijving",
       "modelLabel": "Model",
@@ -1037,7 +1049,8 @@
       "failedDelete": "Verwijderen van radio mislukt",
       "failedLoadDetails": "Laden van radiodetails mislukt",
       "noNodeId": "Radio heeft geen node-ID (MAC-adres niet ingesteld)",
-      "failedCopyUrl": "Kopiëren van URL naar klembord mislukt"
+      "failedCopyUrl": "Kopiëren van URL naar klembord mislukt",
+      "factoryResetFailed": "Fabrieksreset mislukt: {{error}}"
     },
     "settings": {
       "title": "Instellingen",
@@ -1129,6 +1142,14 @@
       "loginPageHelp": "Uiterlijk van de inlogpagina en de andere aanmeldpagina's. Achtergrond, overlay, glaseffect, kopbalk en de accentkleur op knoppen gelden alleen voor de layouts Gecentreerd en Gesplitst.",
       "loginPageContrastHint": "Tip: een lichte accentkleur, of overlay \"Geen\" over een heldere afbeelding, kan tekst en knoppen slecht leesbaar maken. Controleer het voorbeeld.",
       "previewLoginPage": "Voorbeeld inlogpagina",
+      "dateFormatOption": {
+        "eu": "EU — 31-10-2026 14:30",
+        "us": "VS — 10/31/2026 2:30 PM",
+        "iso": "ISO — 2026-10-31 14:30"
+      },
+      "kioskLanguageOption": {
+        "visitor": "Browser volgen"
+      },
       "loginLayoutOption": {
         "classic": "Klassiek",
         "centered": "Gecentreerd",
@@ -1216,10 +1237,6 @@
         "truststore_homepage_icon_enabled": {
           "label": "TrustStore-downloadtegel",
           "description": "Toon het TrustStore-downloadpictogram op het dashboard"
-        },
-        "zerotier_icon": {
-          "label": "ZeroTier-downloadtegel",
-          "description": "Toon het ZeroTier-downloadpictogram op het dashboard"
         },
         "meshtastic_homepage_icon_enabled": {
           "label": "Meshtastic-downloadtegel",
@@ -1353,9 +1370,17 @@
           "label": "Standaardthema",
           "description": "Standaardthema voor het portaal (licht of donker)"
         },
+        "date_format": {
+          "label": "Datumnotatie",
+          "description": "Datum- en tijdnotatie die in het hele portaal wordt gebruikt"
+        },
         "kiosk_default_theme": {
           "label": "Standaardthema kiosk",
           "description": "Standaardthema voor het kioskscherm (licht of donker)"
+        },
+        "kiosk_language": {
+          "label": "Kiosktaal",
+          "description": "Vaste interfacetaal voor het kioskscherm (/kiosk). \"Browser volgen\" gebruikt de taal van de browser. Herlaad de kioskpagina na een wijziging."
         }
       }
     },

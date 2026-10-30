@@ -3,10 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { announcementsAPI } from '../services/api';
+import { formatDate, formatDateTime, useDateFormat } from '../utils/formatDate';
 import './AnnouncementsBadge.css';
 
 function AnnouncementsBadge() {
   const { t } = useTranslation();
+  const dateFormat = useDateFormat();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [showPanel, setShowPanel] = useState(false);
@@ -98,7 +100,7 @@ function AnnouncementsBadge() {
                     >
                       <div className="announcement-content">
                         <strong>{a.title}</strong>
-                        <span className="date">{new Date(a.sentAt).toLocaleDateString()}</span>
+                        <span className="date">{formatDate(a.sentAt, dateFormat)}</span>
                       </div>
                       <button
                         className="dismiss-btn"
@@ -138,7 +140,7 @@ function AnnouncementsBadge() {
               <div dangerouslySetInnerHTML={{ __html: selectedAnnouncement.content }} />
             </div>
             <div className="modal-footer">
-              <span className="date">{t('announcements.posted')}: {new Date(selectedAnnouncement.sentAt).toLocaleString()}</span>
+              <span className="date">{t('announcements.posted')}: {formatDateTime(selectedAnnouncement.sentAt, dateFormat)}</span>
             </div>
           </div>
         </div>

@@ -297,11 +297,18 @@ def refresh():
     if jwt_data.get('kiosk_session'):
         from app.models import SystemSettingsModel
         claims['kiosk_session'] = True
+        # Kiosk sessions never carry the user's roles.
+        claims['roles'] = []
         timeout_str = SystemSettingsModel.get_setting('kiosk_session_timeout_minutes', '10')
         try:
             expires_delta = timedelta(minutes=int(timeout_str))
         except (ValueError, TypeError):
             expires_delta = timedelta(minutes=10)
+        # Never outlive the kiosk refresh token, so repeated refreshes cannot
+        # stretch the session past its original kiosk lifetime.
+        import time
+        remaining = int(jwt_data['exp']) - int(time.time())
+        expires_delta = min(expires_delta, timedelta(seconds=max(0, remaining)))
 
     # A bounded event-leader session keeps its scope claims and can never be
     # refreshed past its original hard expiry (event_leader_until, UTC epoch).

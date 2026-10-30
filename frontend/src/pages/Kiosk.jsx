@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import axios from 'axios';
+import { useQueryClient } from '@tanstack/react-query';
 import { QRCodeSVG } from 'qrcode.react';
-import { useTranslation } from 'react-i18next';
+import { useTranslation, I18nextProvider } from 'react-i18next';
+import { createFixedLanguageI18n } from '../i18n';
 import { kioskAPI, settingsAPI } from '../services/api';
 import ProgramRadioModal from '../components/ProgramRadioModal';
 import ConfigValidatorModal from '../components/ConfigValidatorModal';
@@ -12,16 +14,25 @@ import './Kiosk.css';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || window.location.origin;
 
 const KIOSK_SESSION_KEY = 'kiosk_session';
+const KIOSK_LANGUAGES = ['en', 'nl', 'de'];
 
 function saveKioskSession(data) {
   sessionStorage.setItem(KIOSK_SESSION_KEY, JSON.stringify(data));
-  // Also write to localStorage so ProgramRadioModal/ConfigValidatorModal API calls work
-  localStorage.setItem('access_token', data.accessToken);
+  // The kiosk token stays out of localStorage: the modals get the kiosk axios
+  // instance instead, so closing the tab cannot leave it behind for the shared
+  // api client. Drop any earlier user's session on this browser so the 401
+  // refresh interceptor and AuthContext cannot fall back into it.
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('user');
 }
 
 function clearKioskSession() {
   sessionStorage.removeItem(KIOSK_SESSION_KEY);
+  // Also clears a kiosk token left in localStorage by older versions
   localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('user');
 }
 
 function loadKioskSession() {
@@ -42,7 +53,7 @@ function loadKioskSession() {
 }
 
 function Kiosk() {
-  const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [state, setState] = useState('loading'); // loading, qr, authenticated, disabled, error
   const [sessionId, setSessionId] = useState(null);
   const [qrUrl, setQrUrl] = useState(null);
@@ -51,7 +62,22 @@ function Kiosk() {
   const [kioskUser, setKioskUser] = useState(null);
   const [settings, setSettings] = useState(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState(''); // i18n key
+
+  // Fixed kiosk language from the settings; otherwise follow the browser (global instance)
+  const kioskLanguage = settings?.kiosk_language;
+  const kioskI18n = useMemo(
+    () => (KIOSK_LANGUAGES.includes(kioskLanguage) ? createFixedLanguageI18n(kioskLanguage) : null),
+    [kioskLanguage]
+  );
+  const { t } = useTranslation(undefined, { i18n: kioskI18n || undefined });
+
+  useEffect(() => {
+    if (!kioskI18n) return;
+    const previousLang = document.documentElement.lang;
+    document.documentElement.lang = kioskLanguage;
+    return () => { document.documentElement.lang = previousLang; };
+  }, [kioskI18n, kioskLanguage]);
 
   // Authenticated view state
   const [atakQrData, setAtakQrData] = useState(null);
@@ -62,14 +88,6 @@ function Kiosk() {
 
   // Radio enrollment state
   const [showEnrollModal, setShowEnrollModal] = useState(false);
-
-  // Password change state
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [passwordSuccess, setPasswordSuccess] = useState('');
-  const [changingPassword, setChangingPassword] = useState(false);
 
   const pollRef = useRef(null);
   const timerRef = useRef(null);
@@ -87,6 +105,7 @@ function Kiosk() {
       },
     });
   }, [accessToken]);
+  const kioskClient = useMemo(() => getKioskApi(), [getKioskApi]);
 
   // Load settings on mount and restore session if saved
   useEffect(() => {
@@ -105,6 +124,8 @@ function Kiosk() {
       // Check for saved session (survives page refresh)
       const saved = loadKioskSession();
       if (saved) {
+        // Older versions also kept the kiosk token in localStorage
+        localStorage.removeItem('access_token');
         setAccessToken(saved.accessToken);
         setRefreshToken(saved.refreshToken);
         setKioskUser(saved.user);
@@ -115,7 +136,7 @@ function Kiosk() {
       }
     }).catch(() => {
       setState('error');
-      setErrorMessage(t('kiosk.failedLoadSettings'));
+      setErrorMessage('kiosk.failedLoadSettings');
     });
   }, []);
 
@@ -132,7 +153,7 @@ function Kiosk() {
         setState('disabled');
       } else {
         setState('error');
-        setErrorMessage(t('kiosk.failedCreateSession'));
+        setErrorMessage('kiosk.failedCreateSession');
       }
     }
   };
@@ -240,6 +261,8 @@ function Kiosk() {
     clearInterval(timerRef.current);
     clearInterval(pollRef.current);
     clearKioskSession();
+    // The next person at this kiosk must not see this user's cached groups
+    queryClient.removeQueries({ queryKey: ['meshtasticGroups'] });
     expiryTimeRef.current = null;
     setAccessToken(null);
     setRefreshToken(null);
@@ -250,52 +273,7 @@ function Kiosk() {
     setProgrammingRadio(null);
     setValidatingRadio(null);
     setShowEnrollModal(false);
-    setShowPasswordForm(false);
-    setNewPassword('');
-    setConfirmPassword('');
-    setPasswordError('');
-    setPasswordSuccess('');
     createNewSession();
-  };
-
-  const handleChangePassword = async (e) => {
-    e.preventDefault();
-    setPasswordError('');
-    setPasswordSuccess('');
-
-    if (!newPassword || !confirmPassword) {
-      setPasswordError(t('profile.allFieldsRequired'));
-      return;
-    }
-    if (newPassword.length < 8) {
-      setPasswordError(t('profile.newPasswordTooShort'));
-      return;
-    }
-    if (/[&^$]/.test(newPassword)) {
-      setPasswordError(t('profile.passwordDisallowedChars'));
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordError(t('profile.newPasswordsNoMatch'));
-      return;
-    }
-
-    setChangingPassword(true);
-    try {
-      const kioskApi = getKioskApi();
-      await kioskApi.post('/auth/change-password', { newPassword });
-      setPasswordSuccess(t('profile.passwordChanged'));
-      setNewPassword('');
-      setConfirmPassword('');
-      setTimeout(() => {
-        setShowPasswordForm(false);
-        setPasswordSuccess('');
-      }, 3000);
-    } catch (err) {
-      setPasswordError(err.response?.data?.error || t('profile.failedChangePassword'));
-    } finally {
-      setChangingPassword(false);
-    }
   };
 
   const formatTime = (seconds) => {
@@ -322,7 +300,7 @@ function Kiosk() {
       <div className="kiosk-container">
         <div className="kiosk-loading">
           <div className="kiosk-spinner" />
-          <p>Loading...</p>
+          <p>{t('kiosk.loading')}</p>
         </div>
       </div>
     );
@@ -333,8 +311,8 @@ function Kiosk() {
     return (
       <div className="kiosk-container">
         <div className="kiosk-message">
-          <h2>Kiosk Enrollment</h2>
-          <p>Kiosk enrollment is not enabled. Contact your administrator.</p>
+          <h2>{t('kiosk.title')}</h2>
+          <p>{t('kiosk.notEnabled')}</p>
         </div>
       </div>
     );
@@ -345,10 +323,10 @@ function Kiosk() {
     return (
       <div className="kiosk-container">
         <div className="kiosk-message">
-          <h2>Error</h2>
-          <p>{errorMessage || 'Something went wrong.'}</p>
+          <h2>{t('kiosk.error')}</h2>
+          <p>{t(errorMessage || 'kiosk.somethingWrong')}</p>
           <button className="kiosk-retry-btn" onClick={createNewSession}>
-            Try Again
+            {t('kiosk.tryAgain')}
           </button>
         </div>
       </div>
@@ -361,17 +339,17 @@ function Kiosk() {
       <div className="kiosk-container">
         <div className="kiosk-qr-screen">
           {settings?.custom_logo_enabled && settings?.custom_logo_path ? (
-            <img src={`${API_BASE_URL}${settings.custom_logo_path}`} alt="Logo" className="kiosk-logo" />
+            <img src={`${API_BASE_URL}${settings.custom_logo_path}`} alt={t('kiosk.logoAlt')} className="kiosk-logo" />
           ) : (
-            <img src={`${API_BASE_URL}/static/img/logo.png`} alt="Logo" className="kiosk-logo" />
+            <img src={`${API_BASE_URL}/static/img/logo.png`} alt={t('kiosk.logoAlt')} className="kiosk-logo" />
           )}
           <h1>{settings?.brand_name || 'OpenTAK Portal'}</h1>
-          <p className="kiosk-subtitle">Scan to log in</p>
+          <p className="kiosk-subtitle">{t('kiosk.scanToLogin')}</p>
           <div className="kiosk-qr-code">
             {qrUrl && <QRCodeSVG value={qrUrl} size={280} level="M" />}
           </div>
           <p className="kiosk-qr-instruction">
-            Scan this QR code with your phone to authenticate
+            {t('kiosk.scanDesc')}
             <span className="kiosk-polling-dot" />
           </p>
         </div>
@@ -383,24 +361,24 @@ function Kiosk() {
   if (state === 'authenticated' && kioskUser) {
     const isWarning = timeRemaining < 60;
 
-    return (
+    const dashboard = (
       <div className="kiosk-container">
         <div className="kiosk-dashboard">
           <div className="kiosk-header">
             <div className="kiosk-header-brand">
               {settings?.custom_logo_enabled && settings?.custom_logo_path ? (
-                <img src={`${API_BASE_URL}${settings.custom_logo_path}`} alt="Logo" className="kiosk-header-logo" />
+                <img src={`${API_BASE_URL}${settings.custom_logo_path}`} alt={t('kiosk.logoAlt')} className="kiosk-header-logo" />
               ) : (
-                <img src={`${API_BASE_URL}/static/img/logo.png`} alt="Logo" className="kiosk-header-logo" />
+                <img src={`${API_BASE_URL}/static/img/logo.png`} alt={t('kiosk.logoAlt')} className="kiosk-header-logo" />
               )}
-              <h1>Welcome, {kioskUser.callsign || kioskUser.username}</h1>
+              <h1>{t('kiosk.welcome', { name: kioskUser.callsign || kioskUser.username })}</h1>
             </div>
             <div className="kiosk-header-actions">
               <span className={`kiosk-timer ${isWarning ? 'warning' : ''}`}>
-                Session: {formatTime(timeRemaining)}
+                {t('kiosk.session')}{formatTime(timeRemaining)}
               </span>
               <button className="kiosk-signout-btn" onClick={handleSignOut}>
-                Sign Out
+                {t('kiosk.signOut')}
               </button>
             </div>
           </div>
@@ -409,18 +387,18 @@ function Kiosk() {
             {/* QR Codes Section */}
             {(atakQrData || itakQrData) && (
               <div className="kiosk-section">
-                <h2>TAK Enrollment QR Codes</h2>
+                <h2>{t('kiosk.takEnrollment')}</h2>
                 <div className="kiosk-qr-pair">
                   {atakQrData?.qr_string && (
                     <div className="kiosk-qr-item">
                       <QRCodeSVG value={atakQrData.qr_string} size={180} level="M" />
-                      <p>ATAK</p>
+                      <p>{t('kiosk.atak')}</p>
                     </div>
                   )}
                   {itakQrData?.qr_string && (
                     <div className="kiosk-qr-item">
                       <QRCodeSVG value={itakQrData.qr_string} size={180} level="M" />
-                      <p>iTAK</p>
+                      <p>{t('kiosk.itak')}</p>
                     </div>
                   )}
                 </div>
@@ -430,7 +408,7 @@ function Kiosk() {
             {/* Radio Section */}
             {(radios.length > 0 || settings?.user_radio_enrollment_enabled) && (
               <div className="kiosk-section">
-                <h2>Your Radios</h2>
+                <h2>{t('kiosk.yourRadios')}</h2>
                 {radios.length > 0 ? (
                   <div className="kiosk-radio-list">
                     {radios.map(radio => (
@@ -443,7 +421,7 @@ function Kiosk() {
                                 className="kiosk-btn-validate"
                                 onClick={() => setValidatingRadio(radio)}
                               >
-                                Validate
+                                {t('kiosk.validate')}
                               </button>
                             )}
                             {settings?.user_program_radio_enabled && (
@@ -451,7 +429,7 @@ function Kiosk() {
                                 className="kiosk-btn-program"
                                 onClick={() => setProgrammingRadio(radio)}
                               >
-                                Program
+                                {t('kiosk.program')}
                               </button>
                             )}
                           </div>
@@ -460,7 +438,7 @@ function Kiosk() {
                     ))}
                   </div>
                 ) : (
-                  <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>No radios assigned to you yet.</p>
+                  <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>{t('kiosk.noRadios')}</p>
                 )}
                 {settings?.user_radio_enrollment_enabled && (
                   <button
@@ -468,7 +446,7 @@ function Kiosk() {
                     style={{ marginTop: '1rem' }}
                     onClick={() => setShowEnrollModal(true)}
                   >
-                    + Register Radio
+                    + {t('kiosk.registerRadio')}
                   </button>
                 )}
               </div>
@@ -476,60 +454,10 @@ function Kiosk() {
 
             {/* User Info Section */}
             <div className="kiosk-section">
-              <h2>Account</h2>
-              <p><strong>Username:</strong> {kioskUser.username}</p>
-              <p><strong>Name:</strong> {kioskUser.firstName} {kioskUser.lastName}</p>
-              <p><strong>Callsign:</strong> {kioskUser.callsign || '-'}</p>
-
-              {!showPasswordForm ? (
-                <button
-                  className="kiosk-btn-program"
-                  style={{ marginTop: '1rem' }}
-                  onClick={() => setShowPasswordForm(true)}
-                >
-                  Change Password
-                </button>
-              ) : (
-                <form className="kiosk-password-form" onSubmit={handleChangePassword} style={{ marginTop: '1rem' }}>
-                  {passwordError && <div className="kiosk-alert kiosk-alert-error">{passwordError}</div>}
-                  {passwordSuccess && <div className="kiosk-alert kiosk-alert-success">{passwordSuccess}</div>}
-                  <input
-                    type="password"
-                    placeholder="New Password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    minLength={8}
-                    required
-                    autoComplete="new-password"
-                  />
-                  <input
-                    type="password"
-                    placeholder="Confirm Password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    minLength={8}
-                    required
-                    autoComplete="new-password"
-                  />
-                  <div className="kiosk-form-actions">
-                    <button type="submit" className="btn-primary" disabled={changingPassword}>
-                      {changingPassword ? 'Changing...' : 'Change Password'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowPasswordForm(false);
-                        setPasswordError('');
-                        setPasswordSuccess('');
-                        setNewPassword('');
-                        setConfirmPassword('');
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              )}
+              <h2>{t('kiosk.account')}</h2>
+              <p><strong>{t('kiosk.username')}:</strong> {kioskUser.username}</p>
+              <p><strong>{t('kiosk.name')}:</strong> {kioskUser.firstName} {kioskUser.lastName}</p>
+              <p><strong>{t('kiosk.callsign')}:</strong> {kioskUser.callsign || '-'}</p>
             </div>
           </div>
         </div>
@@ -539,6 +467,7 @@ function Kiosk() {
           <ProgramRadioModal
             radio={programmingRadio}
             onClose={() => setProgrammingRadio(null)}
+            apiClient={kioskClient}
           />
         )}
 
@@ -547,6 +476,7 @@ function Kiosk() {
           <ConfigValidatorModal
             radio={validatingRadio}
             onClose={() => setValidatingRadio(null)}
+            apiClient={kioskClient}
           />
         )}
 
@@ -554,6 +484,7 @@ function Kiosk() {
         {showEnrollModal && (
           <EnrollRadioModal
             onClose={() => setShowEnrollModal(false)}
+            apiClient={kioskClient}
             onSuccess={() => {
               // Re-fetch radios after enrollment
               const kioskApi = getKioskApi();
@@ -568,6 +499,9 @@ function Kiosk() {
         )}
       </div>
     );
+
+    // The radio modals translate via the provider, so they follow the kiosk language too
+    return kioskI18n ? <I18nextProvider i18n={kioskI18n}>{dashboard}</I18nextProvider> : dashboard;
   }
 
   return null;

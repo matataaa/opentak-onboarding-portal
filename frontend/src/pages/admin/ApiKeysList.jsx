@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { apiKeysAPI } from '../../services/api';
+import { formatDateTime, useDateFormat } from '../../utils/formatDate';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import './ApiKeysList.css';
 
 function ApiKeysList() {
   const { t } = useTranslation();
+  const dateFormat = useDateFormat();
   const { showSuccess, showError, confirm } = useNotification();
   const { hasRole } = useAuth();
   const canEdit = hasRole('api_key_admin') || hasRole('administrator');
@@ -176,7 +178,7 @@ function ApiKeysList() {
 
   const formatDate = (dateString) => {
     if (!dateString) return t('common.never');
-    return new Date(dateString).toLocaleString();
+    return formatDateTime(dateString, dateFormat);
   };
 
   const isExpired = (expiresAt) => {

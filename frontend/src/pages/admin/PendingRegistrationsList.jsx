@@ -4,10 +4,12 @@ import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatDateTime, useDateFormat } from '../../utils/formatDate';
 import './PendingRegistrationsList.css';
 
 function PendingRegistrationsList() {
   const { t } = useTranslation();
+  const dateFormat = useDateFormat();
   const [pendingRegistrations, setPendingRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -171,8 +173,7 @@ function PendingRegistrationsList() {
 
   const formatDate = (dateString) => {
     if (!dateString) return t('common.unknown');
-    const date = new Date(dateString);
-    return date.toLocaleString();
+    return formatDateTime(dateString, dateFormat);
   };
 
   const getTimeRemaining = (expiresAt) => {
@@ -447,9 +448,11 @@ function PendingRegistrationsList() {
 
       <div className="pending-registrations-stats">
         <p>
-          {t('admin.pendingRegistrations.totalPending')}: <strong>{pendingRegistrations.length}</strong> |
-          {t('common.expired')}: <strong>{pendingRegistrations.filter(p => p.is_expired).length}</strong> |
-          {t('common.active')}: <strong>{pendingRegistrations.filter(p => !p.is_expired).length}</strong>
+          {t('admin.pendingRegistrations.totalPending', {
+            total: pendingRegistrations.length,
+            expired: pendingRegistrations.filter(p => p.is_expired).length,
+            active: pendingRegistrations.filter(p => !p.is_expired).length
+          })}
         </p>
       </div>
 
@@ -566,11 +569,6 @@ function PendingRegistrationsList() {
                   value={formData.onboarding_code_id}
                   onChange={handleFormChange}
                   required={modalMode === 'create'}
-                  style={{
-                    backgroundColor: 'white',
-                    color: '#333',
-                    appearance: 'auto'
-                  }}
                 >
                   <option value="">{t('admin.pendingRegistrations.selectCode')}</option>
                   {onboardingCodes.map((code) => (

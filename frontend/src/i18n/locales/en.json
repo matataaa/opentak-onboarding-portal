@@ -16,7 +16,6 @@
     "perPage": "Per page",
     "all": "All",
     "pageInfo": "Page {{page}} of {{totalPages}} ({{total}} total)",
-    "noResults": "No results match your search.",
     "search": "Search",
     "actions": "Actions",
     "name": "Name",
@@ -191,8 +190,8 @@
   "dashboard": {
     "welcome": "Welcome, ",
     "user": "user",
-    "editProfile": "EDIT PROFILE",
-    "changePassword": "CHANGE PASSWORD",
+    "editProfile": "Edit profile",
+    "changePassword": "Change password",
     "introText": "This portal is designed to help you get your ATAK client setup and ready to use. If you do not have ATAK you can download it using the icons below, once you have ATAK you can download and import the profiles.",
     "getStarted": "Get started with ATAK",
     "collapseAll": "Collapse All",
@@ -236,8 +235,8 @@
     "registerRadio": "+ Register Radio",
     "compareConfig": "Compare radio config with target",
     "programConfig": "Program radio with config",
-    "helpLink": "HELP / HOW TO INSTALL",
-    "helpEmail": "CONTACT SUPPORT"
+    "helpLink": "Help / how to install",
+    "helpEmail": "Contact support"
   },
   "profile": {
     "title": "User Profile",
@@ -309,7 +308,20 @@
     "loggedIn": "You are now logged in on the kiosk!",
     "canClosePage": "You can close this page.",
     "sessionExpired": "This kiosk session has expired or is no longer available.",
-    "scanAgain": "Please scan the QR code on the kiosk again."
+    "scanAgain": "Please scan the QR code on the kiosk again.",
+    "loading": "Loading...",
+    "tryAgain": "Try Again",
+    "failedLoadSettings": "Failed to load kiosk settings.",
+    "failedCreateSession": "Failed to create a kiosk session.",
+    "logoAlt": "Logo",
+    "welcome": "Welcome, {{name}}",
+    "noRadios": "No radios assigned to you yet.",
+    "registerRadio": "Register Radio",
+    "validate": "Validate",
+    "program": "Program",
+    "username": "Username",
+    "name": "Name",
+    "callsign": "Callsign"
   },
   "announcements": {
     "title": "Announcement History",
@@ -1130,6 +1142,14 @@
       "loginPageHelp": "Appearance of the login and other sign-in pages. Background, overlay, glass effect, header bar and the accent color on buttons only apply to the Centered and Split layouts.",
       "loginPageContrastHint": "Tip: a light accent color, or overlay \"None\" over a bright image, can make text and buttons hard to read. Check the preview.",
       "previewLoginPage": "Preview login page",
+      "dateFormatOption": {
+        "eu": "EU — 31-10-2026 14:30",
+        "us": "US — 10/31/2026 2:30 PM",
+        "iso": "ISO — 2026-10-31 14:30"
+      },
+      "kioskLanguageOption": {
+        "visitor": "Follow the browser"
+      },
       "loginLayoutOption": {
         "classic": "Classic",
         "centered": "Centered",
@@ -1217,10 +1237,6 @@
         "truststore_homepage_icon_enabled": {
           "label": "TrustStore Download Tile",
           "description": "Show TrustStore download icon on the dashboard"
-        },
-        "zerotier_icon": {
-          "label": "ZeroTier Download Tile",
-          "description": "Show ZeroTier download icon on the dashboard"
         },
         "meshtastic_homepage_icon_enabled": {
           "label": "Meshtastic Download Tile",
@@ -1354,9 +1370,17 @@
           "label": "Default Theme",
           "description": "Default theme for the portal (light or dark)"
         },
+        "date_format": {
+          "label": "Date Format",
+          "description": "Date and time format used across the portal"
+        },
         "kiosk_default_theme": {
           "label": "Kiosk Default Theme",
           "description": "Default theme for the kiosk screen (light or dark)"
+        },
+        "kiosk_language": {
+          "label": "Kiosk Language",
+          "description": "Fixed UI language for the kiosk screen (/kiosk). \"Follow the browser\" uses the browser language. Reload the kiosk page after changing it."
         }
       }
     },
