@@ -2228,6 +2228,11 @@ class EventSessionModel(db.Model):
     # a direction without a group = granted nothing.
     direction = Column(String(4), nullable=True)
     otsGroupId = Column(Integer, nullable=True)
+    # Organizer (HQ) memberships granted on the other teams' groups: JSON list of
+    # [group name, IN|OUT] pairs; NULL = none. Names, not ids like otsGroupId: OTS
+    # memberships are keyed by name, names never change in the portal, and a
+    # deleted local group row must not hide a removal.
+    organizerGrant = Column(Text, nullable=True)
 
     event = relationship("EventModel")
     team = relationship("EventTeamModel")

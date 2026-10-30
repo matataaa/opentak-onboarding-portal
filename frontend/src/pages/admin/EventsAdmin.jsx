@@ -21,6 +21,13 @@ const LINK_DIRECTIONS = [
   ['OUT', 'events.directionOut'],
 ];
 
+// How the organizer (HQ) team takes part in the groups of the other teams of an event.
+const ORGANIZER_DIRECTIONS = [
+  ['OUT', 'events.organizerDirectionOut'],
+  ['BOTH', 'events.organizerDirectionBoth'],
+  ['IN', 'events.organizerDirectionIn'],
+];
+
 export default function EventsAdmin() {
   const { t } = useTranslation();
   const dateFormat = useDateFormat();
@@ -48,10 +55,29 @@ export default function EventsAdmin() {
   const [eudsAvailable, setEudsAvailable] = useState(true);
   const [notice, setNotice] = useState('');
   const [linkRemaining, setLinkRemaining] = useState({}); // linkId -> open accounts left after a close
+  const [linkRetry, setLinkRetry] = useState({}); // linkId -> last direction save left accounts unchanged
+
+  const openEvent = events.find((ev) => ev.id === openLinksFor);
+  const hqTeamId = openEvent?.organizerTeamId ?? null;
+  // Organizer candidates: teams with a link in this event and a usable OTS group
+  const organizerOptions = teams.filter((tm) => (tm.id === hqTeamId
+    || (links.some((l) => l.eventTeamId === tm.id) && tm.otsGroup && !tm.otsGroup.missingInOts)));
+  // HQ links grant visibility of every team: mark them on screen and on the print sheet
+  const printItem = (l, url) => ({ id: l.id, url, label: `${l.team?.name || ''} · ${l.role}`, hq: l.eventTeamId === hqTeamId });
 
   const addGenerated = (d) => {
     setNewLink(d);
-    setPrintSheet((p) => [...p.filter((x) => x.id !== d.id), { id: d.id, url: d.url, label: `${d.team?.name || ''} · ${d.role}` }]);
+    setPrintSheet((p) => [...p.filter((x) => x.id !== d.id), printItem(d, d.url)]);
+  };
+
+  // Organizer (HQ) devices re-provisioned in OTS by a save; quiet when nothing changed
+  const notifyHq = (data, okKey = 'events.hqReprovisioned', failKey = 'events.hqReprovisionFailed', quiet = true) => {
+    const { reprovisioned = 0, reprovisionFailed = 0 } = data || {};
+    if (reprovisionFailed > 0) {
+      showWarning(t(failKey, { done: reprovisioned, failed: reprovisionFailed }), 12000);
+    } else if (!quiet || reprovisioned > 0) {
+      showSuccess(t(okKey, { done: reprovisioned }));
+    }
   };
 
   const reload = useCallback(async () => {
@@ -162,6 +188,7 @@ export default function EventsAdmin() {
     setOpenLinksFor(eventId);
     setNotice('');
     setLinkRemaining({});
+    setLinkRetry({});
     setAccounts([]);
     loadAccounts(eventId);
     setNewLink(null);
@@ -174,7 +201,7 @@ export default function EventsAdmin() {
     setError('');
     try {
       const r = await eventsAPI.getLinkUrl(l.id);
-      setQrLink({ id: l.id, url: r.data.url, label: `${l.team?.name || ''} · ${l.role}` });
+      setQrLink(printItem(l, r.data.url));
     } catch (e) {
       setError(e.response?.data?.error || t('events.actionFailed'));
     }
@@ -186,7 +213,7 @@ export default function EventsAdmin() {
       const items = [];
       for (const l of links.filter((x) => x.retrievable)) {
         const r = await eventsAPI.getLinkUrl(l.id);
-        items.push({ id: l.id, url: r.data.url, label: `${l.team?.name || ''} · ${l.role}` });
+        items.push(printItem(l, r.data.url));
       }
       setPrintSheet(items);
       // Let the sheet render before opening the print dialog.
@@ -206,20 +233,34 @@ export default function EventsAdmin() {
     if (linkForm.role === 'player' && linkForm.onboardingCodeId) payload.onboardingCodeId = Number(linkForm.onboardingCodeId);
     call(
       () => eventsAPI.createLink(openLinksFor, payload),
-      (res) => addGenerated(res.data),
+      (res) => { addGenerated(res.data); notifyHq(res.data); },
     ).then(() => loadLinks(openLinksFor));
   };
 
-  const changeDirection = (l, direction) => {
-    if (!window.confirm(t('events.directionChangeConfirm'))) return;
+  const applyOrganizer = (changes) => call(() => eventsAPI.updateEvent(openLinksFor, changes),
+    (res) => notifyHq(res.data, 'events.organizerReprovisioned', 'events.organizerReprovisionFailed', false));
+
+  const changeOrganizer = (changes) => {
+    if (!window.confirm(t('events.organizerChangeConfirm'))) return;
+    applyOrganizer(changes);
+  };
+
+  // Saving the current direction again (Re-apply) retries the accounts that failed
+  const applyDirection = (l, direction) => {
     call(() => eventsAPI.updateLink(l.id, { direction }), (res) => {
       const { reprovisioned = 0, reprovisionFailed = 0 } = res.data;
+      setLinkRetry((p) => ({ ...p, [l.id]: reprovisionFailed > 0 }));
       if (reprovisionFailed > 0) {
         showWarning(t('events.directionReprovisionFailed', { done: reprovisioned, failed: reprovisionFailed }), 12000);
       } else {
         showSuccess(t('events.directionReprovisioned', { done: reprovisioned }));
       }
     }).then(() => loadLinks(openLinksFor));
+  };
+
+  const changeDirection = (l, direction) => {
+    if (!window.confirm(t('events.directionChangeConfirm'))) return;
+    applyDirection(l, direction);
   };
 
   return (
@@ -272,7 +313,7 @@ export default function EventsAdmin() {
                       </span>
                     )}
                   </td>
-                  <td><button className="events-danger" onClick={() => call(() => eventsAPI.deleteTeam(team.id))}>{t('common.delete')}</button></td>
+                  <td><button className="events-danger" onClick={() => call(() => eventsAPI.deleteTeam(team.id), (res) => notifyHq(res.data))}>{t('common.delete')}</button></td>
                 </tr>
               ))}
             </tbody>
@@ -325,6 +366,38 @@ export default function EventsAdmin() {
       {openLinksFor && (
         <section className="events-section">
           <h2>{t('events.linksFor')} #{openLinksFor}</h2>
+          <div className="events-form-row">
+            <label>{t('events.organizerTeam')}
+              <select
+                value={hqTeamId ?? ''}
+                disabled={!canEdit}
+                onChange={(e) => changeOrganizer({ organizerTeamId: e.target.value === '' ? null : Number(e.target.value) })}
+              >
+                <option value="">{t('events.organizerNone')}</option>
+                {organizerOptions.map((tm) => <option key={tm.id} value={tm.id}>{tm.name}</option>)}
+              </select>
+            </label>
+            <label>{t('events.organizerDirection')}
+              <select
+                value={openEvent?.organizerDirection || 'OUT'}
+                disabled={!canEdit}
+                onChange={(e) => changeOrganizer({ organizerDirection: e.target.value })}
+              >
+                {ORGANIZER_DIRECTIONS.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}
+              </select>
+            </label>
+            {canEdit && (
+              <button
+                type="button"
+                title={t('events.reapplyHint')}
+                onClick={() => applyOrganizer({ organizerTeamId: hqTeamId, organizerDirection: openEvent?.organizerDirection || 'OUT' })}
+              >
+                {t('events.reapply')}
+              </button>
+            )}
+          </div>
+          <p className="events-hint">{t('events.organizerHint')}</p>
+          {openEvent?.playerAccessMode === 'individual' && <p className="events-hint">{t('events.organizerIndividualHint')}</p>}
           {newLink && (
             <div className="events-new-link">
               <strong>{newLink.retrievable ? t('events.linkCreated') : t('events.linkOnce')}</strong>
@@ -358,13 +431,23 @@ export default function EventsAdmin() {
               <tbody>
                 {links.map((l) => (
                   <tr key={l.id}>
-                    <td>{l.team?.name}</td>
+                    <td>
+                      {l.team?.name}
+                      {l.eventTeamId === hqTeamId && <span className="badge badge-primary" style={{ marginLeft: '0.5rem' }} title={t('events.hqPrintLabel')}>{t('events.hqBadge')}</span>}
+                    </td>
                     <td>{l.role}</td>
                     <td>
                       {canEdit ? (
-                        <select aria-label={t('events.direction')} value={l.direction || 'BOTH'} onChange={(e) => changeDirection(l, e.target.value)}>
-                          {LINK_DIRECTIONS.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}
-                        </select>
+                        <>
+                          <select aria-label={t('events.direction')} value={l.direction || 'BOTH'} onChange={(e) => changeDirection(l, e.target.value)}>
+                            {LINK_DIRECTIONS.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}
+                          </select>
+                          {linkRetry[l.id] && (
+                            <button type="button" title={t('events.reapplyHint')} onClick={() => applyDirection(l, l.direction || 'BOTH')}>
+                              {t('events.reapply')}
+                            </button>
+                          )}
+                        </>
                       ) : t((LINK_DIRECTIONS.find(([value]) => value === l.direction) || LINK_DIRECTIONS[0])[1])}
                     </td>
                     <td>{l.onboardingCode?.name || l.onboardingCode?.onboardingCode || '-'}</td>
@@ -375,7 +458,8 @@ export default function EventsAdmin() {
                       {canEdit && (
                         <button className="events-danger" onClick={() => closeLinkAccounts(l)}>{linkRemaining[l.id] > 0 ? t('events.closeLinkAccountsMore', { remaining: linkRemaining[l.id] }) : t('events.closeLinkAccounts')}</button>
                       )}
-                      <button className="events-danger" onClick={() => call(() => eventsAPI.deleteLink(l.id), () => {
+                      <button className="events-danger" onClick={() => call(() => eventsAPI.deleteLink(l.id), (res) => {
+                      notifyHq(res.data);
                       setPrintSheet((p) => p.filter((x) => x.id !== l.id));
                       setQrLink((q) => (q?.id === l.id ? null : q));
                     }).then(() => loadLinks(openLinksFor))}>{t('common.delete')}</button>
@@ -408,7 +492,10 @@ export default function EventsAdmin() {
                       {(a.euds || []).map((e) => e.callsign).filter(Boolean).join(', ') || '-'}
                       <div className="events-hint">{a.otsUsername}</div>
                     </td>
-                    <td>{a.team?.name || '-'}</td>
+                    <td>
+                      {a.team?.name || '-'}
+                      {!a.parked && a.team && a.team.id === hqTeamId && <span className="badge badge-primary" style={{ marginLeft: '0.5rem' }}>{t('events.hqBadge')}</span>}
+                    </td>
                     <td>
                       {a.legacy ? t('events.accountLegacy') : (a.parked ? t('events.accountParked') : t('events.accountActive'))}
                       {a.role === 'leader' && <span className="badge badge-primary" style={{ marginLeft: '0.5rem' }}>{t('events.accountLeader')}</span>}
@@ -424,7 +511,7 @@ export default function EventsAdmin() {
                               onChange={(e) => moveAccount(a, e.target.value)}
                             >
                               <option value="">{t('events.parkNoTeam')}</option>
-                              {teams.map((tm) => <option key={tm.id} value={tm.id}>{tm.name}</option>)}
+                              {teams.map((tm) => <option key={tm.id} value={tm.id}>{tm.id === hqTeamId ? `${tm.name} (${t('events.hqBadge')})` : tm.name}</option>)}
                             </select>
                             <button className="events-danger" onClick={() => closeAccount(a)}>{t('events.closeAccount')}</button>
                           </>
@@ -440,6 +527,7 @@ export default function EventsAdmin() {
           {qrLink && (
             <div className="events-new-link events-qr-panel">
               <strong>{qrLink.label}</strong>
+              {qrLink.hq && <span className="events-print-hq">{t('events.hqPrintLabel')}</span>}
               <QRCodeSVG value={qrLink.url} size={200} level="M" />
               <code>{qrLink.url}</code>
               <div>
@@ -459,6 +547,7 @@ export default function EventsAdmin() {
                   <div key={i} className="events-print-card">
                     <QRCodeSVG value={item.url} size={200} level="M" />
                     <div className="events-print-label">{item.label}</div>
+                    {item.hq && <div className="events-print-label events-print-hq">{t('events.hqPrintLabel')}</div>}
                   </div>
                 ))}
               </div>

@@ -24,6 +24,7 @@
 .events-print-card { border: 1px solid var(--border-color, #ddd); border-radius: 8px; padding: 1rem; text-align: center; background: #fff; }
 .events-print-card svg { width: 100%; height: auto; max-width: 200px; }
 .events-print-label { margin-top: 0.5rem; font-weight: 600; color: #111; }
+.events-print-hq { color: #b00020; text-transform: uppercase; }
 @media print {
   body * { visibility: hidden; }
   .events-print-sheet, .events-print-sheet * { visibility: visible; }

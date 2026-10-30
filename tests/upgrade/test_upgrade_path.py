@@ -45,7 +45,7 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 # SEEDS below) must be revisited on purpose.
 UPSTREAM_REV = '4b754g491aa1'
 
-HEAD_REV = 'c7d8e9f0a1b3'
+HEAD_REV = 'd8e9f0a1b2c4'
 
 # a5b6c7d8e9f1 adds the primary keys to the OTS group association tables and
 # merges duplicate (group, user) / (group, code) rows into one row first.
@@ -93,7 +93,7 @@ NEW_EMPTY_TABLES = {
                     'createdAt', 'onboardingCodeId', 'tokenNonce', 'direction'},
     'event_sessions': {'id', 'eventId', 'eventTeamId', 'otsUsername', 'mode', 'createdAt',
                        'expiresAt', 'closedAt', 'closeReason', 'parkedAt', 'clientKeyHash',
-                       'eventLinkId', 'role', 'direction', 'otsGroupId'},
+                       'eventLinkId', 'role', 'direction', 'otsGroupId', 'organizerGrant'},
 }
 
 NOW = datetime(2026, 1, 15, 12, 0, 0)
