@@ -3,6 +3,9 @@ set -euo pipefail
 
 echo "Starting OpenTAK Onboarding Portal..."
 
+# Back up the SQLite database before applying pending migrations
+python3 /app/docker-backup-sqlite.py
+
 # Run database migrations; refuse to start on a half-migrated database
 echo "Running database migrations..."
 if ! flask db upgrade; then

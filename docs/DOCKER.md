@@ -50,7 +50,8 @@
 5. **Access the portal:**
    Open http://localhost:5000 in your browser
 
-Database migrations run automatically on container startup via the entrypoint script.
+Database migrations run automatically on container startup via the entrypoint script. If a
+migration fails, the container refuses to start instead of running on a half-migrated database.
 
 ## Configuration Options
 
@@ -85,9 +86,12 @@ The portal runs with the React SPA frontend bundled in the container. The API se
 
 ### Database Errors
 
-Migrations run automatically on startup. To manually run migrations:
+Migrations run automatically on startup; if one fails the container refuses to start
+(see [Recovering from a failed migration](#recovering-from-a-failed-migration)).
+Because a crash-looping container can't be `exec`'d into, run one-off commands in a fresh container:
 ```bash
-docker compose exec web flask db upgrade
+docker compose run --rm web flask db current
+docker compose run --rm web flask db upgrade
 ```
 
 ### Check Application Logs
@@ -119,6 +123,38 @@ docker compose build
 # Restart services
 docker compose up -d
 ```
+
+### Backups
+
+Back up before every update. On startup, when migrations are pending, the container
+copies a SQLite database to `instance/db.sqlite.pre-<revision>-<UTC timestamp>` before
+migrating (one copy per starting revision while the database is unchanged). If that copy can't be made, the container
+does not migrate and does not start.
+
+For PostgreSQL there is no automatic backup; take a dump yourself before updating:
+```bash
+pg_dump -Fc -h <host> -U <user> <dbname> > portal-$(date -u +%Y%m%dT%H%M%SZ).dump
+```
+
+### Recovering from a failed migration
+
+If `flask db upgrade` fails, the container logs
+`ERROR: database migration failed; not starting.`, prints the current revision and exits;
+with `restart: always` it keeps restarting without serving traffic. Check the logs with
+`docker compose logs web`, then either fix the cause and restart, or roll back:
+
+1. Stop the stack: `docker compose down`
+2. Restore the database:
+   - SQLite: `cp instance/db.sqlite.pre-<revision>-<timestamp> instance/db.sqlite`. Migrations
+     are committed one revision at a time, so a failed multi-step upgrade can leave several
+     `pre-*` files; restore the **oldest** one from this update attempt (earliest timestamp,
+     named after the revision the previous version ran at).
+   - PostgreSQL: `pg_restore --clean --if-exists -h <host> -U <user> -d <dbname> portal-<timestamp>.dump`
+3. Go back to the previous image/version (pin the image tag in `docker-compose.yml`, or
+   `git checkout <previous-version>` and `docker compose build`), then `docker compose up -d`.
+
+`flask db stamp` only changes the recorded revision without migrating anything; use it
+only if you know exactly which schema the database has.
 
 ## Read-Only Database Fix
 
