@@ -185,7 +185,10 @@
     "bothFieldsRequired": "Both fields are required",
     "settingPassword": "Setting password...",
     "setPassword": "Set Password",
-    "failedSetPassword": "Failed to set password"
+    "failedSetPassword": "Failed to set password",
+    "usernameTakenOnServer": "This username is already taken on the TAK server. Contact an administrator.",
+    "passwordAlreadySet": "Your password is already set. Use Change Password to change it.",
+    "takServerUnreachable": "Cannot connect to the TAK server. Please try again later."
   },
   "dashboard": {
     "welcome": "Welcome, ",

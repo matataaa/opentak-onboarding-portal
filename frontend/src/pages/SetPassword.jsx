@@ -71,7 +71,16 @@ function SetPassword() {
       await updateUser();
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.error || t('auth.failedSetPassword'));
+      const code = err.response?.data?.code;
+      if (code === 'username_taken_on_server') {
+        setError(t('auth.usernameTakenOnServer'));
+      } else if (code === 'password_already_set') {
+        setError(t('auth.passwordAlreadySet'));
+      } else if (err.response?.status === 503) {
+        setError(t('auth.takServerUnreachable'));
+      } else {
+        setError(t('auth.failedSetPassword'));
+      }
     } finally {
       setLoading(false);
     }

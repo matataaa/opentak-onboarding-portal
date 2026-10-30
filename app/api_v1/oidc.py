@@ -24,6 +24,7 @@ from authlib.jose import jwt as jose_jwt, JsonWebKey
 from app.api_v1 import api_v1
 from app.models import db, UserModel, UserRoleModel, OIDCProviderModel, SystemSettingsModel
 from app.rbac import require_role
+from app.ots import OTSClient
 
 
 def _get_frontend_url():
@@ -291,12 +292,22 @@ def oidc_callback(provider_id):
             # Create new user. The username must be valid for OTS, so sanitize
             # whatever the provider supplied (preferred_username or email local part).
             username = _sanitize_ots_username(preferred_username or email.split('@')[0])
-            # Ensure username is unique
+            # Ensure username is unique, locally and in OTS: set-password later
+            # creates the OTS account under this name, so it must not belong to
+            # an OTS user the portal does not know about.
+            ots = OTSClient(current_app.config['OTS_URL'], current_app.config['OTS_USERNAME'], current_app.config['OTS_PASSWORD'])
             base_username = username
             counter = 1
-            while UserModel.get_user_by_username(username):
-                username = f"{base_username[:32 - len(str(counter))]}{counter}"
-                counter += 1
+            try:
+                while UserModel.get_user_by_username(username) or ots.user_exists(username):
+                    if counter > 50:
+                        current_app.logger.error(f"OIDC: No free username found for base '{base_username}'")
+                        return redirect(f"{frontend_url}/login?oidc_error=Failed+to+create+user+account")
+                    username = f"{base_username[:32 - len(str(counter))]}{counter}"
+                    counter += 1
+            except Exception as e:
+                current_app.logger.error(f"OIDC: Could not check username '{username}' in OTS: {e}")
+                return redirect(f"{frontend_url}/login?oidc_error=Cannot+reach+the+TAK+server.+Please+try+again+later.")
 
             # Parse first/last name
             first_name = given_name or (name.split(' ')[0] if name else '')
@@ -365,7 +376,7 @@ def oidc_callback(provider_id):
         )
 
         # Build redirect URL with tokens
-        needs_password = 'true' if not user.has_password else 'false'
+        needs_password = 'true' if user.has_password is False else 'false'
         needs_profile = 'true' if (not user.email or not user.callsign) else 'false'
 
         redirect_url = (

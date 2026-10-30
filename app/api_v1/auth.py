@@ -15,6 +15,7 @@ from datetime import timedelta, datetime
 from app.api_v1 import api_v1
 from app.models import db, UserModel, UserRoleModel, PendingRegistrationModel, OnboardingCodeModel, OneTimeTokenModel
 from app.ots import OTSClient
+from app.exceptions import BadRequestError
 from app.email import send_html_email
 import secrets
 
@@ -1268,20 +1269,36 @@ def set_password():
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
+        # Only for accounts without a password yet (None counts as set); everyone
+        # else must go through change-password, which checks the current password.
+        if user.has_password is not False:
+            return jsonify({'error': 'Password already set; use change password', 'code': 'password_already_set'}), 409
+
         ots = OTSClient(current_app.config['OTS_URL'], current_app.config['OTS_USERNAME'], current_app.config['OTS_PASSWORD'])
 
-        # Try to create the user in OTS first (they may not exist there yet if created via OIDC)
+        # Create the OTS account. Never fall back to resetting an existing OTS
+        # password: that account may belong to someone else.
         try:
             ots.create_user(user.username, new_password)
             current_app.logger.info(f"Created OTS user {user.username} for OIDC password set")
-        except Exception:
-            # User may already exist in OTS — just reset the password
+        except BadRequestError as e:
             try:
-                ots.reset_user_password(user.username, new_password)
-                current_app.logger.info(f"Reset OTS password for {user.username}")
-            except Exception as e:
-                current_app.logger.error(f"Failed to set password in OTS: {e}")
-                return jsonify({'error': 'Failed to set password'}), 400
+                taken = ots.user_exists(user.username)
+            except Exception as lookup_error:
+                current_app.logger.error(f"Set password: could not look up OTS user {user.username}: {lookup_error}")
+                return jsonify({'error': 'Cannot connect to TAK server. Please try again later.'}), 503
+            if taken:
+                current_app.logger.warning(f"Set password: OTS username {user.username} already exists, not touching it")
+                return jsonify({'error': 'This username is already taken on the TAK server. Contact an administrator.',
+                                'code': 'username_taken_on_server'}), 409
+            current_app.logger.error(f"Failed to create OTS user {user.username}: {e}")
+            return jsonify({'error': 'Failed to set password'}), 400
+        except ConnectionError as e:
+            current_app.logger.error(f"Set password: OTS server unreachable: {e}")
+            return jsonify({'error': 'Cannot connect to TAK server. Please try again later.'}), 503
+        except Exception as e:
+            current_app.logger.error(f"Failed to set password in OTS: {e}")
+            return jsonify({'error': 'Failed to set password'}), 502
 
         user.has_password = True
         db.session.commit()
@@ -1290,7 +1307,7 @@ def set_password():
 
     except Exception as e:
         current_app.logger.error(f"Set password error: {str(e)}")
-        return jsonify({'error': f'Failed to set password: {str(e)}'}), 400
+        return jsonify({'error': 'Failed to set password'}), 400
 
 
 @api_v1.route('/auth/forgot-password', methods=['POST'])

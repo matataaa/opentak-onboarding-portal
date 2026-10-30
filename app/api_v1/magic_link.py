@@ -159,7 +159,7 @@ def verify_magic_link():
     )
 
     # Determine user state
-    needs_password = not getattr(user, 'has_password', True)
+    needs_password = getattr(user, 'has_password', True) is False
     needs_profile = not user.email or not user.callsign
 
     current_app.logger.info(f"Magic link login for user '{user.username}'")
