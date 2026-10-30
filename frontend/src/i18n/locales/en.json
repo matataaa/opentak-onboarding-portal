@@ -308,7 +308,20 @@
     "loggedIn": "You are now logged in on the kiosk!",
     "canClosePage": "You can close this page.",
     "sessionExpired": "This kiosk session has expired or is no longer available.",
-    "scanAgain": "Please scan the QR code on the kiosk again."
+    "scanAgain": "Please scan the QR code on the kiosk again.",
+    "loading": "Loading...",
+    "tryAgain": "Try Again",
+    "failedLoadSettings": "Failed to load kiosk settings.",
+    "failedCreateSession": "Failed to create a kiosk session.",
+    "logoAlt": "Logo",
+    "welcome": "Welcome, {{name}}",
+    "noRadios": "No radios assigned to you yet.",
+    "registerRadio": "Register Radio",
+    "validate": "Validate",
+    "program": "Program",
+    "username": "Username",
+    "name": "Name",
+    "callsign": "Callsign"
   },
   "announcements": {
     "title": "Announcement History",

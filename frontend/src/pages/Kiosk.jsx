@@ -284,7 +284,7 @@ function Kiosk() {
       <div className="kiosk-container">
         <div className="kiosk-loading">
           <div className="kiosk-spinner" />
-          <p>Loading...</p>
+          <p>{t('kiosk.loading')}</p>
         </div>
       </div>
     );
@@ -295,8 +295,8 @@ function Kiosk() {
     return (
       <div className="kiosk-container">
         <div className="kiosk-message">
-          <h2>Kiosk Enrollment</h2>
-          <p>Kiosk enrollment is not enabled. Contact your administrator.</p>
+          <h2>{t('kiosk.title')}</h2>
+          <p>{t('kiosk.notEnabled')}</p>
         </div>
       </div>
     );
@@ -307,10 +307,10 @@ function Kiosk() {
     return (
       <div className="kiosk-container">
         <div className="kiosk-message">
-          <h2>Error</h2>
-          <p>{errorMessage || 'Something went wrong.'}</p>
+          <h2>{t('kiosk.error')}</h2>
+          <p>{errorMessage || t('kiosk.somethingWrong')}</p>
           <button className="kiosk-retry-btn" onClick={createNewSession}>
-            Try Again
+            {t('kiosk.tryAgain')}
           </button>
         </div>
       </div>
@@ -323,17 +323,17 @@ function Kiosk() {
       <div className="kiosk-container">
         <div className="kiosk-qr-screen">
           {settings?.custom_logo_enabled && settings?.custom_logo_path ? (
-            <img src={`${API_BASE_URL}${settings.custom_logo_path}`} alt="Logo" className="kiosk-logo" />
+            <img src={`${API_BASE_URL}${settings.custom_logo_path}`} alt={t('kiosk.logoAlt')} className="kiosk-logo" />
           ) : (
-            <img src={`${API_BASE_URL}/static/img/logo.png`} alt="Logo" className="kiosk-logo" />
+            <img src={`${API_BASE_URL}/static/img/logo.png`} alt={t('kiosk.logoAlt')} className="kiosk-logo" />
           )}
           <h1>{settings?.brand_name || 'OpenTAK Portal'}</h1>
-          <p className="kiosk-subtitle">Scan to log in</p>
+          <p className="kiosk-subtitle">{t('kiosk.scanToLogin')}</p>
           <div className="kiosk-qr-code">
             {qrUrl && <QRCodeSVG value={qrUrl} size={280} level="M" />}
           </div>
           <p className="kiosk-qr-instruction">
-            Scan this QR code with your phone to authenticate
+            {t('kiosk.scanDesc')}
             <span className="kiosk-polling-dot" />
           </p>
         </div>
@@ -351,18 +351,18 @@ function Kiosk() {
           <div className="kiosk-header">
             <div className="kiosk-header-brand">
               {settings?.custom_logo_enabled && settings?.custom_logo_path ? (
-                <img src={`${API_BASE_URL}${settings.custom_logo_path}`} alt="Logo" className="kiosk-header-logo" />
+                <img src={`${API_BASE_URL}${settings.custom_logo_path}`} alt={t('kiosk.logoAlt')} className="kiosk-header-logo" />
               ) : (
-                <img src={`${API_BASE_URL}/static/img/logo.png`} alt="Logo" className="kiosk-header-logo" />
+                <img src={`${API_BASE_URL}/static/img/logo.png`} alt={t('kiosk.logoAlt')} className="kiosk-header-logo" />
               )}
-              <h1>Welcome, {kioskUser.callsign || kioskUser.username}</h1>
+              <h1>{t('kiosk.welcome', { name: kioskUser.callsign || kioskUser.username })}</h1>
             </div>
             <div className="kiosk-header-actions">
               <span className={`kiosk-timer ${isWarning ? 'warning' : ''}`}>
-                Session: {formatTime(timeRemaining)}
+                {t('kiosk.session')}{formatTime(timeRemaining)}
               </span>
               <button className="kiosk-signout-btn" onClick={handleSignOut}>
-                Sign Out
+                {t('kiosk.signOut')}
               </button>
             </div>
           </div>
@@ -371,18 +371,18 @@ function Kiosk() {
             {/* QR Codes Section */}
             {(atakQrData || itakQrData) && (
               <div className="kiosk-section">
-                <h2>TAK Enrollment QR Codes</h2>
+                <h2>{t('kiosk.takEnrollment')}</h2>
                 <div className="kiosk-qr-pair">
                   {atakQrData?.qr_string && (
                     <div className="kiosk-qr-item">
                       <QRCodeSVG value={atakQrData.qr_string} size={180} level="M" />
-                      <p>ATAK</p>
+                      <p>{t('kiosk.atak')}</p>
                     </div>
                   )}
                   {itakQrData?.qr_string && (
                     <div className="kiosk-qr-item">
                       <QRCodeSVG value={itakQrData.qr_string} size={180} level="M" />
-                      <p>iTAK</p>
+                      <p>{t('kiosk.itak')}</p>
                     </div>
                   )}
                 </div>
@@ -392,7 +392,7 @@ function Kiosk() {
             {/* Radio Section */}
             {(radios.length > 0 || settings?.user_radio_enrollment_enabled) && (
               <div className="kiosk-section">
-                <h2>Your Radios</h2>
+                <h2>{t('kiosk.yourRadios')}</h2>
                 {radios.length > 0 ? (
                   <div className="kiosk-radio-list">
                     {radios.map(radio => (
@@ -405,7 +405,7 @@ function Kiosk() {
                                 className="kiosk-btn-validate"
                                 onClick={() => setValidatingRadio(radio)}
                               >
-                                Validate
+                                {t('kiosk.validate')}
                               </button>
                             )}
                             {settings?.user_program_radio_enabled && (
@@ -413,7 +413,7 @@ function Kiosk() {
                                 className="kiosk-btn-program"
                                 onClick={() => setProgrammingRadio(radio)}
                               >
-                                Program
+                                {t('kiosk.program')}
                               </button>
                             )}
                           </div>
@@ -422,7 +422,7 @@ function Kiosk() {
                     ))}
                   </div>
                 ) : (
-                  <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>No radios assigned to you yet.</p>
+                  <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>{t('kiosk.noRadios')}</p>
                 )}
                 {settings?.user_radio_enrollment_enabled && (
                   <button
@@ -430,7 +430,7 @@ function Kiosk() {
                     style={{ marginTop: '1rem' }}
                     onClick={() => setShowEnrollModal(true)}
                   >
-                    + Register Radio
+                    + {t('kiosk.registerRadio')}
                   </button>
                 )}
               </div>
@@ -438,10 +438,10 @@ function Kiosk() {
 
             {/* User Info Section */}
             <div className="kiosk-section">
-              <h2>Account</h2>
-              <p><strong>Username:</strong> {kioskUser.username}</p>
-              <p><strong>Name:</strong> {kioskUser.firstName} {kioskUser.lastName}</p>
-              <p><strong>Callsign:</strong> {kioskUser.callsign || '-'}</p>
+              <h2>{t('kiosk.account')}</h2>
+              <p><strong>{t('kiosk.username')}:</strong> {kioskUser.username}</p>
+              <p><strong>{t('kiosk.name')}:</strong> {kioskUser.firstName} {kioskUser.lastName}</p>
+              <p><strong>{t('kiosk.callsign')}:</strong> {kioskUser.callsign || '-'}</p>
             </div>
           </div>
         </div>

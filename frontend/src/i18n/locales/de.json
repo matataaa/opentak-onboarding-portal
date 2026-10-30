@@ -308,7 +308,20 @@
     "loggedIn": "Sie sind jetzt am Kiosk angemeldet!",
     "canClosePage": "Sie können diese Seite schließen.",
     "sessionExpired": "Diese Kiosk-Sitzung ist abgelaufen oder nicht mehr verfügbar.",
-    "scanAgain": "Bitte scannen Sie den QR-Code am Kiosk erneut."
+    "scanAgain": "Bitte scannen Sie den QR-Code am Kiosk erneut.",
+    "loading": "Wird geladen...",
+    "tryAgain": "Erneut versuchen",
+    "failedLoadSettings": "Kiosk-Einstellungen konnten nicht geladen werden.",
+    "failedCreateSession": "Kiosk-Sitzung konnte nicht erstellt werden.",
+    "logoAlt": "Logo",
+    "welcome": "Willkommen, {{name}}",
+    "noRadios": "Ihnen sind noch keine Funkgeräte zugewiesen.",
+    "registerRadio": "Funkgerät registrieren",
+    "validate": "Validieren",
+    "program": "Programmieren",
+    "username": "Benutzername",
+    "name": "Name",
+    "callsign": "Rufzeichen"
   },
   "announcements": {
     "title": "Ankündigungsverlauf",
