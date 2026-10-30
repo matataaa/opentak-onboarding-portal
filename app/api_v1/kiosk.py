@@ -8,13 +8,47 @@ from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
     jwt_required,
+    get_jwt,
     get_jwt_identity,
+    verify_jwt_in_request,
 )
 from datetime import timedelta, datetime
 from app.api_v1 import api_v1
 from app.models import db, UserModel, KioskSessionModel, SystemSettingsModel
 from app.api_v1.auth import get_frontend_url
 import secrets
+
+# A kiosk token is left behind on a shared terminal, so it only works on what the
+# kiosk screen needs (endpoint name, HTTP method). Everything else is denied,
+# including routes added later. Password change is deliberately not allowed.
+KIOSK_ALLOWED = frozenset({
+    ('api_v1.get_settings', 'GET'),
+    ('api_v1.get_atak_qr_string', 'GET'),
+    ('api_v1.get_itak_qr_string', 'GET'),
+    ('api_v1.get_radios', 'GET'),
+    ('api_v1.get_meshtastic_groups', 'GET'),
+    ('api_v1.get_program_config', 'POST'),
+    ('api_v1.enroll_radio', 'POST'),
+    ('api_v1.refresh', 'POST'),
+})
+
+
+@api_v1.before_request
+def restrict_kiosk_sessions():
+    if request.method == 'OPTIONS':
+        return None
+    try:
+        # verify_type=False: a kiosk refresh token is restricted the same way.
+        verify_jwt_in_request(optional=True, verify_type=False)
+        claims = get_jwt()
+    except Exception:
+        # Invalid/expired token: the endpoint's own decorator answers.
+        return None
+    if not claims or not claims.get('kiosk_session'):
+        return None
+    if (request.endpoint, request.method) in KIOSK_ALLOWED:
+        return None
+    return jsonify({'error': 'Not available for kiosk sessions'}), 403
 
 
 @api_v1.route('/kiosk/session', methods=['POST'])
@@ -144,7 +178,8 @@ def authenticate_kiosk_session(session_id):
         identity=str(user.id),
         additional_claims={
             'username': user.username,
-            'roles': [role.name for role in user.roles],
+            # Kiosk sessions never carry the user's roles (see restrict_kiosk_sessions).
+            'roles': [],
             'kiosk_session': True
         },
         expires_delta=timedelta(minutes=timeout_minutes)

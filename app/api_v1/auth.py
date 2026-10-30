@@ -297,6 +297,8 @@ def refresh():
     if jwt_data.get('kiosk_session'):
         from app.models import SystemSettingsModel
         claims['kiosk_session'] = True
+        # Kiosk sessions never carry the user's roles.
+        claims['roles'] = []
         timeout_str = SystemSettingsModel.get_setting('kiosk_session_timeout_minutes', '10')
         try:
             expires_delta = timedelta(minutes=int(timeout_str))

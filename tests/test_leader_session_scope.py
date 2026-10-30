@@ -247,7 +247,8 @@ def test_normal_and_admin_tokens_unaffected(client, db, world):
         for method, path in NON_ALLOWLISTED:
             r = _call(client, method, path, h)
             assert (r.get_json() or {}).get('error') != DENIED_MSG, (path, h)
-        assert client.get(PREFIX + '/auth/me', headers=h).status_code == 200
+        if h is not kiosk:  # kiosk tokens are restricted by their own allowlist (kiosk.py)
+            assert client.get(PREFIX + '/auth/me', headers=h).status_code == 200
     assert client.get(PREFIX + '/users', headers=adm).status_code == 200
 
 
