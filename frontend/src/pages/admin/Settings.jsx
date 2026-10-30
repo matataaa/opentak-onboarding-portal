@@ -35,7 +35,6 @@ const SETTING_GROUP_OVERRIDES = {
   itak_homepage_icon_enabled: 'homepage_tiles',
   truststore_homepage_icon_enabled: 'homepage_tiles',
   meshtastic_homepage_icon_enabled: 'homepage_tiles',
-  zerotier_icon: 'homepage_tiles',
   open_in_atak_enabled: 'homepage_tiles',
   atak_installer_qr_enabled: 'homepage_tiles',
   atak_installer_qr_url: 'homepage_tiles',
@@ -1445,7 +1444,7 @@ function Settings() {
   // Get regular (non-paired) settings from a category
   const getRegularSettings = (categorySettings, processedKeys) => {
     // Settings managed by dedicated components (not shown as toggles)
-    const managedSettings = ['custom_logo_path', 'logo_display_mode', 'login_background_path', 'login_hero_texts', ...colorSettingKeys, ...dropdownSettingKeys];
+    const managedSettings = ['custom_logo_enabled', 'custom_logo_path', 'logo_display_mode', 'login_background_path', 'login_hero_texts', ...colorSettingKeys, ...dropdownSettingKeys];
     return categorySettings?.filter(s => !processedKeys.has(s.key) && !managedSettings.includes(s.key)) || [];
   };
 

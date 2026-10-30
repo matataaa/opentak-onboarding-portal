@@ -16,7 +16,6 @@
     "perPage": "Per pagina",
     "all": "Alle",
     "pageInfo": "Pagina {{page}} van {{totalPages}} ({{total}} totaal)",
-    "noResults": "Geen resultaten voor je zoekopdracht.",
     "search": "Zoeken",
     "actions": "Acties",
     "name": "Naam",
@@ -1011,7 +1010,7 @@
       "learnFromUsbHelp": "Sluit een Meshtastic-radio aan via USB om apparaatinfo automatisch in te vullen",
       "deviceInfoLoaded": "Apparaatinfo geladen!",
       "limitedInfo": "Verbonden maar beperkte informatie beschikbaar.",
-      "failedRead": "Lezen van radio mislukt",
+      "failedRead": "Lezen van radio mislukt: {{error}}",
       "nameLabel": "Naam *",
       "descriptionLabel": "Beschrijving",
       "modelLabel": "Model",
@@ -1037,7 +1036,8 @@
       "failedDelete": "Verwijderen van radio mislukt",
       "failedLoadDetails": "Laden van radiodetails mislukt",
       "noNodeId": "Radio heeft geen node-ID (MAC-adres niet ingesteld)",
-      "failedCopyUrl": "Kopiëren van URL naar klembord mislukt"
+      "failedCopyUrl": "Kopiëren van URL naar klembord mislukt",
+      "factoryResetFailed": "Fabrieksreset mislukt: {{error}}"
     },
     "settings": {
       "title": "Instellingen",
@@ -1216,10 +1216,6 @@
         "truststore_homepage_icon_enabled": {
           "label": "TrustStore-downloadtegel",
           "description": "Toon het TrustStore-downloadpictogram op het dashboard"
-        },
-        "zerotier_icon": {
-          "label": "ZeroTier-downloadtegel",
-          "description": "Toon het ZeroTier-downloadpictogram op het dashboard"
         },
         "meshtastic_homepage_icon_enabled": {
           "label": "Meshtastic-downloadtegel",

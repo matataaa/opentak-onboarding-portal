@@ -16,7 +16,6 @@
     "perPage": "Per page",
     "all": "All",
     "pageInfo": "Page {{page}} of {{totalPages}} ({{total}} total)",
-    "noResults": "No results match your search.",
     "search": "Search",
     "actions": "Actions",
     "name": "Name",
@@ -1217,10 +1216,6 @@
         "truststore_homepage_icon_enabled": {
           "label": "TrustStore Download Tile",
           "description": "Show TrustStore download icon on the dashboard"
-        },
-        "zerotier_icon": {
-          "label": "ZeroTier Download Tile",
-          "description": "Show ZeroTier download icon on the dashboard"
         },
         "meshtastic_homepage_icon_enabled": {
           "label": "Meshtastic Download Tile",

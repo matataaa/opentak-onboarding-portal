@@ -2001,8 +2001,6 @@ paths:
                     type: boolean
                   truststore_homepage_icon_enabled:
                     type: boolean
-                  zerotier_icon:
-                    type: boolean
                   enable_repo:
                     type: boolean
                   enable_claim_radio:

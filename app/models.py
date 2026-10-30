@@ -1482,12 +1482,6 @@ class SystemSettingsModel(db.Model):
                 'description': 'Show TrustStore download icon on the dashboard'
             },
             {
-                'key': 'zerotier_icon',
-                'value': 'false',
-                'category': 'general',
-                'description': 'Show ZeroTier download icon on the dashboard'
-            },
-            {
                 'key': 'meshtastic_homepage_icon_enabled',
                 'value': 'true',
                 'category': 'general',

@@ -16,7 +16,6 @@
     "perPage": "Pro Seite",
     "all": "Alle",
     "pageInfo": "Seite {{page}} von {{totalPages}} ({{total}} gesamt)",
-    "noResults": "Keine Ergebnisse für Ihre Suche.",
     "search": "Suchen",
     "actions": "Aktionen",
     "name": "Name",
@@ -268,23 +267,23 @@
   },
   "claimRadio": {
     "featureDisabled": "Funktion deaktiviert",
-    "claimingDisabled": "Die Funkgerät-Beanspruchung ist auf diesem Portal nicht aktiviert.",
+    "claimingDisabled": "Die Übernahme von Funkgeräten ist auf diesem Portal nicht aktiviert.",
     "goToDashboard": "Zum Dashboard",
     "radioNotFound": "Funkgerät nicht gefunden",
-    "radioNotFoundDesc": "Das Funkgerät, das Sie beanspruchen möchten, existiert nicht oder Sie haben keinen Zugriff darauf.",
+    "radioNotFoundDesc": "Das Funkgerät, das Sie übernehmen möchten, existiert nicht oder Sie haben keinen Zugriff darauf.",
     "alreadyAssigned": "Bereits zugewiesen",
     "alreadyAssignedDesc": "Dieses Funkgerät ist bereits jemandem zugewiesen.",
-    "radioClaimed": "Funkgerät beansprucht!",
+    "radioClaimed": "Funkgerät übernommen!",
     "nowOwner": "Sie sind jetzt der Besitzer von ",
     "redirectingToDashboard": "Weiterleitung zum Dashboard...",
-    "title": "Funkgerät beanspruchen",
+    "title": "Funkgerät übernehmen",
     "model": "Modell: ",
     "nodeId": "Knoten-ID: ",
     "shortName": "Kurzname: ",
     "longName": "Langname: ",
-    "claimDesc": "Durch die Beanspruchung dieses Funkgeräts wird es Ihnen zugewiesen. Dies ermöglicht Ihnen, dieses Funkgerät von Ihrem Dashboard aus anzuzeigen und zu verwalten.",
-    "claiming": "Beanspruchen...",
-    "claimButton": "Dieses Funkgerät beanspruchen"
+    "claimDesc": "Wenn Sie dieses Funkgerät übernehmen, wird es Ihnen zugewiesen. Dies ermöglicht Ihnen, dieses Funkgerät von Ihrem Dashboard aus anzuzeigen und zu verwalten.",
+    "claiming": "Wird übernommen...",
+    "claimButton": "Dieses Funkgerät übernehmen"
   },
   "kiosk": {
     "title": "Kiosk-Registrierung",
@@ -480,7 +479,7 @@
     "resetting": "Zurücksetzen...",
     "factoryResetConfirm": "Dies wird ALLE Einstellungen auf \"{{name}}\" löschen und die Werkseinstellungen wiederherstellen.\n\nDas Gerät wird neu gestartet. Sind Sie sicher?",
     "factoryResetTitle": "Funkgerät auf Werkseinstellungen zurücksetzen",
-    "copyClaimUrl": "Beanspruchungs-URL kopieren",
+    "copyClaimUrl": "Übernahme-URL kopieren",
     "slot": "Slot",
     "notRead": "(nicht gelesen)",
     "failedToRegister": "Radio-Registrierung fehlgeschlagen"
@@ -1011,7 +1010,7 @@
       "learnFromUsbHelp": "Verbinden Sie ein Meshtastic-Funkgerät per USB, um Geräteinformationen automatisch auszufüllen",
       "deviceInfoLoaded": "Geräteinformationen geladen!",
       "limitedInfo": "Verbunden, aber nur begrenzte Informationen verfügbar.",
-      "failedRead": "Lesen vom Funkgerät fehlgeschlagen",
+      "failedRead": "Lesen vom Funkgerät fehlgeschlagen: {{error}}",
       "nameLabel": "Name *",
       "descriptionLabel": "Beschreibung",
       "modelLabel": "Modell",
@@ -1037,7 +1036,8 @@
       "failedDelete": "Funkgerät konnte nicht gelöscht werden",
       "failedLoadDetails": "Funkgerät-Details konnten nicht geladen werden",
       "noNodeId": "Funkgerät hat keine Knoten-ID (MAC-Adresse nicht gesetzt)",
-      "failedCopyUrl": "URL konnte nicht in die Zwischenablage kopiert werden"
+      "failedCopyUrl": "URL konnte nicht in die Zwischenablage kopiert werden",
+      "factoryResetFailed": "Zurücksetzen auf Werkseinstellungen fehlgeschlagen: {{error}}"
     },
     "settings": {
       "title": "Einstellungen",
@@ -1217,17 +1217,13 @@
           "label": "TrustStore-Download-Kachel",
           "description": "TrustStore-Download-Symbol im Dashboard anzeigen"
         },
-        "zerotier_icon": {
-          "label": "ZeroTier-Download-Kachel",
-          "description": "ZeroTier-Download-Symbol im Dashboard anzeigen"
-        },
         "meshtastic_homepage_icon_enabled": {
           "label": "Meshtastic-Download-Kachel",
           "description": "Meshtastic-Download-Symbol im Dashboard anzeigen"
         },
         "claim_radio_enabled": {
-          "label": "Funkgerät-Beanspruchung",
-          "description": "Benutzern erlauben, Funkgeräte ohne Besitzer über eine Beanspruchungs-URL zu beanspruchen"
+          "label": "Funkgerät-Übernahme",
+          "description": "Benutzern erlauben, Funkgeräte ohne Besitzer über eine Übernahme-URL zu übernehmen"
         },
         "user_program_radio_enabled": {
           "label": "Funkgeräte-Programmierung durch Benutzer",
