@@ -90,7 +90,7 @@ function EnrollRadioModal({ onClose, onSuccess, apiClient }) {
           displayName = shortName;
         }
 
-        setScanStatus(`Done: ${displayName}`);
+        setScanStatus(t('radio.scanDone', { name: displayName }));
         setFormData(prev => ({
           ...prev,
           platform: 'meshtastic',

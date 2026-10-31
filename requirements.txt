@@ -21,6 +21,7 @@ Flask-QRcode==3.2.0
 Flask-WTF==1.2.1
 PyYAML==6.0.2
 Authlib==1.9.1
+joserfc==1.7.7
 cryptography>=50,<51
 meshtastic==2.5.6
 

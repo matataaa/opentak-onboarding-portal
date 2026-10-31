@@ -514,5 +514,10 @@ def test_team_leader_candidates_are_capped(client, db, pw, admin):
     w = pw
     for i in range(events_mod.TEAM_LEADER_CANDIDATES_MAX + 3):
         _user(db, 'capuser%02d' % i)
-    assert len(_candidates(client, admin, w, search='capuser').get_json()['users']) == \
-        events_mod.TEAM_LEADER_CANDIDATES_MAX
+    try:
+        assert len(_candidates(client, admin, w, search='capuser').get_json()['users']) == \
+            events_mod.TEAM_LEADER_CANDIDATES_MAX
+    finally:
+        db.session.rollback()
+        UserModel.query.filter(UserModel.username.like('capuser%')).delete(synchronize_session=False)
+        db.session.commit()

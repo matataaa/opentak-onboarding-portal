@@ -445,6 +445,7 @@
     "learnFromUsb": "Von USB erkennen",
     "scanning": "Scannen...",
     "clickToScan": "Klicken, um ein verbundenes Funkgerät zu scannen",
+    "scanDone": "Fertig: {{name}}",
     "usbRequiresChrome": "USB-Scan erfordert Chrome, Edge oder Opera Browser.",
     "radioDetails": "Funkgerät-Details",
     "radioName": "Name *",

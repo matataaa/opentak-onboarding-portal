@@ -26,6 +26,7 @@ def kiosk(db):
     yield
     db.session.rollback()
     KioskSessionModel.query.delete()
+    UserModel.query.filter_by(username='kioskuser').delete()
     db.session.commit()
     SystemSettingsModel.set_setting('kiosk_enrollment_enabled', old_enabled)
     SystemSettingsModel.set_setting('kiosk_session_timeout_minutes', old_timeout)

@@ -445,6 +445,7 @@
     "learnFromUsb": "Learn from USB",
     "scanning": "Scanning...",
     "clickToScan": "Click to scan a connected radio",
+    "scanDone": "Done: {{name}}",
     "usbRequiresChrome": "USB scanning requires Chrome, Edge, or Opera browser.",
     "radioDetails": "Radio Details",
     "radioName": "Name *",
