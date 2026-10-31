@@ -27,7 +27,7 @@ from app.api_v1 import api_v1
 from app.models import db, EventTeamModel, EventModel, EventLinkModel, EventSessionModel, EventLeaderSessionModel, EventTeamLeaderModel, OTSGroupModel, UserModel, OnboardingCodeModel, SystemSettingsModel
 from app.ots import otsClient, new_password_error
 from app.exceptions import BadRequestError
-from app.rbac import require_role
+from app.rbac import has_privileged_role, is_administrator, require_role, visible_code_value
 
 # Access tokens stay short even when the leader session lives (via refresh)
 # until the event ends.
@@ -105,12 +105,12 @@ def _link_to_dict(link, raw_token=None):
         'role': link.role,
         'direction': link.direction,
         'tokenVersion': link.tokenVersion,
-        'retrievable': _link_retrievable(link),
+        'retrievable': _link_retrievable(link) and not _privileged_code_denied(link.onboardingCode),
         'onboardingCodeId': link.onboardingCodeId,
         'onboardingCode': {
             'id': link.onboardingCode.id,
             'name': link.onboardingCode.name,
-            'onboardingCode': link.onboardingCode.onboardingCode,
+            'onboardingCode': visible_code_value(link.onboardingCode),
         } if link.onboardingCode else None,
         'createdAt': link.createdAt.isoformat() if link.createdAt else None,
     }
@@ -127,6 +127,14 @@ TAK_TEAM_COLORS = (
     'White', 'Yellow', 'Orange', 'Magenta', 'Red', 'Maroon', 'Purple',
     'Dark Blue', 'Blue', 'Cyan', 'Teal', 'Green', 'Dark Green', 'Brown',
 )
+
+
+LINK_PRIVILEGED_CODE_ERROR = 'Only an administrator can get the token of a link bound to this onboarding code'
+
+
+def _privileged_code_denied(code):
+    """True if the current user may not hand out this code (it carries a privileged role)."""
+    return bool(code) and has_privileged_role(code) and not is_administrator()
 
 
 def _parse_dt(value):
@@ -577,8 +585,11 @@ def create_event_link(event_id):
         return jsonify({'error': 'A link for this team and role already exists; regenerate it to get a new one'}), 409
 
     onboarding_code_id = data.get('onboardingCodeId')
-    if onboarding_code_id and not OnboardingCodeModel.get_onboarding_code_by_id(onboarding_code_id):
+    onboarding_code = OnboardingCodeModel.get_onboarding_code_by_id(onboarding_code_id) if onboarding_code_id else None
+    if onboarding_code_id and not onboarding_code:
         return jsonify({'error': 'Unknown onboardingCodeId'}), 400
+    if _privileged_code_denied(onboarding_code):
+        return jsonify({'error': 'Only an administrator can bind this onboarding code to a link'}), 403
     # Applies to the device accounts of shared mode; stored for leader links too
     direction = data.get('direction', 'BOTH')
     if direction not in LINK_DIRECTIONS:
@@ -619,6 +630,9 @@ def revoke_event_link(link_id):
     link = EventLinkModel.query.get(link_id)
     if not link:
         return jsonify({'error': 'Link not found'}), 404
+    # The token leads to the code through the join route
+    if _privileged_code_denied(link.onboardingCode):
+        return jsonify({'error': LINK_PRIVILEGED_CODE_ERROR}), 403
     link.tokenVersion = (link.tokenVersion or 0) + 1
     link.tokenNonce = secrets.token_urlsafe(16)
     if _key_is_strong():
@@ -654,6 +668,9 @@ def get_event_link_url(link_id):
     link = EventLinkModel.query.get(link_id)
     if not link:
         return jsonify({'error': 'Link not found'}), 404
+    # The token leads to the code through the join route
+    if _privileged_code_denied(link.onboardingCode):
+        return jsonify({'error': LINK_PRIVILEGED_CODE_ERROR}), 403
     if not _link_retrievable(link):
         return jsonify({'error': 'This link cannot be shown again; regenerate it to get a retrievable link'}), 409
     return jsonify({'url': _link_url(_derive_link_token(link))}), 200
@@ -1645,7 +1662,7 @@ def get_my_team():
     reason = None
     if not link:
         reason = 'missing'
-    elif not _link_retrievable(link):
+    elif _privileged_code_denied(link.onboardingCode) or not _link_retrievable(link):
         reason = 'notRetrievable'
     else:
         player_link = {'url': _link_url(_derive_link_token(link))}

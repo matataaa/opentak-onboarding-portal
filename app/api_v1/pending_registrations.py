@@ -9,6 +9,7 @@ from app.api_v1 import api_v1
 from app.api_v1.auth import get_frontend_url
 from app.models import PendingRegistrationModel, OnboardingCodeModel, UserModel
 from app.ots import new_password_error
+from app.rbac import has_privileged_role, is_administrator, visible_code_value
 from datetime import datetime, timedelta
 import secrets
 import re
@@ -27,6 +28,13 @@ def require_view_role():
     from app.rbac import has_any_role
     if not has_any_role(['administrator', 'registration_admin', 'registration_readonly']):
         return jsonify({'error': 'Registration admin or readonly access required'}), 403
+    return None
+
+
+def _privileged_code_denied(code):
+    """A code carrying a privileged role hands out admin accounts: only an administrator may use it here."""
+    if code and has_privileged_role(code) and not is_administrator():
+        return jsonify({'error': 'Only an administrator can use this onboarding code'}), 403
     return None
 
 
@@ -54,7 +62,7 @@ def get_pending_registrations():
                 'onboarding_code': {
                     'id': p.onboarding_code.id,
                     'name': p.onboarding_code.name,
-                    'code': p.onboarding_code.onboardingCode,
+                    'code': visible_code_value(p.onboarding_code),
                     'requireApproval': p.onboarding_code.requireApproval,
                     'approverRole': {
                         'id': p.onboarding_code.approverRole.id,
@@ -106,7 +114,7 @@ def get_pending_registration(pending_id):
             'onboarding_code': {
                 'id': pending.onboarding_code.id,
                 'name': pending.onboarding_code.name,
-                'code': pending.onboarding_code.onboardingCode,
+                'code': visible_code_value(pending.onboarding_code),
                 'requireApproval': pending.onboarding_code.requireApproval,
                 'approverRole': {
                     'id': pending.onboarding_code.approverRole.id,
@@ -117,7 +125,8 @@ def get_pending_registration(pending_id):
             'created_at': pending.created_at.isoformat() if pending.created_at else None,
             'expires_at': pending.expires_at.isoformat() if pending.expires_at else None,
             'is_expired': pending.expires_at < datetime.now() if pending.expires_at else False,
-            'verification_token': pending.verification_token,  # Admin can see token
+            # Admin can see token, unless it activates an account from a code they may not see
+            'verification_token': None if _privileged_code_denied(pending.onboarding_code) else pending.verification_token,
             'approval_status': pending.approval_status,
             'approved_at': pending.approved_at.isoformat() if pending.approved_at else None,
             'approved_by': {
@@ -191,6 +200,10 @@ def create_pending_registration():
         if not onboarding_code:
             return jsonify({'error': 'Invalid onboarding code'}), 400
 
+        denied = _privileged_code_denied(onboarding_code)
+        if denied:
+            return denied
+
         # Check if auto-approve is enabled on the onboarding code
         if onboarding_code.autoApprove:
             # Auto-approve: Create user directly without email verification
@@ -205,8 +218,7 @@ def create_pending_registration():
             # Prepare roles from onboarding code
             ots_roles = ['user']
             if onboarding_code.roles:
-                role_names = [role.name.lower() for role in onboarding_code.roles]
-                if any(r in ['administrator', 'admin'] for r in role_names):
+                if has_privileged_role(onboarding_code):
                     ots_roles = ['administrator']
 
             try:
@@ -390,6 +402,14 @@ def update_pending_registration(pending_id):
             return jsonify({'error': 'Pending registration not found'}), 404
 
         data = request.get_json()
+
+        # Editing such a registration would let the editor take over the admin account it
+        # will become (the verification email goes to the address set here).
+        denied = _privileged_code_denied(pending.onboarding_code)
+        if not denied and 'onboarding_code_id' in data:
+            denied = _privileged_code_denied(OnboardingCodeModel.get_onboarding_code_by_id(data['onboarding_code_id']))
+        if denied:
+            return denied
 
         # Update fields if provided
         if 'username' in data:
@@ -652,6 +672,10 @@ def approve_pending_registration(pending_id):
         if not onboarding_code:
             return jsonify({'error': 'Onboarding code no longer valid'}), 400
 
+        denied = _privileged_code_denied(onboarding_code)
+        if denied:
+            return denied
+
         # Check for duplicates before creating
         if UserModel.get_user_by_username(pending.username):
             PendingRegistrationModel.delete_by_id(pending.id)
@@ -667,8 +691,7 @@ def approve_pending_registration(pending_id):
         # Prepare roles from onboarding code - OTS only supports 'user' and 'administrator'
         ots_roles = ['user']  # Default role
         if onboarding_code.roles:
-            role_names = [role.name.lower() for role in onboarding_code.roles]
-            if any(r in ['administrator', 'admin'] for r in role_names):
+            if has_privileged_role(onboarding_code):
                 ots_roles = ['administrator']
             else:
                 ots_roles = ['user']

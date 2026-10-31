@@ -8,6 +8,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.api_v1 import api_v1
 from app.api_v1.auth import get_frontend_url
 from app.models import PendingRegistrationModel, OnboardingCodeModel, UserModel, UserRoleModel, db
+from app.rbac import has_privileged_role, is_administrator, visible_code_value
 from datetime import datetime
 
 
@@ -65,7 +66,7 @@ def get_my_approvals():
                 'onboarding_code': {
                     'id': p.onboarding_code.id,
                     'name': p.onboarding_code.name,
-                    'code': p.onboarding_code.onboardingCode
+                    'code': visible_code_value(p.onboarding_code)
                 } if p.onboarding_code else None,
                 'approver_role': {
                     'id': p.onboarding_code.approverRole.id,
@@ -128,6 +129,10 @@ def approve_pending(pending_id):
         if onboarding_code.approverRoleId not in approver_role_ids:
             return jsonify({'error': 'You do not have permission to approve this registration'}), 403
 
+        # This code hands out an admin account: an approver role alone is not enough
+        if has_privileged_role(onboarding_code) and not is_administrator():
+            return jsonify({'error': 'Only an administrator can approve a registration for this onboarding code'}), 403
+
         # Check if expired
         if pending.expires_at < datetime.now():
             return jsonify({'error': 'This registration has expired'}), 400
@@ -148,8 +153,7 @@ def approve_pending(pending_id):
         # Prepare roles from onboarding code - OTS only supports 'user' and 'administrator'
         ots_roles = ['user']  # Default role
         if onboarding_code.roles:
-            role_names = [role.name.lower() for role in onboarding_code.roles]
-            if any(r in ['administrator', 'admin'] for r in role_names):
+            if has_privileged_role(onboarding_code):
                 ots_roles = ['administrator']
 
         try:

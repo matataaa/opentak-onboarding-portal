@@ -10,7 +10,7 @@ from flask_jwt_extended import create_access_token
 
 from app.api_v1 import events as events_mod
 from app.models import (EventLeaderSessionModel, EventLinkModel, EventModel, EventSessionModel,
-                        EventTeamModel, OTSGroupModel, SystemSettingsModel, UserModel, UserRoleModel)
+                        EventTeamModel, OnboardingCodeModel, OTSGroupModel, SystemSettingsModel, UserModel, UserRoleModel)
 
 STRONG = 'a-strong-secret-key-for-tests-0123456789'
 
@@ -230,6 +230,26 @@ def test_legacy_link_not_retrievable(client, db, strong_key, world):
     d = client.get('/api/v1/events/my-team',
                    headers=_leader_headers(_user(db, 'leaderl'), team, w['event'])).get_json()
     assert d['playerLink'] is None and d['reason'] == 'notRetrievable'
+
+
+def test_link_with_privileged_code_is_not_shown_to_leader(client, db, strong_key, world):
+    """The link leads to the code value through the public join route."""
+    w = world
+    admin_role = UserRoleModel.query.filter_by(name='administrator').first() or \
+        UserRoleModel.create_role(name='administrator', description='admin')
+    code = OnboardingCodeModel(onboardingCode='my-team-secret', name='secret', uses=0, roles=[admin_role])
+    w['link_a'].onboardingCode = code
+    db.session.commit()
+    try:
+        r = client.get('/api/v1/events/my-team', headers=_leader_headers(w['la'], w['ta'], w['event']))
+        d = r.get_json()
+        assert d['playerLink'] is None and d['reason'] == 'notRetrievable'
+        assert 'my-team-secret' not in r.get_data(as_text=True)
+    finally:
+        db.session.rollback()
+        w['link_a'].onboardingCode = None
+        db.session.delete(code)
+        db.session.commit()
 
 
 def test_missing_link(client, db, strong_key, world):

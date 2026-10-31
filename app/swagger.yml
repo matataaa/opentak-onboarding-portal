@@ -154,6 +154,9 @@ components:
           type: string
         description:
           type: string
+        userCount:
+          type: integer
+          description: Only in GET /roles, for administrator, role_admin and role_readonly
 
     OnboardingCode:
       type: object
@@ -482,12 +485,14 @@ components:
           type: integer
         retrievable:
           type: boolean
+          description: Whether this viewer can get the join URL again; false for a non-administrator when the code carries a privileged role
         onboardingCodeId:
           type: integer
           nullable: true
         onboardingCode:
           type: object
           nullable: true
+          description: id, name and onboardingCode; the value of onboardingCode is null for a non-administrator when the code carries a privileged role
         createdAt:
           type: string
           format: date-time
@@ -808,7 +813,8 @@ paths:
       summary: Set initial password
       description: >
         Set the first password for an OIDC-created user that has none yet, and create
-        their OTS account with it. Never resets an existing OTS account's password.
+        their OTS account with it (as administrator if the user holds a privileged role).
+        Never resets an existing OTS account's password.
       security:
         - bearerAuth: []
       requestBody:
@@ -830,6 +836,8 @@ paths:
           description: Password set and OTS account created
         '400':
           description: Invalid password, or OTS rejected the account
+        '403':
+          description: This is the portal service account (OTS_USERNAME)
         '409':
           description: >
             Password already set (`code`: `password_already_set`; use change-password),
@@ -838,6 +846,29 @@ paths:
           description: OTS returned an unexpected error
         '503':
           description: TAK server unreachable
+
+  /auth/forgot-password:
+    post:
+      tags:
+        - Authentication
+      summary: Request a password reset email
+      description: Always answers the same. No token or email is produced for the portal service account (OTS_USERNAME).
+      responses:
+        '200':
+          description: If the account exists, reset instructions are sent
+
+  /auth/reset-password:
+    post:
+      tags:
+        - Authentication
+      summary: Reset a password with a token
+      responses:
+        '200':
+          description: Password reset
+        '400':
+          description: Missing, invalid or expired token, or a disallowed password
+        '403':
+          description: This is the portal service account (OTS_USERNAME)
 
   /auth/register:
     post:
@@ -918,7 +949,7 @@ paths:
         '400':
           description: Missing current/new password, new password shorter than 8 characters or with disallowed characters, or the account has no password yet (use set-password)
         '403':
-          description: Current password is incorrect
+          description: Current password is incorrect, or this is the portal service account (OTS_USERNAME)
         '502':
           description: OTS could not verify the current password or change it
         '503':
@@ -1250,6 +1281,8 @@ paths:
                   - $ref: '#/components/schemas/ReprovisionCounts'
         '400':
           description: Missing teamId/role, unknown team or onboarding code, or invalid direction
+        '403':
+          description: The onboarding code carries a privileged role and the caller is no administrator
         '404':
           description: Event not found
         '409':
@@ -1348,6 +1381,7 @@ paths:
         (field `retrievable` in the link list). Legacy links with a random token,
         or any link when SECRET_KEY is weak, return 409; regenerate the link first.
         Rotating SECRET_KEY makes derived links non-retrievable (printed QRs keep working).
+        Only an administrator gets the URL of a link bound to a code carrying a privileged role.
       security:
         - bearerAuth: []
       parameters:
@@ -1366,6 +1400,8 @@ paths:
                 properties:
                   url:
                     type: string
+        '403':
+          description: The link is bound to a code carrying a privileged role and the caller is no administrator
         '404':
           description: Link not found
         '409':
@@ -2099,7 +2135,7 @@ paths:
         '400':
           description: Missing field or invalid username
         '403':
-          description: Administrator role required
+          description: User admin role required, or roleIds has a privileged role and the caller is no administrator
         '409':
           description: Username already exists
 
@@ -2108,7 +2144,7 @@ paths:
       tags:
         - Users
       summary: Get user by ID
-      description: Get detailed user information (own profile or admin)
+      description: Get detailed user information (own profile, or administrator, user_admin or user_readonly; checked against database roles, not token claims)
       security:
         - bearerAuth: []
       parameters:
@@ -2133,7 +2169,21 @@ paths:
       tags:
         - Users
       summary: Update user
-      description: Update user information (own profile or admin)
+      description: >
+        Update user information. Roles are checked in the database, not in the token. On your own
+        profile you can change email, firstName, lastName, callsign and language; administrator and
+        user_admin can also change roleIds, expiryDate, groups, groupIds and password. A non-administrator
+        cannot change another user holding a privileged role (administrator/admin, in any case), and cannot
+        add or remove a privileged role; roleIds is the full list, unchanged roles are not a change.
+        When the privileged state of the user changes, the OTS role is set first (`administrator` or
+        `user`, replacing all OTS roles) on the account found case-insensitively, and read back; if OTS
+        refuses or the role did not change, nothing is changed. If the outcome is unknown (a lost OTS
+        response or failed read-back) the portal is not changed and the OTS role is put back. Taking the
+        role from an account OTS does not have succeeds; granting it refuses. A user without a password
+        has no OTS account yet: the OTS call is skipped and set-password creates it with the right role. groups and
+        groupIds take different integer ids. The account named in
+        OTS_USERNAME cannot get a password, an expiry date or lose its privileged role; the last
+        administrator cannot lose the role.
       security:
         - bearerAuth: []
       parameters:
@@ -2161,24 +2211,34 @@ paths:
                   type: array
                   items:
                     type: integer
-                  description: Admin only
+                  description: Administrator or user_admin only
                 expiryDate:
                   type: string
                   format: date-time
-                  description: Admin only
+                  description: Administrator or user_admin only
+                password:
+                  type: string
+                  format: password
+                  description: Administrator or user_admin only
       responses:
         '200':
           description: User updated successfully
+        '400':
+          description: Invalid value, or OTS refused the role change (for example under LDAP, or no such OTS account); nothing was changed. Also a failure after an OTS change; the local update is rolled back, restoring the role is attempted, and `passwordChanged` tells whether the password was already changed.
         '403':
-          description: Permission denied
+          description: Permission denied, privileged role or target without the administrator role, or a change the service account does not allow
         '404':
           description: User not found
+        '409':
+          description: The last administrator cannot lose the administrator role
+        '502':
+          description: The role could not be changed in OTS, or the change did not show when read back. The portal was not changed. The error says nothing was changed if that is certain; otherwise OTS and the portal may differ and it says to check the account in OTS.
 
     delete:
       tags:
         - Users
-      summary: Delete user (admin) 🔒
-      description: Deletes the user from OTS and the local database. If OTS answers 400 and has no such account, the user is deleted locally only; any other OTS failure returns 502. API keys the user created are deactivated and lose their creator; announcements stay, without a creator.
+      summary: Delete user (administrator or user_admin) 🔒
+      description: Deletes the user from OTS and the local database. A non-administrator cannot delete a user holding a privileged role; the account named in OTS_USERNAME and the last administrator cannot be deleted. If OTS answers 400 and has no such account, the user is deleted locally only; any other OTS failure returns 502. API keys the user created are deactivated and lose their creator; announcements stay, without a creator.
       security:
         - bearerAuth: []
       parameters:
@@ -2191,11 +2251,11 @@ paths:
         '200':
           description: User deleted successfully
         '403':
-          description: Administrator role required
+          description: User admin role required, target holds a privileged role and caller is no administrator, or target is the service account
         '404':
           description: User not found
         '409':
-          description: Other records still reference the user; nothing was deleted locally or in OTS
+          description: Target is the last administrator, or other records still reference the user; nothing was deleted locally or in OTS
         '502':
           description: OTS could not be reached, refused or failed; the user was kept in both stores
         '500':
@@ -2205,7 +2265,8 @@ paths:
     get:
       tags:
         - Roles
-      summary: List all roles
+      summary: List all roles (any admin role) 🔒
+      description: Any admin role can read this, because admin pages use it as a picker. `userCount` is only included for administrator, role_admin and role_readonly.
       security:
         - bearerAuth: []
       parameters:
@@ -2243,6 +2304,8 @@ paths:
                   per_page:
                     type: integer
                     nullable: true
+        '403':
+          description: No admin role
 
     post:
       tags:
@@ -2266,16 +2329,70 @@ paths:
       responses:
         '201':
           description: Role created successfully
+        '400':
+          description: Missing name, or a reserved name (administrator, admin, event_leader, user or any built-in admin role, ignoring case and surrounding whitespace)
         '403':
           description: Administrator role required
         '409':
           description: Role already exists
+
+  /roles/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - Roles
+      summary: Get role by ID (administrator, role_admin or role_readonly) 🔒
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The role with its users, TAK profiles and Meshtastic configs
+        '403':
+          description: Role admin or readonly access required
+        '404':
+          description: Role not found
+    put:
+      tags:
+        - Roles
+      summary: Update role (administrator or role_admin) 🔒
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Role updated
+        '400':
+          description: Rename to a reserved name (see POST /roles)
+        '403':
+          description: Role admin access required, or a protected role. Other privileged rows (such as admin) are protected for non-administrators.
+        '404':
+          description: Role not found
+        '409':
+          description: Role name already exists
+    delete:
+      tags:
+        - Roles
+      summary: Delete role (administrator or role_admin) 🔒
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Role deleted
+        '403':
+          description: Role admin access required, or a protected role. Other privileged rows (such as admin) are protected for non-administrators.
+        '404':
+          description: Role not found
 
   /onboarding-codes:
     get:
       tags:
         - Onboarding Codes
       summary: List onboarding codes (admin) 🔒
+      description: Codes carrying a privileged role (administrator/admin) are only listed for administrators.
       security:
         - bearerAuth: []
       parameters:
@@ -2313,6 +2430,236 @@ paths:
                   per_page:
                     type: integer
                     nullable: true
+
+    post:
+      tags:
+        - Onboarding Codes
+      summary: Create onboarding code (administrator or onboarding_admin) 🔒
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Code created
+        '400':
+          description: Missing or invalid values
+        '403':
+          description: Onboarding admin access required, or roleIds has a privileged role and the caller is no administrator
+        '409':
+          description: Onboarding code already exists
+
+  /onboarding-codes/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags:
+        - Onboarding Codes
+      summary: Get onboarding code (administrator, onboarding_admin or onboarding_readonly) 🔒
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The code
+        '403':
+          description: Onboarding admin or readonly access required
+        '404':
+          description: Not found, also when the code carries a privileged role and the caller is no administrator
+    put:
+      tags:
+        - Onboarding Codes
+      summary: Update onboarding code (administrator or onboarding_admin) 🔒
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Code updated
+        '400':
+          description: Invalid values
+        '403':
+          description: Onboarding admin access required, or roleIds has a privileged role and the caller is no administrator
+        '404':
+          description: Not found, also when the code carries a privileged role and the caller is no administrator
+    delete:
+      tags:
+        - Onboarding Codes
+      summary: Delete onboarding code (administrator or onboarding_admin) 🔒
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Code deleted
+        '403':
+          description: Onboarding admin access required
+        '404':
+          description: Not found, also when the code carries a privileged role and the caller is no administrator
+
+  /pending-registrations:
+    post:
+      tags:
+        - Onboarding Codes
+      summary: Create a pending registration (administrator or registration_admin) 🔒
+      description: In GET responses for pending registrations, the code value and verification token are null for a non-administrator when the code carries a privileged role.
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Registration created, or user created when the code auto-approves
+        '400':
+          description: Missing or invalid values
+        '403':
+          description: Registration admin access required, or the code carries a privileged role and the caller is no administrator
+        '409':
+          description: Username or email already in use
+
+  /pending-registrations/{id}:
+    put:
+      tags:
+        - Onboarding Codes
+      summary: Update a pending registration (administrator or registration_admin) 🔒
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Registration updated and a verification email sent
+        '403':
+          description: Registration admin access required, or the current or new code carries a privileged role and the caller is no administrator
+        '404':
+          description: Pending registration not found
+
+  /pending-registrations/{id}/approve:
+    post:
+      tags:
+        - Onboarding Codes
+      summary: Approve a pending registration (administrator or registration_admin) 🔒
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User created
+        '403':
+          description: Registration admin access required, manual approval disabled, or the code carries a privileged role and the caller is no administrator
+        '404':
+          description: Pending registration not found
+
+  /approvals/{id}/approve:
+    post:
+      tags:
+        - Onboarding Codes
+      summary: Approve a registration as a member of the approver role 🔒
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User created
+        '403':
+          description: Not in the approver role, or the code carries a privileged role and the caller is no administrator
+        '404':
+          description: Pending registration not found
+
+  /admin/oidc/providers:
+    get:
+      tags:
+        - Settings
+      summary: List OIDC providers (administrator only) 🔒
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The providers, secrets masked
+        '403':
+          description: Administrator role required
+    post:
+      tags:
+        - Settings
+      summary: Create an OIDC provider (administrator only) 🔒
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Provider created
+        '403':
+          description: Administrator role required
+
+  /admin/oidc/providers/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    put:
+      tags:
+        - Settings
+      summary: Update an OIDC provider (administrator only) 🔒
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Provider updated
+        '403':
+          description: Administrator role required
+    delete:
+      tags:
+        - Settings
+      summary: Delete an OIDC provider (administrator only) 🔒
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Provider deleted
+        '403':
+          description: Administrator role required
+
+  /admin/oidc/providers/{id}/icon:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      tags:
+        - Settings
+      summary: Upload a provider icon (administrator only) 🔒
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Icon uploaded
+        '403':
+          description: Administrator role required
+    delete:
+      tags:
+        - Settings
+      summary: Delete a provider icon (administrator only) 🔒
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Icon deleted
+        '403':
+          description: Administrator role required
 
   /onboarding-codes/validate/{code}:
     get:

@@ -8,7 +8,9 @@ from flask_jwt_extended import jwt_required, get_jwt
 from app.api_v1 import api_v1
 from app.models import UserRoleModel
 from app.pagination import search_and_paginate
-from app.rbac import ADMIN_ROLES
+from app.rbac import ADMIN_ROLES, has_any_role, is_administrator, is_privileged_role, is_reserved_role_name, require_any_admin_role
+
+RESERVED_NAME_ERROR = 'This role name is reserved'
 
 
 def require_admin_role():
@@ -37,6 +39,9 @@ def is_protected_role(role):
     # Admin roles are always protected
     if role.name in ADMIN_ROLES:
         return True
+    # Other privileged rows (e.g. "admin"): only an administrator may change them
+    if is_privileged_role(role) and not is_administrator():
+        return True
     # Roles auto-created from OTS have specific description patterns
     if role.description and 'OTS' in role.description:
         return True
@@ -46,7 +51,13 @@ def is_protected_role(role):
 @api_v1.route('/roles', methods=['GET'])
 @jwt_required()
 def get_roles():
-    """Get roles, optionally filtered by search and paginated (all roles when per_page is omitted)"""
+    """Get roles for any admin (admin pages use this as a picker), optionally filtered by search and
+    paginated (all roles when per_page is omitted). userCount only with access to the roles module."""
+    error = require_any_admin_role()
+    if error:
+        return error
+
+    show_user_count = has_any_role(['administrator', 'role_admin', 'role_readonly'])
     roles, meta = search_and_paginate(
         UserRoleModel.query, UserRoleModel.name,
         [UserRoleModel.name, UserRoleModel.display_name, UserRoleModel.description])
@@ -57,7 +68,7 @@ def get_roles():
             'name': role.name,
             'displayName': role.display_name,
             'description': role.description,
-            'userCount': len(role.users),
+            **({'userCount': len(role.users)} if show_user_count else {}),
             'isProtected': is_protected_role(role)
         } for role in roles],
         **meta
@@ -68,6 +79,10 @@ def get_roles():
 @jwt_required()
 def get_role(role_id):
     """Get role by ID with details"""
+    error = require_view_role()
+    if error:
+        return error
+
     role = UserRoleModel.get_by_id(role_id)
     if not role:
         return jsonify({'error': 'Role not found'}), 404
@@ -95,6 +110,9 @@ def create_role():
 
     if not data.get('name'):
         return jsonify({'error': 'Name is required'}), 400
+
+    if is_reserved_role_name(data['name']):
+        return jsonify({'error': RESERVED_NAME_ERROR}), 400
 
     # Check if role already exists
     existing = UserRoleModel.get_role_by_name(data['name'])
@@ -141,6 +159,10 @@ def update_role(role_id):
     data = request.get_json()
 
     if data.get('name'):
+        # An existing row keeps working under its own name, whatever that is
+        if data['name'] != role.name and is_reserved_role_name(data['name']):
+            return jsonify({'error': RESERVED_NAME_ERROR}), 400
+
         # Check if new name conflicts with existing role
         existing = UserRoleModel.get_role_by_name(data['name'])
         if existing and existing.id != role_id:

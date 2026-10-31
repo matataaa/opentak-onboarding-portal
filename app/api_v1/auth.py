@@ -15,6 +15,11 @@ from datetime import timedelta, datetime
 from app.api_v1 import api_v1
 from app.models import db, UserModel, UserRoleModel, PendingRegistrationModel, OnboardingCodeModel, OneTimeTokenModel
 from app.ots import OTSClient, new_password_error
+from app.rbac import SERVICE_ACCOUNT_PASSWORD_ERROR, has_privileged_role, is_service_account
+
+# Marks an approve link only mailed to administrators (token_urlsafe never contains a dot).
+# A code carrying a privileged role only accepts these, so older links are refused.
+ADMIN_ONLY_APPROVAL_TOKEN_PREFIX = 'adm.'
 from app.exceptions import AuthenticationError, AuthorizationError, BadRequestError
 from app.email import send_html_email
 import secrets
@@ -641,8 +646,7 @@ def register():
             # Prepare roles from onboarding code - OTS only supports 'user' and 'administrator'
             ots_roles = ['user']  # Default role
             if onboarding_code.roles:
-                role_names = [role.name.lower() for role in onboarding_code.roles]
-                if any(r in ['administrator', 'admin'] for r in role_names):
+                if has_privileged_role(onboarding_code):
                     ots_roles = ['administrator']
                 else:
                     ots_roles = ['user']
@@ -774,7 +778,8 @@ The OpenTAK Team"""
 
             # Generate verification and approval tokens
             verification_token = secrets.token_urlsafe(48)
-            approval_token = secrets.token_urlsafe(48)
+            privileged_code = has_privileged_role(onboarding_code)
+            approval_token = (ADMIN_ONLY_APPROVAL_TOKEN_PREFIX if privileged_code else '') + secrets.token_urlsafe(48)
 
             # Set expiration (7 days for approval flow to give approvers time)
             expires_at = datetime.now() + timedelta(days=7)
@@ -811,14 +816,22 @@ The OpenTAK Team"""
             # Get approvers from the approver role
             approver_emails = set()
 
-            if onboarding_code.approverRole:
+            # The link creates the account without a login: for an admin account only administrators get it
+            if privileged_code:
+                from app.models import UserRoleModel
+                admin_role = UserRoleModel.get_role_by_name('administrator')
+                for user in (admin_role.users if admin_role else []):
+                    if user.email:
+                        approver_emails.add(user.email)
+                        current_app.logger.info(f"Adding admin as approver: {user.username} ({user.email})")
+            elif onboarding_code.approverRole:
                 for user in onboarding_code.approverRole.users:
                     if user.email:
                         approver_emails.add(user.email)
                         current_app.logger.info(f"Adding approver from role '{onboarding_code.approverRole.name}': {user.username} ({user.email})")
 
             # If no approver role set or no emails in that role, fall back to administrators
-            if not approver_emails:
+            if not approver_emails and not privileged_code:
                 current_app.logger.info("No approvers with email found, falling back to administrators")
                 from app.models import UserRoleModel
                 # Case-insensitive search for administrator role
@@ -1046,10 +1059,9 @@ def verify_email():
         if onboarding_code.roles:
             # Filter roles to only include those that exist in OTS
             allowed_ots_roles = ['user', 'administrator']
-            role_names = [role.name.lower() for role in onboarding_code.roles]
 
             # Check if any role maps to administrator
-            if any(r in ['administrator', 'admin'] for r in role_names):
+            if has_privileged_role(onboarding_code):
                 ots_roles = ['administrator']
             else:
                 # Default to user for any other role
@@ -1249,6 +1261,9 @@ def change_password():
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
+        if is_service_account(user.username):
+            return jsonify({'error': SERVICE_ACCOUNT_PASSWORD_ERROR}), 403
+
         if user.has_password is False:
             return jsonify({'error': 'No password set; use set password'}), 400
 
@@ -1313,6 +1328,9 @@ def set_password():
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
+        if is_service_account(user.username):
+            return jsonify({'error': SERVICE_ACCOUNT_PASSWORD_ERROR}), 403
+
         # Only for accounts without a password yet (None counts as set); everyone
         # else must go through change-password, which checks the current password.
         if user.has_password is not False:
@@ -1323,7 +1341,8 @@ def set_password():
         # Create the OTS account. Never fall back to resetting an existing OTS
         # password: that account may belong to someone else.
         try:
-            ots.create_user(user.username, new_password)
+            # A privileged role assigned before the account existed could not reach OTS then
+            ots.create_user(user.username, new_password, ['administrator'] if has_privileged_role(user) else ['user'])
             current_app.logger.info(f"Created OTS user {user.username} for OIDC password set")
         except BadRequestError as e:
             try:
@@ -1379,6 +1398,12 @@ def forgot_password():
         # Always return success even if user not found (security best practice)
         if not user:
             current_app.logger.info(f"Password reset requested for non-existent email: {email}")
+            return jsonify({'message': 'If an account exists with that email, you will receive reset instructions'}), 200
+
+        # Same answer as for any other address: this public route must not reveal the
+        # service account's email. No token is created; the reset route refuses it too.
+        if is_service_account(user.username):
+            current_app.logger.warning("Password reset requested for the service account; ignored")
             return jsonify({'message': 'If an account exists with that email, you will receive reset instructions'}), 200
 
         # Delete any existing tokens for this user
@@ -1479,6 +1504,9 @@ def reset_password():
         user = UserModel.query.get(reset_token.user_id)
         if not user:
             return jsonify({'error': 'User not found'}), 404
+
+        if is_service_account(user.username):
+            return jsonify({'error': SERVICE_ACCOUNT_PASSWORD_ERROR}), 403
 
         # Reset password in OTS
         try:
@@ -1629,13 +1657,25 @@ def approve_registration(token):
             </html>
             """, 400
 
+        # This link may have been mailed to non-administrators
+        if has_privileged_role(onboarding_code) and not token.startswith(ADMIN_ONLY_APPROVAL_TOKEN_PREFIX):
+            current_app.logger.warning(f"Refused approval link for {pending.username}: not issued to administrators only")
+            return f"""
+            <html>
+            <head><title>Registration Approval</title></head>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; text-align: center;">
+                <h1 style="color: #dc3545;">Administrator Approval Required</h1>
+                <p>This registration would create an administrator account. An administrator must approve it in the portal.</p>
+            </body>
+            </html>
+            """, 403
+
         # Create user in OTS
         ots = OTSClient(current_app.config['OTS_URL'], current_app.config['OTS_USERNAME'], current_app.config['OTS_PASSWORD'])
 
         ots_roles = ['user']
         if onboarding_code.roles:
-            role_names = [role.name.lower() for role in onboarding_code.roles]
-            if any(r in ['administrator', 'admin'] for r in role_names):
+            if has_privileged_role(onboarding_code):
                 ots_roles = ['administrator']
 
         ots.create_user(

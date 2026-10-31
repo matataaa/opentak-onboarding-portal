@@ -8,6 +8,7 @@ from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity, verify_j
 from app.api_v1 import api_v1
 from app.models import TakProfileModel, UserRoleModel, UserModel, OneTimeTokenModel, db
 from app.pagination import search_and_paginate
+from app.rbac import is_administrator
 from werkzeug.utils import secure_filename
 import os
 import zipfile
@@ -96,8 +97,7 @@ def get_tak_profiles():
     """Get TAK profiles (filter by user access), optionally filtered by search and paginated
     (all accessible profiles when per_page is omitted)"""
     current_user_id = int(get_jwt_identity())  # Convert string to int
-    claims = get_jwt()
-    is_admin = 'administrator' in claims.get('roles', [])
+    is_admin = is_administrator()
 
     if is_admin:
         query = TakProfileModel.query
@@ -151,8 +151,7 @@ def get_tak_profile(profile_id):
 
     # Check access
     current_user_id = int(get_jwt_identity())  # Convert string to int
-    claims = get_jwt()
-    is_admin = 'administrator' in claims.get('roles', [])
+    is_admin = is_administrator()
 
     if not is_admin and not profile.isPublic:
         user = UserModel.get_user_by_id(current_user_id)
@@ -192,8 +191,7 @@ def create_download_token(profile_id):
     if not profile:
         return jsonify({'error': 'TAK profile not found'}), 404
 
-    claims = get_jwt()
-    is_admin = 'administrator' in claims.get('roles', [])
+    is_admin = is_administrator()
     is_unrestricted_public = profile.isPublic and not profile.roles and not profile.users
     has_access = is_admin or is_unrestricted_public or profile in user.takprofiles
     if not has_access and user.roles:

@@ -15,7 +15,7 @@ Admin roles (stored in local database, not OTS):
 """
 
 from functools import wraps
-from flask import jsonify
+from flask import current_app, jsonify
 from flask_jwt_extended import get_jwt, get_jwt_identity
 
 # Define admin roles with description and display name
@@ -64,6 +64,16 @@ MODULE_ROLES = {
     'groups': ['administrator', 'group_admin', 'group_readonly'],
     'events': ['administrator', 'events_admin', 'events_readonly'],
 }
+
+# Roles that grant full administrator rights in OTS (a row named admin/Admin counts too)
+PRIVILEGED_ROLE_NAMES = {'administrator', 'admin'}
+# Names a new or renamed role may not take: they have a fixed meaning in the portal or OTS
+RESERVED_ROLE_NAMES = PRIVILEGED_ROLE_NAMES | {'event_leader', 'user'} | set(ADMIN_ROLES)
+
+SERVICE_ACCOUNT_PASSWORD_ERROR = (
+    'The password of the portal service account cannot be changed through the portal: '
+    'change it in OpenTAK Server and in the portal configuration (OTS_PASSWORD)'
+)
 
 
 def get_user_roles():
@@ -168,6 +178,80 @@ def require_admin():
     if 'administrator' not in get_user_roles():
         return jsonify({'error': 'Administrator role required'}), 403
     return None
+
+
+def _normalize_role_name(name):
+    return str(name or '').strip().casefold()
+
+
+def is_privileged_role(role):
+    """True for a role that grants full administrator rights, whatever its case or padding"""
+    return _normalize_role_name(role.name) in PRIVILEGED_ROLE_NAMES
+
+
+def is_reserved_role_name(name):
+    """True if a new or renamed role may not use this name"""
+    return _normalize_role_name(name) in RESERVED_ROLE_NAMES
+
+
+def is_administrator():
+    """True if the current user holds the 'administrator' role (from database)"""
+    return 'administrator' in get_user_roles()
+
+
+def has_privileged_role(holder):
+    """True if a user or onboarding code carries a privileged role"""
+    return any(is_privileged_role(role) for role in holder.roles)
+
+
+def role_ids_include_privileged(role_ids):
+    """True if the roleIds of a request name a privileged role.
+
+    Anything but a list cannot be vetted, so it counts as privileged.
+    """
+    from app.models import UserRoleModel
+
+    if not role_ids:
+        return False
+    if not isinstance(role_ids, list):
+        return True
+    roles = [UserRoleModel.get_by_id(role_id) for role_id in role_ids]
+    return any(role and is_privileged_role(role) for role in roles)
+
+
+def privileged_role_ids():
+    """Ids of all privileged roles, to filter queries (names are compared here, not in SQL)"""
+    from app.models import UserRoleModel
+
+    return [role.id for role in UserRoleModel.get_all_roles() if is_privileged_role(role)]
+
+
+def visible_code_value(code):
+    """The value of an onboarding code, or None if the current user may not see it"""
+    if has_privileged_role(code) and not is_administrator():
+        return None
+    return code.onboardingCode
+
+
+def is_service_account(username):
+    """True for the account the portal itself uses for every OTS call (OTS_USERNAME)"""
+    service_username = current_app.config.get('OTS_USERNAME')
+    # settings.py turns an unset OTS_USERNAME into the string 'None'
+    if not username or not service_username or service_username == 'None':
+        return False
+    return username.strip().casefold() == service_username.strip().casefold()
+
+
+def is_last_administrator(user):
+    """True if this user is the only one holding the 'administrator' role"""
+    from app.models import UserModel, UserRoleModel
+
+    if not any(role.name == 'administrator' for role in user.roles):
+        return False
+    return not UserModel.query.filter(
+        UserModel.id != user.id,
+        UserModel.roles.any(UserRoleModel.name == 'administrator')
+    ).first()
 
 
 def get_user_admin_modules():

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { usersAPI, rolesAPI, groupsAPI } from '../../services/api';
 import { formatDate, useDateFormat } from '../../utils/formatDate';
 import { isValidNewPassword } from '../../utils/passwordRules';
+import { isPrivilegedRole } from '../../utils/roles';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import '../../components/AdminTable.css';
@@ -17,6 +18,7 @@ function UsersList() {
   const { showError, showSuccess, confirm } = useNotification();
   const { hasRole, isAdmin, startImpersonation, user: currentUser } = useAuth();
   const canEdit = hasRole('user_admin') || hasRole('administrator');
+  const isProtectedTarget = (user) => !hasRole('administrator') && user.roles?.some(r => isPrivilegedRole(r.name));
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -331,17 +333,21 @@ function UsersList() {
                     {canEdit && (
                       <td>
                         <div className="table-actions">
-                          <button className="btn btn-sm btn-secondary" onClick={() => handleEdit(user)}>
-                            {t('common.edit')}
-                          </button>
+                          {(!isProtectedTarget(user) || user.id === currentUser?.id) && (
+                            <button className="btn btn-sm btn-secondary" onClick={() => handleEdit(user)}>
+                              {t('common.edit')}
+                            </button>
+                          )}
                           {isAdmin() && user.id !== currentUser?.id && (
                             <button className="btn btn-sm btn-warning" onClick={() => handleImpersonate(user)}>
                               {t('admin.users.impersonate')}
                             </button>
                           )}
-                          <button className="btn btn-sm btn-danger" onClick={() => handleDelete(user)}>
-                            {t('common.delete')}
-                          </button>
+                          {!isProtectedTarget(user) && (
+                            <button className="btn btn-sm btn-danger" onClick={() => handleDelete(user)}>
+                              {t('common.delete')}
+                            </button>
+                          )}
                         </div>
                       </td>
                     )}
@@ -467,7 +473,7 @@ function UsersList() {
                 <div className="form-group">
                   <label>{t('admin.users.roles')}</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {rolesData?.roles?.map(role => (
+                    {rolesData?.roles?.filter(role => hasRole('administrator') || !isPrivilegedRole(role.name)).map(role => (
                       <label key={role.name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'normal' }}>
                         <input
                           type="checkbox"

@@ -9,3 +9,6 @@ class BadRequestError(Exception):
 
 class CSRFError(Exception):
     pass
+
+class OTSRoleUnconfirmed(Exception):
+    pass

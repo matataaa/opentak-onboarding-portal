@@ -8,6 +8,7 @@ from flask_jwt_extended import jwt_required, get_jwt
 from app.api_v1 import api_v1
 from app.models import OnboardingCodeModel, UserModel, UserRoleModel, OTSGroupModel, GroupOnboardingCodeAssociation, db
 from app.pagination import search_and_paginate
+from app.rbac import has_privileged_role, is_administrator, privileged_role_ids, role_ids_include_privileged
 from datetime import datetime
 
 
@@ -25,6 +26,14 @@ def require_view_role():
     if not has_any_role(['administrator', 'onboarding_admin', 'onboarding_readonly']):
         return jsonify({'error': 'Onboarding admin or readonly access required'}), 403
     return None
+
+
+PRIVILEGED_ROLE_ERROR = 'Only an administrator can attach the administrator role to an onboarding code'
+
+
+def _is_hidden(code):
+    """A code carrying a privileged role hands out admin accounts: administrators only."""
+    return has_privileged_role(code) and not is_administrator()
 
 
 def _flagged_new_groups(data, existing_ids=()):
@@ -48,8 +57,12 @@ def get_onboarding_codes():
     if error:
         return error
 
+    query = OnboardingCodeModel.query
+    if not is_administrator():
+        query = query.filter(~OnboardingCodeModel.roles.any(UserRoleModel.id.in_(privileged_role_ids())))
+
     codes, meta = search_and_paginate(
-        OnboardingCodeModel.query, OnboardingCodeModel.name,
+        query, OnboardingCodeModel.name,
         [OnboardingCodeModel.name, OnboardingCodeModel.description, OnboardingCodeModel.onboardingCode])
 
     return jsonify({
@@ -90,7 +103,7 @@ def get_onboarding_code(code_id):
         return error
 
     code = OnboardingCodeModel.get_onboarding_code_by_id(code_id)
-    if not code:
+    if not code or _is_hidden(code):
         return jsonify({'error': 'Onboarding code not found'}), 404
 
     return jsonify({
@@ -156,6 +169,9 @@ def create_onboarding_code():
         return error
 
     data = request.get_json()
+
+    if not is_administrator() and role_ids_include_privileged(data.get('roleIds')):
+        return jsonify({'error': PRIVILEGED_ROLE_ERROR}), 403
 
     required_fields = ['name', 'onboardingCode']
     for field in required_fields:
@@ -255,10 +271,13 @@ def update_onboarding_code(code_id):
         return error
 
     code = OnboardingCodeModel.get_onboarding_code_by_id(code_id)
-    if not code:
+    if not code or _is_hidden(code):
         return jsonify({'error': 'Onboarding code not found'}), 404
 
     data = request.get_json()
+
+    if not is_administrator() and role_ids_include_privileged(data.get('roleIds')):
+        return jsonify({'error': PRIVILEGED_ROLE_ERROR}), 403
 
     if 'groups' in data or 'groupIds' in data:
         flagged = _flagged_new_groups(
@@ -356,7 +375,7 @@ def delete_onboarding_code(code_id):
         return error
 
     code = OnboardingCodeModel.get_onboarding_code_by_id(code_id)
-    if not code:
+    if not code or _is_hidden(code):
         return jsonify({'error': 'Onboarding code not found'}), 404
 
     try:

@@ -1118,6 +1118,7 @@ function Settings() {
   const { t } = useTranslation();
   const { hasRole, updateUser } = useAuth();
   const canEdit = hasRole('settings_admin') || hasRole('administrator');
+  const canManageOidc = hasRole('administrator');
   const queryClient = useQueryClient();
 
   const [settings, setSettings] = useState({});
@@ -1141,6 +1142,7 @@ function Settings() {
       const response = await rolesAPI.getAll();
       return response.data;
     },
+    enabled: canManageOidc,
   });
   const roles = rolesData?.roles || [];
 
@@ -1150,8 +1152,13 @@ function Settings() {
   useEffect(() => {
     fetchSettings();
     fetchLogoSettings();
-    fetchOidcProviders();
   }, []);
+
+  useEffect(() => {
+    if (canManageOidc) {
+      fetchOidcProviders();
+    }
+  }, [canManageOidc]);
 
   const fetchSettings = async () => {
     try {
@@ -1639,7 +1646,7 @@ function Settings() {
       {groupId === 'branding' && renderLoginPageSettings(groupSettings.filter(s => LOGIN_PAGE_SETTING_KEYS.includes(s.key)))}
 
       {/* OIDC Providers (part of Security) */}
-      {groupId === 'security' && (
+      {groupId === 'security' && canManageOidc && (
         <div className="settings-subsection">
           <div className="oidc-section-header">
             <h3>{t('admin.settings.oidcProviders')}</h3>

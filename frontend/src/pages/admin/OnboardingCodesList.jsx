@@ -5,6 +5,7 @@ import { onboardingCodesAPI, rolesAPI, usersAPI, groupsAPI } from '../../service
 import { formatDate, useDateFormat } from '../../utils/formatDate';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { isPrivilegedRole } from '../../utils/roles';
 import Pagination from '../../components/Pagination';
 import '../../components/AdminTable.css';
 
@@ -398,7 +399,7 @@ function OnboardingCodesList() {
                 <div className="form-group">
                   <label>{t('common.roles')}</label>
                   <div className="checkbox-list">
-                    {roles.map(role => (
+                    {roles.filter(role => hasRole('administrator') || !isPrivilegedRole(role.name)).map(role => (
                       <label key={role.id} className="checkbox-label">
                         <span>{role.displayName || role.name}</span>
                         <input

@@ -1,7 +1,7 @@
 from app.settings import OTS_USERNAME, OTS_PASSWORD, OTS_URL, OTS_VERIFY_SSL
 import re
 import requests
-from .exceptions import AuthenticationError, AuthorizationError, BadRequestError, CSRFError
+from .exceptions import AuthenticationError, AuthorizationError, BadRequestError, CSRFError, OTSRoleUnconfirmed
 
 class OTSClient:
 
@@ -18,6 +18,7 @@ class OTSClient:
     _user_delete = _user + "/delete"
     _user_activate = _user + "/activate"
     _user_deactivate = _user + "/deactivate"
+    _user_role = _user + "/role"
     _eud = _apibase + "/eud"
     _jobs = _apibase + "/scheduler/jobs"
     _points = _apibase + "/point"
@@ -269,6 +270,11 @@ class OTSClient:
     def deactivate_user(self, username):
         body = {'username': username}
         return self.request_handler(method="POST", endpoint=self._user_deactivate, body=body)
+
+    def set_user_roles(self, username, roles):
+        """Replace all roles of a user in OTS (answers 400 under LDAP or for an unknown user)"""
+        body = {'username': username, 'roles': roles}
+        return self.request_handler(method="POST", endpoint=self._user_role, body=body)
 
 
     def get_groups(self, page=None, per_page=None, name=None, active=None, sort_by=None):
@@ -558,6 +564,67 @@ def delete_user_if_present(client, username):
             raise
         client.delete_user(matches[0])
     return True
+
+
+def find_ots_account(client, username):
+    """The OTS account of a portal user, or None.
+
+    OTS logs in case-insensitively but looks accounts up by exact name, and portal usernames
+    are lowercase, so an account differing only in case is this user's. Several of those
+    cannot be told apart. OTS always lists at least the account the portal logs in with,
+    so an empty list says nothing about this user and is an error.
+    """
+    results = client.get_all_pages(client.get_users).get('response', {}).get('results', [])
+    if not results:
+        raise Exception('OTS returned no user list')
+    matches = [u for u in results if (u.get('username') or '').lower() == username.lower()]
+    for account in matches:
+        if account.get('username') == username:
+            return account
+    if len(matches) > 1:
+        raise BadRequestError(f"OTS has several accounts named like '{username}'")
+    return matches[0] if matches else None
+
+
+def _is_ots_admin(client, real_username):
+    results = client.get_users(username=real_username, per_page=100).get('response', {}).get('results', [])
+    for account in results:
+        if account.get('username') == real_username:
+            return any(isinstance(r, dict) and r.get('name') == 'administrator' for r in account.get('roles') or [])
+    raise OTSRoleUnconfirmed(f"OTS did not return the account '{real_username}'")
+
+
+def set_ots_admin(client, username, privileged):
+    """Give or take away the OTS administrator role and confirm it by reading the account back.
+
+    OTS can answer success without having done it: POST /api/user/role removes roles from the
+    list it is iterating, so an account holding ['user', 'administrator'] can stay administrator.
+    The order changes in that run, so one retry can finish the job; otherwise this fails.
+    Taking the role from an account OTS does not have is a success: there is nothing to take.
+    Raises BadRequestError if OTS refuses or cannot grant to such an account, OTSRoleUnconfirmed
+    if OTS may have changed but the outcome is unknown (a lost response or failed read-back),
+    and any other exception if the role is known not to have changed.
+    """
+    account = find_ots_account(client, username)
+    if not account:
+        if not privileged:
+            return
+        raise BadRequestError(f"OTS has no account '{username}'")
+    real_username = account['username']
+    for _ in range(2):
+        try:
+            client.set_user_roles(real_username, ['administrator'] if privileged else ['user'])
+        except BadRequestError:
+            raise
+        except Exception as e:
+            raise OTSRoleUnconfirmed(str(e)) from e
+        try:
+            confirmed = _is_ots_admin(client, real_username) == privileged
+        except Exception as e:
+            raise OTSRoleUnconfirmed(str(e)) from e
+        if confirmed:
+            return
+    raise Exception(f"OTS did not change the administrator role of '{real_username}'")
 
 
 otsClient = OTSClient(OTS_URL, OTS_USERNAME, OTS_PASSWORD)

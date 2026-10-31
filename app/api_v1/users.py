@@ -4,10 +4,13 @@ CRUD operations for user management
 """
 
 from flask import request, jsonify, current_app
-from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.api_v1 import api_v1
 from app.models import UserModel, UserRoleModel, OTSGroupModel, GroupUserAssociation, db
-from app.ots import OTSClient, delete_user_if_present, new_password_error
+from app.exceptions import BadRequestError, OTSRoleUnconfirmed
+from app.ots import OTSClient, delete_user_if_present, new_password_error, set_ots_admin
+from app.rbac import (SERVICE_ACCOUNT_PASSWORD_ERROR, has_privileged_role, has_role, is_administrator, is_last_administrator,
+                      is_privileged_role, is_service_account, role_ids_include_privileged)
 from app.settings import OTS_URL, OTS_USERNAME, OTS_PASSWORD, OTS_VERIFY_SSL
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
@@ -28,6 +31,28 @@ def require_view_role():
     if not has_any_role(['administrator', 'user_admin', 'user_readonly']):
         return jsonify({'error': 'User admin or readonly role required'}), 403
     return None
+
+
+PRIVILEGED_ROLE_ERROR = 'Only an administrator can grant or remove the administrator role'
+PRIVILEGED_TARGET_ERROR = 'Only an administrator can change a user with the administrator role'
+
+
+def _set_ots_admin(username, privileged):
+    set_ots_admin(OTSClient(OTS_URL, OTS_USERNAME, OTS_PASSWORD), username, privileged)
+
+
+def _restore_ots_admin(username, privileged):
+    """OTS may have been changed while the local change failed: put the OTS role back.
+
+    Returns True if the role is confirmed back, False if OTS and the portal may differ.
+    """
+    try:
+        _set_ots_admin(username, privileged)
+        current_app.logger.warning(f"Restored the OTS role of '{username}' after a failed update")
+        return True
+    except Exception as e:
+        current_app.logger.error(f"Could not restore the OTS role of '{username}'; OTS and the portal now differ: {e}")
+        return False
 
 
 @api_v1.route('/users', methods=['GET'])
@@ -106,9 +131,7 @@ def get_user(user_id):
     Response includes full user details with relationships
     """
     from app.rbac import has_any_role
-    claims = get_jwt()
-    roles = claims.get('roles', [])
-    current_user_id = claims.get('sub')
+    current_user_id = get_jwt_identity()
 
     # Users can view their own profile, admins and user readonly can view any
     is_user_viewer = has_any_role(['administrator', 'user_admin', 'user_readonly'])
@@ -159,6 +182,22 @@ def get_user(user_id):
     }), 200
 
 
+def _group_request_error(data):
+    """What is wrong with groups/groupIds, or None. Only real ints: '5' would count as another group than 5."""
+    def bad_ids(ids):
+        return any(type(gid) is not int for gid in ids) or len(set(ids)) != len(ids)
+
+    if 'groupIds' in data and (not isinstance(data['groupIds'], list) or bad_ids(data['groupIds'])):
+        return 'groupIds must be a list of different integer ids'
+    if 'groups' in data:
+        groups = data['groups']
+        if not isinstance(groups, list) or not all(isinstance(g, dict) for g in groups):
+            return 'groups must be a list of objects with an id and a valid direction'
+        if bad_ids([g.get('id') for g in groups]) or any(g.get('direction', 'BOTH') not in ('BOTH', 'IN', 'OUT') for g in groups):
+            return 'groups must be a list of objects with a different integer id and a valid direction'
+    return None
+
+
 def _flagged_new_groups(data, existing_ids=()):
     """Groups in the request that are flagged missing in OTS and not already associated."""
     ids = [g.get('id') for g in data.get('groups') or [] if isinstance(g, dict)]
@@ -194,6 +233,10 @@ def create_user():
         return error
 
     data = request.get_json()
+
+    # Before anything reaches OTS
+    if not is_administrator() and role_ids_include_privileged(data.get('roleIds')):
+        return jsonify({'error': PRIVILEGED_ROLE_ERROR}), 403
 
     # Validate required fields
     required_fields = ['username', 'password', 'email', 'firstName', 'lastName', 'callsign']
@@ -231,8 +274,7 @@ def create_user():
         ots_roles = ['user']  # Default role
         if data.get('roleIds'):
             roles = UserRoleModel.query.filter(UserRoleModel.id.in_(data['roleIds'])).all()
-            role_names = [role.name.lower() for role in roles]
-            if any(r in ['administrator', 'admin'] for r in role_names):
+            if any(is_privileged_role(role) for role in roles):
                 ots_roles = ['administrator']
 
         # Create user in OTS with username, password, and roles
@@ -315,13 +357,16 @@ def update_user(user_id):
         "roleIds": [int],  // admin only
         "expiryDate": "ISO8601 string"  // admin only
     }
-    """
-    claims = get_jwt()
-    roles = claims.get('roles', [])
-    current_user_id = claims.get('sub')
 
-    is_admin = 'administrator' in roles
-    is_own_profile = int(current_user_id) == user_id
+    Everything is validated before the first OTS side effect. Local changes are flushed,
+    then OTS is changed (administrator role first), then they are committed. If a step
+    fails after the OTS role may have changed, the local changes are rolled back and the role
+    is restored. The error only says nothing was changed if OTS definitely refused or did
+    not change, or the restore was confirmed; otherwise it says to check the account in OTS.
+    """
+    actor_is_administrator = is_administrator()
+    is_admin = actor_is_administrator or has_role('user_admin')
+    is_own_profile = int(get_jwt_identity()) == user_id
 
     if not is_admin and not is_own_profile:
         return jsonify({'error': 'Permission denied'}), 403
@@ -330,7 +375,50 @@ def update_user(user_id):
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
+    if not actor_is_administrator and not is_own_profile and has_privileged_role(user):
+        return jsonify({'error': PRIVILEGED_TARGET_ERROR}), 403
+
     data = request.get_json()
+
+    group_change = is_admin and ('groups' in data or 'groupIds' in data)
+    if group_change:
+        group_error = _group_request_error(data)
+        if group_error:
+            return jsonify({'error': group_error}), 400
+
+    # The portal logs in to OTS with this account's credentials from its configuration
+    if is_service_account(user.username):
+        if data.get('password'):
+            return jsonify({'error': SERVICE_ACCOUNT_PASSWORD_ERROR}), 403
+        if data.get('expiryDate'):
+            return jsonify({'error': 'The portal service account cannot be given an expiry date'}), 403
+
+    new_expiry = None
+    if is_admin and data.get('expiryDate'):
+        try:
+            new_expiry = datetime.fromisoformat(data['expiryDate'].replace('Z', '+00:00'))
+        except (AttributeError, ValueError):
+            return jsonify({'error': 'Invalid expiryDate'}), 400
+
+    # The UI sends the full list, so only what is added or removed counts
+    new_roles = None
+    was_privileged = has_privileged_role(user)
+    now_privileged = was_privileged
+    if is_admin and 'roleIds' in data:
+        if not isinstance(data['roleIds'], list):
+            return jsonify({'error': 'roleIds must be a list'}), 400
+        new_roles = [role for role in (UserRoleModel.get_by_id(role_id) for role_id in data['roleIds']) if role]
+        added = set(new_roles) - set(user.roles)
+        removed = set(user.roles) - set(new_roles)
+        if not actor_is_administrator and any(is_privileged_role(role) for role in added | removed):
+            return jsonify({'error': PRIVILEGED_ROLE_ERROR}), 403
+        if is_service_account(user.username) and any(is_privileged_role(role) for role in removed):
+            return jsonify({'error': 'The portal service account cannot lose the administrator role'}), 403
+        if any(role.name == 'administrator' for role in removed) and is_last_administrator(user):
+            return jsonify({'error': 'The last administrator cannot lose the administrator role'}), 409
+        now_privileged = any(is_privileged_role(role) for role in new_roles)
+    # Without a password the user has no OTS account yet; set-password creates it with the right role
+    ots_role_changes = now_privileged != was_privileged and user.has_password is not False
 
     # Before anything is changed: the group sync below already pushes to OTS
     if is_admin and data.get('password'):
@@ -338,7 +426,7 @@ def update_user(user_id):
         if password_error:
             return jsonify({'error': password_error}), 400
 
-    if is_admin and ('groups' in data or 'groupIds' in data):
+    if group_change:
         flagged = _flagged_new_groups(data, {a.group_id for a in user.group_associations})
         if flagged:
             return jsonify({'error': 'Groups not found in OpenTAK Server: ' + ', '.join(g.name for g in flagged)}), 400
@@ -358,28 +446,21 @@ def update_user(user_id):
     # Admin-only fields
     if is_admin:
         # Update roles if roleIds is provided in the request
-        if 'roleIds' in data:
+        if new_roles is not None:
             user.roles.clear()
-            for role_id in data['roleIds']:
-                role = UserRoleModel.get_by_id(role_id)
-                if role:
-                    user.roles.append(role)
+            for role in new_roles:
+                user.roles.append(role)
 
         if 'expiryDate' in data:
-            if data['expiryDate']:
-                user.expiryDate = datetime.fromisoformat(data['expiryDate'].replace('Z', '+00:00'))
-            else:
-                user.expiryDate = None
+            user.expiryDate = new_expiry
 
-        if 'groups' in data or 'groupIds' in data:
-            old_assocs = {a.group_id: a.direction for a in user.group_associations}
-
+    # A local change that cannot be stored never reaches OTS
+    username = user.username
+    try:
+        if group_change:
             new_groups_list = data.get('groups', [{'id': gid, 'direction': 'BOTH'} for gid in data.get('groupIds', [])])
+            old_assocs = {a.group_id: a.direction for a in user.group_associations}
             new_assocs = {g['id']: g.get('direction', 'BOTH') for g in new_groups_list}
-
-            added = set(new_assocs.keys()) - set(old_assocs.keys())
-            removed = set(old_assocs.keys()) - set(new_assocs.keys())
-            changed = {gid for gid in set(new_assocs.keys()) & set(old_assocs.keys()) if new_assocs[gid] != old_assocs[gid]}
 
             GroupUserAssociation.query.filter_by(user_id=user.id).delete()
             for g in new_groups_list:
@@ -387,6 +468,49 @@ def update_user(user_id):
                 if group:
                     assoc = GroupUserAssociation(group_id=group.id, user_id=user.id, direction=g.get('direction', 'BOTH'))
                     db.session.add(assoc)
+
+        db.session.flush()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Failed to store the update of user '{username}': {e}")
+        return jsonify({'error': 'Failed to update user'}), 400
+
+    # OTS first: if it refuses, nothing has been changed anywhere
+    if ots_role_changes:
+        try:
+            _set_ots_admin(username, now_privileged)
+            current_app.logger.info(f"OTS role of '{username}' set for privileged={now_privileged}")
+        except BadRequestError as e:
+            db.session.rollback()
+            current_app.logger.error(f"OTS refused the role change of '{username}': {e}")
+            return jsonify({'error': 'OpenTAK Server refused the role change (for example because it uses LDAP or has no such account); nothing was changed'}), 400
+        except OTSRoleUnconfirmed as e:
+            db.session.rollback()
+            current_app.logger.error(f"Could not confirm the OTS role of '{username}': {e}")
+            if _restore_ots_admin(username, was_privileged):
+                return jsonify({'error': 'Could not change the role in OpenTAK Server; nothing was changed'}), 502
+            return jsonify({'error': 'Could not confirm the role change in OpenTAK Server, so the portal was not changed. '
+                                     'OpenTAK Server and the portal may differ: check this account in OpenTAK Server.'}), 502
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Failed to change the OTS role of '{username}': {e}")
+            return jsonify({'error': 'Could not change the role in OpenTAK Server; nothing was changed'}), 502
+
+    # From here on OTS may have changed: any failure rolls back and restores the role
+    new_password = data.get('password') if is_admin else None
+    password_changed = False
+    try:
+        # Handle password reset (admin only)
+        if new_password:
+            ots = OTSClient(OTS_URL, OTS_USERNAME, OTS_PASSWORD)
+            ots.reset_user_password(username, new_password)
+            password_changed = True
+            current_app.logger.info(f"Password reset for user '{username}' by admin")
+
+        if group_change:
+            added = set(new_assocs.keys()) - set(old_assocs.keys())
+            removed = set(old_assocs.keys()) - set(new_assocs.keys())
+            changed = {gid for gid in set(new_assocs.keys()) & set(old_assocs.keys()) if new_assocs[gid] != old_assocs[gid]}
 
             try:
                 ots = OTSClient(OTS_URL, OTS_USERNAME, OTS_PASSWORD)
@@ -422,46 +546,37 @@ def update_user(user_id):
             except Exception as e:
                 current_app.logger.error(f"Failed to sync OTS groups for {user.username}: {e}")
 
-    # Handle password reset (admin only)
-    password_changed = False
-    if is_admin and data.get('password'):
-        try:
-            ots = OTSClient(OTS_URL, OTS_USERNAME, OTS_PASSWORD)
-            ots.reset_user_password(user.username, data['password'])
-            password_changed = True
-            current_app.logger.info(f"Password reset for user '{user.username}' by admin")
-        except Exception as e:
-            current_app.logger.error(f"Failed to reset password for user '{user.username}': {str(e)}")
-            return jsonify({'error': f'Failed to reset password: {str(e)}'}), 400
-
-    try:
         # Commit directly to ensure relationship changes are saved
         db.session.commit()
 
-        # Sync roles to OTS if admin updated them
-        if is_admin and 'roleIds' in data:
-            ots = OTSClient(OTS_URL, OTS_USERNAME, OTS_PASSWORD)
-            # OTS sync would go here if supported
-
-        message = 'User updated successfully'
-        if password_changed:
-            message = 'User updated and password reset successfully'
-
-        return jsonify({
-            'message': message,
-            'passwordChanged': password_changed,
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'callsign': user.callsign,
-                'roles': [role.name for role in user.roles]
-            }
-        }), 200
-
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Failed to update user: {str(e)}'}), 400
+        current_app.logger.error(f"Failed to update user '{username}': {e}")
+        if ots_role_changes:
+            _restore_ots_admin(username, was_privileged)
+        if password_changed:
+            error = 'Failed to update user, but the password was already changed in OpenTAK Server'
+        elif new_password:
+            error = 'Failed to reset password'
+        else:
+            error = 'Failed to update user'
+        return jsonify({'error': error, 'passwordChanged': password_changed}), 400
+
+    message = 'User updated successfully'
+    if password_changed:
+        message = 'User updated and password reset successfully'
+
+    return jsonify({
+        'message': message,
+        'passwordChanged': password_changed,
+        'user': {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'callsign': user.callsign,
+            'roles': [role.name for role in user.roles]
+        }
+    }), 200
 
 
 @api_v1.route('/users/<int:user_id>', methods=['DELETE'])
@@ -480,6 +595,13 @@ def delete_user(user_id):
     user = UserModel.get_user_by_id(user_id)
     if not user:
         return jsonify({'error': 'User not found'}), 404
+
+    if not is_administrator() and has_privileged_role(user):
+        return jsonify({'error': PRIVILEGED_TARGET_ERROR}), 403
+    if is_service_account(user.username):
+        return jsonify({'error': 'The portal service account cannot be deleted'}), 403
+    if is_last_administrator(user):
+        return jsonify({'error': 'The last administrator cannot be deleted'}), 409
 
     username = user.username
 
