@@ -5,7 +5,22 @@ from app.models import db, migrate
 from app.extensions import mail, jwt_manager
 from app.extensions import scheduler
 import logging
+import sys
+from urllib.parse import urlparse
 from app.extensions import qrcode
+
+
+def warn_if_frontend_url_is_local(app):
+    """Emailed links are built from FRONTEND_URL; left local they don't reach anyone."""
+    url = app.config.get('FRONTEND_URL', 'http://localhost:5000')
+    try:
+        hostname = urlparse(url).hostname
+    except ValueError:
+        hostname = None
+    if hostname in (None, 'localhost', '127.0.0.1', '::1'):
+        app.logger.warning(f"FRONTEND_URL is '{url}': emailed links won't work for recipients until it "
+                           "is set to the portal's public URL")
+
 
 def create_app():
     # create and configure the app
@@ -148,7 +163,11 @@ def create_app():
         return send_from_directory(static_folder, 'index.html')
 
     mail.init_app(app)
-    if not app.config.get('TESTING'):
+    # `flask db upgrade` and other one-off CLI commands load this app too; they must not start
+    # the scheduler or query tables a pending migration has yet to create. `flask run` serves.
+    one_off_cli = os.environ.get('FLASK_RUN_FROM_CLI') == 'true' and 'run' not in sys.argv[1:]
+    if not app.config.get('TESTING') and not one_off_cli:
+        warn_if_frontend_url_is_local(app)
         with app.app_context():
             # Imported only for its side effect: the @scheduler.task decorators
             # register the jobs. Must happen before start(); under TESTING the
