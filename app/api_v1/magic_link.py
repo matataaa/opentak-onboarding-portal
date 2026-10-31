@@ -58,7 +58,7 @@ def request_magic_link():
         except (ValueError, TypeError):
             expiry_minutes = 15
 
-        expires_at = datetime.utcnow() + timedelta(minutes=expiry_minutes)
+        expires_at = datetime.now() + timedelta(minutes=expiry_minutes)
 
         # Create token record
         OneTimeTokenModel.create_token(

@@ -1396,7 +1396,7 @@ def forgot_password():
             user_id=user.id,
             token=token,
             token_type='password_reset',
-            expires_at=datetime.utcnow() + timedelta(hours=1)
+            expires_at=datetime.now() + timedelta(hours=1)
         )
 
         from app import db
@@ -1474,7 +1474,7 @@ def reset_password():
             return jsonify({'error': 'Invalid or expired reset token'}), 400
 
         # Check if token is expired
-        if reset_token.expires_at < datetime.utcnow():
+        if reset_token.expires_at < datetime.now():
             return jsonify({'error': 'Reset token has expired'}), 400
 
         # Get user
@@ -1497,7 +1497,7 @@ def reset_password():
 
         # Mark token as used
         reset_token.is_used = True
-        reset_token.used_at = datetime.utcnow()
+        reset_token.used_at = datetime.now()
         from app import db
         db.session.commit()
 
