@@ -25,7 +25,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api_v1 import api_v1
 from app.models import db, EventTeamModel, EventModel, EventLinkModel, EventSessionModel, EventLeaderSessionModel, EventTeamLeaderModel, OTSGroupModel, UserModel, OnboardingCodeModel, SystemSettingsModel
-from app.ots import otsClient
+from app.ots import otsClient, new_password_error
 from app.exceptions import BadRequestError
 from app.rbac import require_role
 
@@ -359,6 +359,9 @@ def create_event_team_leader(team_id):
     password = data.get('password') or ''
     if not username or not password:
         return jsonify({'error': 'username and password are required'}), 400
+    password_error = new_password_error(password)
+    if password_error:
+        return jsonify({'error': password_error}), 400
     if len(password) < 8:
         return jsonify({'error': 'Password must be at least 8 characters'}), 400
     if not OTS_USERNAME_RE.match(username):

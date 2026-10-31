@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI, settingsAPI } from '../services/api';
+import { isValidNewPassword } from '../utils/passwordRules';
 import AuthLayout from '../components/AuthLayout';
 import './Auth.css';
 
@@ -53,8 +54,7 @@ function SetPassword() {
       return;
     }
 
-    const disallowedChars = /[&^$]/;
-    if (disallowedChars.test(formData.newPassword)) {
+    if (!isValidNewPassword(formData.newPassword)) {
       setError(t('auth.passwordNoSpecial'));
       return;
     }

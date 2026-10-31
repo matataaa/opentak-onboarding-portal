@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatDateTime, useDateFormat } from '../../utils/formatDate';
+import { isValidNewPassword } from '../../utils/passwordRules';
 import './PendingRegistrationsList.css';
 
 function PendingRegistrationsList() {
@@ -259,8 +260,7 @@ function PendingRegistrationsList() {
 
     // Validate password if provided
     if (formData.password) {
-      const disallowedChars = /[&^$]/;
-      if (disallowedChars.test(formData.password)) {
+      if (!isValidNewPassword(formData.password)) {
         setFormError(t('auth.passwordNoSpecial'));
         return;
       }

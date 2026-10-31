@@ -6,6 +6,7 @@ import { eventsAPI, groupsAPI, onboardingCodesAPI } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import { formatDateTime, useDateFormat } from '../../utils/formatDate';
+import { isValidNewPassword } from '../../utils/passwordRules';
 import '../../components/AdminTable.css';
 import './EventsAdmin.css';
 
@@ -131,6 +132,10 @@ export default function EventsAdmin() {
 
   const setLeader = (teamId) => {
     const f = leaderForm[teamId] || {};
+    if (f.password && !isValidNewPassword(f.password)) {
+      setError(t('auth.passwordNoSpecial'));
+      return;
+    }
     call(
       () => eventsAPI.createTeamLeader(teamId, { username: f.username, password: f.password }),
       () => setLeaderForm((p) => ({ ...p, [teamId]: {} })),
