@@ -19,7 +19,8 @@ from flask_jwt_extended import (
 )
 from datetime import timedelta
 from authlib.integrations.requests_client import OAuth2Session
-from authlib.jose import jwt as jose_jwt, JsonWebKey
+from joserfc import jwt as jose_jwt
+from joserfc.jwk import KeySet
 
 from app.api_v1 import api_v1
 from app.models import db, UserModel, UserRoleModel, OIDCProviderModel, SystemSettingsModel
@@ -88,6 +89,16 @@ def _build_callback_url(provider_id):
 # =============================================================================
 # Public endpoints
 # =============================================================================
+
+# Providers publish public keys in their JWKS, so only asymmetric algorithms can verify
+ID_TOKEN_ALGORITHMS = ['RS256', 'RS384', 'RS512', 'PS256', 'PS384', 'PS512',
+                       'ES256', 'ES384', 'ES512', 'EdDSA']
+
+
+def _decode_id_token(id_token, jwks):
+    """Verify the id_token signature against the provider's JWKS and return its claims"""
+    return dict(jose_jwt.decode(id_token, KeySet.import_key_set(jwks), algorithms=ID_TOKEN_ALGORITHMS).claims)
+
 
 @api_v1.route('/auth/oidc/providers', methods=['GET'])
 def get_oidc_providers():
@@ -242,18 +253,12 @@ def oidc_callback(provider_id):
         if 'id_token' in token:
             # Fetch JWKS for token verification
             jwks_resp = http_requests.get(discovery['jwks_uri'], timeout=10)
-            jwks = jwks_resp.json()
-            key_set = JsonWebKey.import_key_set(jwks)
-
-            claims = jose_jwt.decode(
-                token['id_token'],
-                key_set,
-            )
+            claims = _decode_id_token(token['id_token'], jwks_resp.json())
             # Validate nonce
             if claims.get('nonce') != stored_nonce:
                 current_app.logger.error("OIDC callback: nonce mismatch")
                 return redirect(f"{frontend_url}/login?oidc_error=Authentication+verification+failed.+Please+try+again.")
-            id_token_claims = dict(claims)
+            id_token_claims = claims
 
         # Merge userinfo and id_token claims (userinfo takes precedence)
         all_claims = {**id_token_claims, **userinfo}

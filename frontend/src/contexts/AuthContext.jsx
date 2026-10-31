@@ -334,7 +334,8 @@ export const AuthProvider = ({ children }) => {
     if (!user || isLeaderOnly(permissions.roles)) return;
 
     const pollInterval = setInterval(() => {
-      refreshApproverStatus();
+      // The kiosk can clear the session in this tab while user state is still set
+      if (localStorage.getItem('access_token')) refreshApproverStatus();
     }, 30000); // 30 seconds
 
     return () => clearInterval(pollInterval);

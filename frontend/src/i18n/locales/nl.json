@@ -445,6 +445,7 @@
     "learnFromUsb": "Uitlezen via USB",
     "scanning": "Scannen...",
     "clickToScan": "Klik om een aangesloten radio te scannen",
+    "scanDone": "Klaar: {{name}}",
     "usbRequiresChrome": "USB-scannen vereist Chrome, Edge of Opera.",
     "radioDetails": "Radiogegevens",
     "radioName": "Naam *",
