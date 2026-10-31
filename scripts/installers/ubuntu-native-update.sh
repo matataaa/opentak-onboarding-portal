@@ -83,3 +83,13 @@ echo ""
 echo "Check status: sudo systemctl status opentak-portal"
 echo "View logs:    sudo journalctl -u opentak-portal -f"
 echo ""
+
+# Emailed links are built from FRONTEND_URL only
+FRONTEND_URL_VALUE=$(sudo sed -n 's/^FRONTEND_URL=//p' "$INSTALL_DIR/.env" 2>/dev/null | tail -n 1 | tr -d "\"'")
+case "$FRONTEND_URL_VALUE" in
+    ""|*://localhost*|*://127.0.0.1*|*'://[::1]'*)
+        echo "WARNING: FRONTEND_URL is not set to a public URL, so emailed links won't work for recipients."
+        echo "Set it in $INSTALL_DIR/.env and run: sudo systemctl restart opentak-portal"
+        echo ""
+        ;;
+esac

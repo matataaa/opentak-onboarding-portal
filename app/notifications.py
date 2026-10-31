@@ -5,30 +5,13 @@ Checks system settings to honor user preferences
 
 from app.models import SystemSettingsModel, UserModel, UserRoleModel
 from app.email import send_html_email
-from flask import current_app, request, has_request_context
+from flask import current_app
 import logging
 
 
 def get_frontend_url_safe():
-    """
-    Get frontend URL, auto-detecting from request if available.
-    Safe to call outside of request context.
-    """
-    frontend_url = current_app.config.get('FRONTEND_URL', 'http://localhost:5000')
-
-    # If explicitly set to a non-localhost value, use it
-    if not (frontend_url.startswith('http://localhost') or frontend_url.startswith('http://127.0.0.1')):
-        return frontend_url.rstrip('/')
-
-    # Try to auto-detect from request if available
-    if has_request_context():
-        proto = request.headers.get('X-Forwarded-Proto', request.scheme)
-        host = request.headers.get('X-Forwarded-Host', request.host)
-
-        if not (host.startswith('localhost') or host.startswith('127.0.0.1')):
-            return f"{proto}://{host}"
-
-    return frontend_url.rstrip('/')
+    """The configured public URL. Safe to call outside of a request context."""
+    return current_app.config.get('FRONTEND_URL', 'http://localhost:5000').rstrip('/')
 
 
 def get_admin_emails():

@@ -78,26 +78,8 @@ def assign_ots_groups(username, onboarding_code, user=None):
 
 
 def get_frontend_url():
-    """
-    Get the frontend URL, auto-detecting from request if not explicitly configured.
-    Handles reverse proxy headers (X-Forwarded-Proto, X-Forwarded-Host).
-    """
-    frontend_url = current_app.config.get('FRONTEND_URL', 'http://localhost:5000')
-
-    # If explicitly set to a non-localhost value, use it
-    if not (frontend_url.startswith('http://localhost') or frontend_url.startswith('http://127.0.0.1')):
-        return frontend_url.rstrip('/')
-
-    # Auto-detect from request
-    # Check for reverse proxy headers first
-    proto = request.headers.get('X-Forwarded-Proto', request.scheme)
-    host = request.headers.get('X-Forwarded-Host', request.host)
-
-    # Only use localhost if actually accessing from localhost
-    if host.startswith('localhost') or host.startswith('127.0.0.1'):
-        return frontend_url.rstrip('/')
-
-    return f"{proto}://{host}"
+    """The configured public URL, for links that leave the current request (emails)."""
+    return current_app.config.get('FRONTEND_URL', 'http://localhost:5000').rstrip('/')
 
 
 @api_v1.route('/auth/login', methods=['POST'])
