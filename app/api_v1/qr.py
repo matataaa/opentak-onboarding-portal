@@ -1,15 +1,12 @@
 """
 QR Code API endpoints
 Generates QR code connection strings for ATAK
-Mimics the OTS server /Marti/api/tls/config/qr endpoint
 """
 
-from flask import request, Response, current_app
+from flask import request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.api_v1 import api_v1
 from app.ots import otsClient
-import qrcode
-import io
 import time
 
 # Default token configuration (can be overridden by settings)
@@ -252,86 +249,6 @@ def get_or_create_itak_token(username, force_refresh=False):
         'max_uses': None,    # No usage tracking for iTAK
         'total_uses': None
     }
-
-
-@api_v1.route('/Marti/api/tls/config/qr', methods=['GET'])
-@jwt_required(optional=True)
-def get_marti_qr():
-    """
-    Get QR code image for ATAK configuration
-
-    Mimics the OTS server endpoint: /Marti/api/tls/config/qr?clientUid=username
-
-    Query Parameters:
-    - clientUid: Username for the client (optional if using JWT auth)
-
-    Returns:
-    - PNG image of QR code
-    """
-    try:
-        # Get username from query param or JWT token
-        client_uid = request.args.get('clientUid')
-
-        if not client_uid:
-            # Try to get from JWT if authenticated
-            try:
-                client_uid = get_jwt_identity()
-            except:
-                pass
-
-        if not client_uid:
-            return Response(
-                'Missing clientUid parameter',
-                status=400,
-                mimetype='text/plain'
-            )
-
-        # Get or create token (auto-regenerates if exhausted/expired)
-        token_data = get_or_create_atak_token(client_uid)
-
-        if not token_data or not token_data.get('qr_string'):
-            return Response(
-                'Failed to generate QR string',
-                status=500,
-                mimetype='text/plain'
-            )
-
-        # Generate QR code image
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_H,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(token_data['qr_string'])
-        qr.make(fit=True)
-
-        # Create PNG image
-        img = qr.make_image(fill_color="black", back_color="white")
-
-        # Save to bytes buffer
-        img_io = io.BytesIO()
-        img.save(img_io, 'PNG')
-        img_io.seek(0)
-
-        return Response(
-            img_io.getvalue(),
-            mimetype='image/png',
-            headers={
-                'Content-Disposition': f'inline; filename=qr_{client_uid}.png',
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
-            }
-        )
-
-    except Exception as e:
-        current_app.logger.error(f"QR code generation error: {str(e)}")
-        return Response(
-            f'Failed to generate QR code: {str(e)}',
-            status=500,
-            mimetype='text/plain'
-        )
 
 
 @api_v1.route('/qr/atak', methods=['GET'])
