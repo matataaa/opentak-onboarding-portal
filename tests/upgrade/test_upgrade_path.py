@@ -45,7 +45,7 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 # SEEDS below) must be revisited on purpose.
 UPSTREAM_REV = '4b754g491aa1'
 
-HEAD_REV = 'f0a1b2c3d4e6'
+HEAD_REV = 'a1b2c3d4e5f7'
 
 # a5b6c7d8e9f1 adds the primary keys to the OTS group association tables and
 # merges duplicate (group, user) / (group, code) rows into one row first.
@@ -677,6 +677,20 @@ CHECK_CONSTRAINTS = {
 }
 
 
+CREATOR_TABLES = ('announcements', 'api_keys')
+
+
+def assert_creator_columns(insp, nullable):
+    """created_by has the wanted nullability and kept its FK; the rebuild left api_keys' unique intact."""
+    for table in CREATOR_TABLES:
+        c = next(c for c in insp.get_columns(table) if c['name'] == 'created_by')
+        assert c['nullable'] is nullable, f'{table}.created_by: {c}'
+        fks = {tuple(f['constrained_columns']): f for f in insp.get_foreign_keys(table)}
+        assert fks[('created_by',)]['referred_table'] == 'users', table
+        assert not fks[('created_by',)]['options'].get('ondelete'), table
+    assert ['key_hash'] in [u['column_names'] for u in insp.get_unique_constraints('api_keys')]
+
+
 def assert_constraints(url, ids):
     """Primary keys and CHECK constraints exist and reject bad rows."""
     engine = sa.create_engine(url)
@@ -685,6 +699,7 @@ def assert_constraints(url, ids):
         assert insp.get_pk_constraint(table)['constrained_columns'] == ['group_id', col], table
     for table, names in CHECK_CONSTRAINTS.items():
         assert names <= {c['name'] for c in insp.get_check_constraints(table)}, table
+    assert_creator_columns(insp, nullable=True)
     meta = sa.MetaData()
     meta.reflect(engine, only=['group_user_association', 'group_onboardingcode_association',
                                'announcements', 'radios'])
@@ -715,6 +730,42 @@ def assert_constraints(url, ids):
 def test_primary_keys_and_check_constraints(backend, make_db):
     up = build_upgrade(make_db, backend)  # own database: inserts are attempted
     assert_constraints(up.url, up.ids)
+
+
+def test_downgrade_refused_while_creator_is_null(backend, make_db):
+    up = build_upgrade(make_db, backend)  # own database: this test mutates it
+    engine = sa.create_engine(up.url)
+    ann_id = up.ids['ann1']
+    with engine.begin() as c:
+        c.execute(sa.text('UPDATE announcements SET created_by = NULL WHERE id = :i'), {'i': ann_id})
+        c.execute(sa.text('UPDATE api_keys SET created_by = NULL'))
+    before = snapshot(engine)
+    engine.dispose()
+
+    proc = flask_db(up.url, 'downgrade', check=False)
+
+    assert proc.returncode != 0
+    assert 'rows with created_by NULL exist (announcements: 1, api_keys: 1)' in proc.stderr
+    engine = sa.create_engine(up.url)
+    assert snapshot(engine) == before  # no rows touched
+    with engine.connect() as c:
+        assert c.execute(sa.text('SELECT version_num FROM alembic_version')).scalar() == HEAD_REV
+    assert_creator_columns(sa.inspect(engine), nullable=True)
+
+    # once the rows have a creator again the same downgrade goes through
+    with engine.begin() as c:
+        c.execute(sa.text('UPDATE announcements SET created_by = :u WHERE created_by IS NULL'), {'u': up.ids['user1']})
+        c.execute(sa.text('UPDATE api_keys SET created_by = :u WHERE created_by IS NULL'), {'u': up.ids['user1']})
+    engine.dispose()
+    flask_db(up.url, 'downgrade')
+    engine = sa.create_engine(up.url)
+    assert_creator_columns(sa.inspect(engine), nullable=False)
+    assert counts(snapshot(engine)) == counts(before)
+    engine.dispose()
+    flask_db(up.url, 'upgrade', 'head')
+    assert_constraints(up.url, up.ids)
+    proc = flask_db(up.url, 'check', check=False)
+    assert proc.returncode == 0, f'flask db check:\n{proc.stdout}\n{proc.stderr}'
 
 
 CREATE_ALL = textwrap.dedent('''

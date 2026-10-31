@@ -2,7 +2,7 @@ from app.extensions import scheduler
 from app.models import UserModel, AnnouncementModel, OneTimeTokenModel, EventSessionModel, SystemSettingsModel, db
 from datetime import datetime, timedelta
 from flask import current_app
-from app.ots import otsClient
+from app.ots import otsClient, delete_user_if_present
 from app.settings import MAIL_ENABLED
 from app.services.event_team_colors import sync_event_team_colors, remove_event_colors_for_username, read_profiles
 import json
@@ -38,9 +38,10 @@ def remove_expired_accounts():
                 # the user and is retried next night.
                 from app.api_v1.events import remove_user_leader_designations
                 remove_user_leader_designations(user.id)
+                UserModel.clear_references(user.id)
                 db.session.delete(user)
                 db.session.flush()
-                otsClient.delete_user(username)
+                delete_user_if_present(otsClient, username)
                 db.session.commit()
                 print(f"Removed expired user {username}")
             except Exception as e:
@@ -241,7 +242,7 @@ def cleanup_event_session(session, existing):
         deleted = False
         if colour_ok:
             try:
-                otsClient.delete_user(username)
+                delete_user_if_present(otsClient, username)
                 deleted = True
                 print(f"Event session cleanup: delete {username}")
             except Exception as e:

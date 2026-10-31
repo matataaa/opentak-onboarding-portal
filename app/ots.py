@@ -521,4 +521,25 @@ class OTSClient:
             raise Exception(result)
         return result
 
+def delete_user_if_present(client, username):
+    """Delete a user from OTS; returns False if OTS has no such account, raises on any other failure.
+
+    OTS also answers 400 with LDAP enabled, for its own account and for failures during
+    the delete, so a 400 only counts as "already gone" if the account really is gone.
+    OTS logs in case-insensitively but deletes by exact name, so an account differing
+    only in case (portal usernames are lowercase) is still this user's: delete it by its real name.
+    """
+    try:
+        client.delete_user(username)
+    except BadRequestError:
+        results = client.get_all_pages(client.get_users).get('response', {}).get('results', [])
+        matches = [u.get('username') for u in results if (u.get('username') or '').lower() == username.lower()]
+        if not matches:
+            return False
+        if username in matches or len(matches) > 1:
+            raise
+        client.delete_user(matches[0])
+    return True
+
+
 otsClient = OTSClient(OTS_URL, OTS_USERNAME, OTS_PASSWORD)

@@ -291,14 +291,20 @@ class UserModel(db.Model):
             return {"error": "user.not.exist"}
 
     @staticmethod
-    def delete_user_by_id(user_id):
-        user = UserModel.get_user_by_id(user_id)
-        if user:
-            db.session.delete(user)
-            db.session.commit()
-            return {"message": "user.deleted.successfully"}
-        else:
-            return {"error": "user.not.eixst"}
+    def clear_references(user_id):
+        """Before a user is deleted: remove or unlink rows that reference them (caller commits).
+
+        API keys they created also stop working; announcements stay, without a creator.
+        """
+        AnnouncementReadModel.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+        KioskSessionModel.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+        ApiKeyModel.query.filter_by(created_by=user_id).update(
+            {'is_active': False, 'created_by': None}, synchronize_session=False)
+        for column in (RadioModel.assignedTo, RadioModel.owner, PendingRegistrationModel.approved_by,
+                       UserModel.onboardedBy, EventTeamModel.leaderUserId, EventModel.createdBy,
+                       AnnouncementModel.created_by):
+            db.session.query(column.class_).filter(column == user_id).update(
+                {column: None}, synchronize_session=False)
 
 
 class TakProfileModel(db.Model):
@@ -1116,7 +1122,7 @@ class OneTimeTokenModel(db.Model):
     created_at: Mapped[datetime.datetime] = mapped_column(default=db.func.current_timestamp(), nullable=False)
     used_at: Mapped[datetime.datetime] = mapped_column(nullable=True)
 
-    user = relationship("UserModel", backref="tokens")
+    user = relationship("UserModel", backref=db.backref("tokens", cascade="all, delete-orphan"))
 
     @staticmethod
     def create_token(user_id, token, token_type, expires_at):
@@ -1836,7 +1842,7 @@ class AnnouncementModel(db.Model):
     email_failures = Column(Text, nullable=True)
 
     # Metadata
-    created_by: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
+    created_by: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=True)  # NULL: creator was deleted
     created_at: Mapped[datetime.datetime] = mapped_column(default=db.func.current_timestamp(), nullable=False)
     updated_at: Mapped[datetime.datetime] = mapped_column(default=db.func.current_timestamp(), onupdate=db.func.current_timestamp(), nullable=False)
 
@@ -2048,7 +2054,7 @@ class ApiKeyModel(db.Model):
     rate_limit: Mapped[int] = mapped_column(nullable=True, default=1000)
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
     expires_at: Mapped[datetime.datetime] = mapped_column(nullable=True)
-    created_by: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False)
+    created_by: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=True)  # NULL: creator was deleted
     created_at: Mapped[datetime.datetime] = mapped_column(default=db.func.current_timestamp(), nullable=False)
     last_used_at: Mapped[datetime.datetime] = mapped_column(nullable=True)
     last_used_ip: Mapped[str] = mapped_column(nullable=True)

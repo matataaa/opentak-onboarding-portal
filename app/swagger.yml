@@ -2174,6 +2174,7 @@ paths:
       tags:
         - Users
       summary: Delete user (admin) 🔒
+      description: Deletes the user from OTS and the local database. If OTS answers 400 and has no such account, the user is deleted locally only; any other OTS failure returns 502. API keys the user created are deactivated and lose their creator; announcements stay, without a creator.
       security:
         - bearerAuth: []
       parameters:
@@ -2189,6 +2190,12 @@ paths:
           description: Administrator role required
         '404':
           description: User not found
+        '409':
+          description: Other records still reference the user; nothing was deleted locally or in OTS
+        '502':
+          description: OTS could not be reached, refused or failed; the user was kept in both stores
+        '500':
+          description: Unexpected local failure; the transaction was rolled back
 
   /roles:
     get:
