@@ -52,7 +52,7 @@ All documentation is in the [`/docs`](./docs/) folder:
 - [Docker Setup](./docs/DOCKER.md) - Manual Docker Compose setup
 
 ### Configuration
-- [Settings Guide](./docs/SETTINGS.md) - Environment variables and configuration options
+- [Settings Guide](./docs/settings.md) - Environment variables and configuration options
 - [Nginx Proxy](./docs/NGINX_PROXY.md) - Reverse proxy configuration
 
 ### API
@@ -64,11 +64,15 @@ After installation, edit the `.env` file with your settings:
 
 ```bash
 # Required
-SECRET_KEY=your-secret-key
-JWT_SECRET_KEY=your-jwt-secret
 OTS_URL=https://your-tak-server-url
 OTS_USERNAME=admin-username
 OTS_PASSWORD=admin-password
+FRONTEND_URL=https://your-portal-url
+
+# Generate each with: openssl rand -hex 32
+# May stay empty only with an image built from this version or later
+SECRET_KEY=
+JWT_SECRET_KEY=
 
 # Optional - Branding
 BRAND_NAME="My TAK Portal"
@@ -79,7 +83,7 @@ ACCENT_COLOR="#ff9800"
 MAIL_ENABLED=False
 ```
 
-See [Settings Guide](./docs/SETTINGS.md) for all configuration options.
+See [Settings Guide](./docs/settings.md) for all configuration options.
 
 ## Architecture
 

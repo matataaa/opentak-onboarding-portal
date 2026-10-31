@@ -1,12 +1,14 @@
 # Settings
-The Following Environment Vars control the application:
+The Following Environment Vars control the application. Changes apply after `docker compose up -d` (Docker; `docker compose restart` keeps the old values) or `sudo systemctl restart opentak-portal` (native).
 
 
-SECRET_KEY: This sets a Secret Key for the application to make secure sessions
-JWT_SECRET_KEY: Used for signing the Email Password Reset Links 
+SECRET_KEY: Secret Key for secure sessions and event link tokens. If empty or weak, images built from this version or later generate it once and store it in instance/. Older images refuse logins only when both keys are empty, so set both
+JWT_SECRET_KEY: Signs login tokens and TAK profile download tokens. If empty or weak, images built from this version or later generate it once and store it in instance/. Older images refuse logins only when both keys are empty, so set both
+FRONTEND_URL: The portal's public URL. Must be set: at its localhost default, links in emails and event QR codes point at localhost and won't work for recipients
+TZ: (Docker) Container timezone, defaults to UTC. See DOCKER.md before changing it on a running install
 
 OTS_USERNAME: Dedicated username of the Administrative Open Tak Server User.
-OTS_PASSWORD: Password for the Open Tak Server Username
+OTS_PASSWORD: Password for the Open Tak Server Username. Both must match the existing account in OTS: the portal doesn't set or sync it. They are read at start only, so changing that account's password (in OTS or through the portal) requires updating .env and applying it as above. Use a dedicated service account.
 OTS_URL: Open Tak Server url must be in format of http(s)://tak.domain.tld
 
 DEBUG: (True/False) Show more detailed errors

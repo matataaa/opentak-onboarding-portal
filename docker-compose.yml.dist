@@ -19,8 +19,8 @@ services:
             # Mount data packages
             - ./datapackages:/app/datapackages
         environment:
-            # FRONTEND_URL is now auto-detected from request host
-            # Uncomment and set if you need to override (e.g., behind a reverse proxy)
+            # Set FRONTEND_URL to the portal's public URL, here or in .env. At its localhost default,
+            # links in emails and event QR codes point at localhost and won't work for recipients.
             # - FRONTEND_URL=https://your-domain.com
             - CORS_ORIGINS=*
         extra_hosts:

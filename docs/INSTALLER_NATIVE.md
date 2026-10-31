@@ -33,6 +33,7 @@ Required settings:
 | `OTS_URL` | Your OpenTAK Server URL (e.g., `https://tak.example.com`) |
 | `OTS_USERNAME` | Admin username for OTS |
 | `OTS_PASSWORD` | Admin password for OTS |
+| `FRONTEND_URL` | The portal's public URL (e.g., `https://portal.example.com`). At its localhost default, links in emails and event QR codes point at localhost and won't work for recipients |
 
 ## Service Management
 
@@ -88,7 +89,17 @@ sudo git pull
 sudo venv/bin/pip install -r requirements.txt
 cd frontend && sudo npm install && sudo npm run build && cd ..
 sudo venv/bin/flask db upgrade
+sudo chown -R opentak-portal:opentak-portal /opt/opentak-onboarding-portal
 sudo systemctl start opentak-portal
+```
+
+Neither way rewrites the systemd unit. Installs from before the gunicorn timeout became 300 seconds
+need this once:
+
+```bash
+sudo sed -i 's/gunicorn -w [0-9]* -t 60 /gunicorn -w 1 -t 300 /' /etc/systemd/system/opentak-portal.service
+sudo systemctl daemon-reload
+sudo systemctl restart opentak-portal
 ```
 
 ### Backups and failed migrations
