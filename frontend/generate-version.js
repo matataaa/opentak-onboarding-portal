@@ -35,8 +35,8 @@ try {
   console.warn('⚠ Could not read VERSION file:', error.message);
 }
 
-// Check for APP_VERSION env var (Docker build)
-if (process.env.APP_VERSION) {
+// Check for APP_VERSION env var (Docker build); its 'dev' default means not set
+if (process.env.APP_VERSION && process.env.APP_VERSION !== 'dev') {
   appVersion = process.env.APP_VERSION;
 }
 
