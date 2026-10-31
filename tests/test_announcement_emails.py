@@ -455,11 +455,11 @@ class TestFrontendUrlSafe:
         finally:
             app.config.pop('FRONTEND_URL', None)
 
-    def test_localhost_config_uses_forwarded_host(self, app):
+    def test_localhost_config_ignores_forwarded_host(self, app):
         app.config['FRONTEND_URL'] = 'http://localhost:5000'
         try:
             with app.test_request_context('/', headers={
                     'X-Forwarded-Proto': 'https', 'X-Forwarded-Host': 'tak.example.org'}):
-                assert notifications.get_frontend_url_safe() == 'https://tak.example.org'
+                assert notifications.get_frontend_url_safe() == 'http://localhost:5000'
         finally:
             app.config.pop('FRONTEND_URL', None)

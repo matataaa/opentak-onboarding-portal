@@ -4,7 +4,7 @@
 sudo apt-get update
 
 # Install prerequisite packages
-sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common git
+sudo apt-get install -y apt-transport-https ca-certificates curl git
 
 
 # Check if Docker is installed
@@ -50,18 +50,28 @@ if [ ! -f ".env" ]; then
     cp env.dist .env
 fi
 
+# Fill empty keys only: older images, including the current Docker Hub image, refuse logins without them
+for key in SECRET_KEY JWT_SECRET_KEY; do
+    sudo sed -i "s/^$key=\$/$key=$(openssl rand -hex 32)/" .env
+done
+# Holds the OTS admin password
+sudo chmod 600 .env
+
 if [ ! -f "docker-compose.yml" ]; then
     cp docker-compose.yml.dist docker-compose.yml
 fi
 
 git pull
+# Only does something if the build: section in docker-compose.yml is enabled;
+# by default the pre-built Docker Hub image runs and this prints "No services to build"
 docker compose build
+echo "Running the image set in docker-compose.yml (default: pre-built mattronix/atak-onboarding-portal). git pull only updates the scripts and docs here, use docker compose pull to update the portal."
 
-mkdir -p instance
-sudo chown -R 1000:1000 instance/
+mkdir -p instance datapackages
+sudo chown -R 1000:1000 instance/ datapackages/
 
 # Migrations run automatically when the container starts
 docker compose up -d
 
-echo "Please navigate to /opt/opentak-onboarding-portal and edit the .env file. After making the necessary changes, run the installer again."
+echo "Please navigate to /opt/opentak-onboarding-portal and edit the .env file with sudo (it is root-owned, mode 600); run docker compose with sudo too. After making the necessary changes, run the installer again."
     

@@ -15,7 +15,7 @@ from flask_jwt_extended import (
 from datetime import timedelta, datetime
 from app.api_v1 import api_v1
 from app.models import db, UserModel, KioskSessionModel, SystemSettingsModel
-from app.api_v1.auth import get_frontend_url
+from app.api_v1.oidc import get_request_base_url
 import secrets
 
 # A kiosk token is left behind on a shared terminal, so it only works on what the
@@ -76,7 +76,8 @@ def create_kiosk_session():
         if not session:
             return jsonify({'error': 'Failed to create kiosk session'}), 500
 
-        frontend_url = get_frontend_url()
+        # Rendered on the kiosk that asked for it; a phone can't reach a localhost default
+        frontend_url = get_request_base_url()
         qr_url = f"{frontend_url}/kiosk-login/{session_id}"
 
         return jsonify({

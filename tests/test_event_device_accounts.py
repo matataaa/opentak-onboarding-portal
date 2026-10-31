@@ -756,6 +756,23 @@ def test_close_job_delete_mode_colour_failure_deactivates_instead(db, ots, app, 
     assert _open(s.id)
 
 
+@pytest.mark.parametrize('exists, closed', [(False, True), (True, False)])
+def test_close_job_delete_mode_ots_400_depends_on_account_existing(db, ots, app, monkeypatch, exists, closed):
+    s = _expired(db, monkeypatch, app, ots)
+    s.event.accountCleanup = 'delete'
+    db.session.commit()
+
+    def refuse(username):
+        raise BadRequestError({'status_code': 400})
+
+    monkeypatch.setattr(ots, 'delete_user', refuse)
+    ots.users = [('evt1_abcd1234', None)] if exists else []
+    jobs.close_expired_event_sessions()
+    db.session.expire_all()
+    assert EventSessionModel.query.get(s.id).closedAt is not None if closed else _open(s.id)
+    assert getattr(ots, 'deactivated', []) == ([] if closed else ['evt1_abcd1234'])
+
+
 def test_close_job_delete_mode_delete_failure_deactivates(db, ots, app, monkeypatch):
     s = _expired(db, monkeypatch, app, ots)
     s.event.accountCleanup = 'delete'

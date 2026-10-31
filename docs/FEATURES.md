@@ -267,11 +267,10 @@ Full integration with OTS API endpoints:
 
 ```
 # Database
-DATABASE_URL=sqlite:///app.db
+SQLALCHEMY_DATABASE_URI=sqlite:///db.sqlite
 
-# JWT
-JWT_SECRET_KEY=your-secret-key
-JWT_ACCESS_TOKEN_EXPIRES=3600
+# JWT (generate with: openssl rand -hex 32; may stay empty only with an image built from this version or later)
+JWT_SECRET_KEY=
 
 # OpenTAK Server
 OTS_URL=https://your-ots-server:8443
@@ -288,7 +287,7 @@ MAIL_PASSWORD=password
 MAIL_USE_TLS=true
 
 # Portal
-PORTAL_URL=https://your-portal.com
+FRONTEND_URL=https://your-portal.com
 ```
 
 ---

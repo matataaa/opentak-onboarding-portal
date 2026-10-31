@@ -28,8 +28,13 @@ from app.rbac import require_role
 from app.ots import OTSClient
 
 
-def _get_frontend_url():
-    """Get the frontend URL (same logic as auth.py)"""
+def get_request_base_url():
+    """FRONTEND_URL, or at its localhost default the host this request came in on.
+
+    Only for URLs that go back to the requesting browser. Emailed links use
+    auth.get_frontend_url instead: nothing here reaches a third party, and the IdP
+    validates the OIDC redirect against what is registered.
+    """
     frontend_url = current_app.config.get('FRONTEND_URL', 'http://localhost:5000')
     if not (frontend_url.startswith('http://localhost') or frontend_url.startswith('http://127.0.0.1')):
         return frontend_url.rstrip('/')
@@ -81,7 +86,7 @@ def _sanitize_ots_username(raw):
 
 def _build_callback_url(provider_id):
     """Build the OIDC callback URL"""
-    frontend_url = _get_frontend_url()
+    frontend_url = get_request_base_url()
     # The callback must go to the backend API endpoint
     return f"{frontend_url}/api/v1/auth/oidc/{provider_id}/callback"
 
@@ -172,7 +177,7 @@ def oidc_callback(provider_id):
     Handle OIDC callback after user authenticates with the provider.
     Validates tokens, creates/links local user, generates JWT, redirects to frontend.
     """
-    frontend_url = _get_frontend_url()
+    frontend_url = get_request_base_url()
 
     # Check for errors from the OIDC provider
     error = request.args.get('error')
