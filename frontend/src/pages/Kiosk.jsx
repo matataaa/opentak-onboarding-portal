@@ -8,6 +8,7 @@ import { kioskAPI, settingsAPI } from '../services/api';
 import ProgramRadioModal from '../components/ProgramRadioModal';
 import ConfigValidatorModal from '../components/ConfigValidatorModal';
 import EnrollRadioModal from '../components/EnrollRadioModal';
+import KioskBackground from '../components/KioskBackground';
 import { meshtasticSerial } from '../services/meshtasticSerial';
 import './Kiosk.css';
 
@@ -93,6 +94,7 @@ function Kiosk() {
   const timerRef = useRef(null);
   const timeoutMinutesRef = useRef(10);
   const expiryTimeRef = useRef(null);
+  const refreshInFlightRef = useRef(false);
 
   // Create an axios instance authenticated with the kiosk token
   const getKioskApi = useCallback(() => {
@@ -140,14 +142,18 @@ function Kiosk() {
     });
   }, []);
 
+  const requestSession = async () => {
+    const res = await kioskAPI.createSession();
+    setSessionId(res.data.session_id);
+    setQrUrl(res.data.qr_url);
+    setState('qr');
+  };
+
   // Create a new kiosk session
   const createNewSession = async () => {
     setState('loading');
     try {
-      const res = await kioskAPI.createSession();
-      setSessionId(res.data.session_id);
-      setQrUrl(res.data.qr_url);
-      setState('qr');
+      await requestSession();
     } catch (err) {
       if (err.response?.status === 403) {
         setState('disabled');
@@ -158,14 +164,41 @@ function Kiosk() {
     }
   };
 
+  // Replace an expired session while the old QR stays on screen. The poll keeps
+  // firing meanwhile, so the guard makes sure only one session gets created.
+  const refreshSession = async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    try {
+      await requestSession();
+    } catch (err) {
+      // Otherwise the next poll retries, so an unattended kiosk recovers by itself
+      if (err.response?.status === 403) setState('disabled');
+    } finally {
+      refreshInFlightRef.current = false;
+    }
+  };
+
   // Poll for session status when in QR state
   useEffect(() => {
     if (state !== 'qr' || !sessionId) return;
 
+    // A slow response for a session that has already been replaced must not refresh again
+    let replaced = false;
+    let emptyReads = 0;
+
     const poll = async () => {
       try {
         const res = await kioskAPI.getSessionStatus(sessionId);
-        if (res.data.status === 'authenticated') {
+        // The status endpoint hands out tokens once, so a late overlapping response
+        // would overwrite them with nulls
+        if (replaced) return;
+        if (res.data.status === 'authenticated' && !res.data.access_token) {
+          // Another read took the tokens, or the response carrying them is still on
+          // its way. Wait for that, then give up on this session.
+          emptyReads += 1;
+          if (emptyReads >= 4) refreshSession();
+        } else if (res.data.status === 'authenticated') {
           const token = res.data.access_token;
           const refresh = res.data.refresh_token;
           const user = res.data.user;
@@ -190,15 +223,20 @@ function Kiosk() {
           setState('authenticated');
         } else if (res.data.status === 'expired') {
           // Session expired, create a new one
-          createNewSession();
+          refreshSession();
         }
-      } catch {
-        // Ignore poll errors
+      } catch (err) {
+        // Another kiosk's session create cleans up expired sessions, so ours can be
+        // gone before we saw it expire. Other poll errors are ignored.
+        if (err.response?.data?.error === 'Session not found' && !replaced) refreshSession();
       }
     };
 
     pollRef.current = setInterval(poll, 2500);
-    return () => clearInterval(pollRef.current);
+    return () => {
+      replaced = true;
+      clearInterval(pollRef.current);
+    };
   }, [state, sessionId]);
 
   // When authenticated, fetch QR codes and radios, start countdown
@@ -338,22 +376,25 @@ function Kiosk() {
   // QR display state
   if (state === 'qr') {
     return (
-      <div className="kiosk-container">
+      <div className="kiosk-container kiosk-container--qr">
+        <KioskBackground />
         <div className="kiosk-qr-screen">
-          {settings?.custom_logo_enabled && settings?.custom_logo_path ? (
-            <img src={`${API_BASE_URL}${settings.custom_logo_path}`} alt={t('kiosk.logoAlt')} className="kiosk-logo" />
-          ) : (
-            <img src={`${API_BASE_URL}/static/img/logo.png`} alt={t('kiosk.logoAlt')} className="kiosk-logo" />
-          )}
-          <h1>{settings?.brand_name || 'OpenTAK Portal'}</h1>
-          <p className="kiosk-subtitle">{t('kiosk.scanToLogin')}</p>
-          <div className="kiosk-qr-code">
-            {qrUrl && <QRCodeSVG value={qrUrl} size={280} level="M" />}
+          <div className="kiosk-qr-info">
+            {settings?.custom_logo_enabled && settings?.custom_logo_path ? (
+              <img src={`${API_BASE_URL}${settings.custom_logo_path}`} alt={t('kiosk.logoAlt')} className="kiosk-logo" />
+            ) : (
+              <img src={`${API_BASE_URL}/static/img/logo.png`} alt={t('kiosk.logoAlt')} className="kiosk-logo" />
+            )}
+            <h1>{settings?.brand_name || 'OpenTAK Portal'}</h1>
+            <p className="kiosk-subtitle">{t('kiosk.scanToLogin')}</p>
+            <p className="kiosk-qr-instruction">
+              {t('kiosk.scanDesc')}
+              <span className="kiosk-polling-dot" />
+            </p>
           </div>
-          <p className="kiosk-qr-instruction">
-            {t('kiosk.scanDesc')}
-            <span className="kiosk-polling-dot" />
-          </p>
+          <div className="kiosk-qr-code">
+            {qrUrl && <QRCodeSVG value={qrUrl} size={280} level="M" marginSize={4} />}
+          </div>
         </div>
       </div>
     );
@@ -364,7 +405,8 @@ function Kiosk() {
     const isWarning = timeRemaining < 60;
 
     const dashboard = (
-      <div className="kiosk-container">
+      <div className="kiosk-container kiosk-container--dashboard">
+        <KioskBackground />
         <div className="kiosk-dashboard">
           <div className="kiosk-header">
             <div className="kiosk-header-brand">
@@ -388,18 +430,18 @@ function Kiosk() {
           <div className="kiosk-sections">
             {/* QR Codes Section */}
             {(atakQrData || itakQrData) && (
-              <div className="kiosk-section">
+              <div className="kiosk-section kiosk-section--qr">
                 <h2>{t('kiosk.takEnrollment')}</h2>
                 <div className="kiosk-qr-pair">
                   {atakQrData?.qr_string && (
                     <div className="kiosk-qr-item">
-                      <QRCodeSVG value={atakQrData.qr_string} size={180} level="M" />
+                      <QRCodeSVG value={atakQrData.qr_string} size={360} level="M" marginSize={4} />
                       <p>{t('kiosk.atak')}</p>
                     </div>
                   )}
                   {itakQrData?.qr_string && (
                     <div className="kiosk-qr-item">
-                      <QRCodeSVG value={itakQrData.qr_string} size={180} level="M" />
+                      <QRCodeSVG value={itakQrData.qr_string} size={360} level="M" marginSize={4} />
                       <p>{t('kiosk.itak')}</p>
                     </div>
                   )}
