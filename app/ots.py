@@ -1,4 +1,5 @@
 from app.settings import OTS_USERNAME, OTS_PASSWORD, OTS_URL, OTS_VERIFY_SSL
+import re
 import requests
 from .exceptions import AuthenticationError, AuthorizationError, BadRequestError, CSRFError
 
@@ -520,6 +521,23 @@ class OTSClient:
         if response.status_code != 200:
             raise Exception(result)
         return result
+
+def new_password_error(password):
+    """Return an error message if a new password can't be used on OTS, else None.
+
+    OTS answers 200 for passwords the user could never log in with: it runs bleach.clean
+    before hashing (& < > and control characters) and normalises with NFKD only at login
+    (accented letters), and keeps leading/trailing spaces. Its reset also refuses : and @.
+    ^ and $ work on OTS but have been blocked by the frontend since 1.0.0.
+    Mirrored in frontend/src/utils/passwordRules.js.
+    """
+    if (not isinstance(password, str)
+            or not re.fullmatch(r'(?:(?![&^$<>:@])[\x20-\x7E])+', password)
+            or password.startswith(' ') or password.endswith(' ')):
+        return ('Password can only contain letters without accents, digits and symbols such as ! # % + - _. '
+                'Not allowed: & ^ $ < > : @ or a space at the start or end.')
+    return None
+
 
 def delete_user_if_present(client, username):
     """Delete a user from OTS; returns False if OTS has no such account, raises on any other failure.

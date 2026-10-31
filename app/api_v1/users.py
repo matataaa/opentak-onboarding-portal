@@ -7,7 +7,7 @@ from flask import request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from app.api_v1 import api_v1
 from app.models import UserModel, UserRoleModel, OTSGroupModel, GroupUserAssociation, db
-from app.ots import OTSClient, delete_user_if_present
+from app.ots import OTSClient, delete_user_if_present, new_password_error
 from app.settings import OTS_URL, OTS_USERNAME, OTS_PASSWORD, OTS_VERIFY_SSL
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
@@ -210,6 +210,10 @@ def create_user():
     if len(username) < 3 or len(username) > 32:
         return jsonify({'error': 'Username must be between 3 and 32 characters'}), 400
 
+    password_error = new_password_error(data['password'])
+    if password_error:
+        return jsonify({'error': password_error}), 400
+
     # Check if user already exists
     existing_user = UserModel.get_user_by_username(username)
     if existing_user:
@@ -327,6 +331,12 @@ def update_user(user_id):
         return jsonify({'error': 'User not found'}), 404
 
     data = request.get_json()
+
+    # Before anything is changed: the group sync below already pushes to OTS
+    if is_admin and data.get('password'):
+        password_error = new_password_error(data['password'])
+        if password_error:
+            return jsonify({'error': password_error}), 400
 
     if is_admin and ('groups' in data or 'groupIds' in data):
         flagged = _flagged_new_groups(data, {a.group_id for a in user.group_associations})

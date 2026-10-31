@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { usersAPI, rolesAPI, groupsAPI } from '../../services/api';
 import { formatDate, useDateFormat } from '../../utils/formatDate';
+import { isValidNewPassword } from '../../utils/passwordRules';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import '../../components/AdminTable.css';
@@ -207,8 +208,7 @@ function UsersList() {
 
     // Validate password if provided
     if (formData.password) {
-      const disallowedChars = /[&^$]/;
-      if (disallowedChars.test(formData.password)) {
+      if (!isValidNewPassword(formData.password)) {
         setError(t('auth.passwordNoSpecial'));
         return;
       }

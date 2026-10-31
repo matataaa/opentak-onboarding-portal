@@ -8,6 +8,7 @@ from flask_jwt_extended import jwt_required, get_jwt
 from app.api_v1 import api_v1
 from app.api_v1.auth import get_frontend_url
 from app.models import PendingRegistrationModel, OnboardingCodeModel, UserModel
+from app.ots import new_password_error
 from datetime import datetime, timedelta
 import secrets
 import re
@@ -166,6 +167,10 @@ def create_pending_registration():
         # Validate email format
         if '@' not in data['email'] or '.' not in data['email']:
             return jsonify({'error': 'Invalid email format'}), 400
+
+        password_error = new_password_error(data['password'])
+        if password_error:
+            return jsonify({'error': password_error}), 400
 
         # Check for duplicate username
         if UserModel.get_user_by_username(username):
@@ -414,6 +419,9 @@ def update_pending_registration(pending_id):
             pending.email = data['email']
 
         if 'password' in data:
+            password_error = new_password_error(data['password'])
+            if password_error:
+                return jsonify({'error': password_error}), 400
             pending.password = data['password']
 
         if 'firstName' in data:

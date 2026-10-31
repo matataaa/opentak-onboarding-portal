@@ -14,7 +14,7 @@ from flask_jwt_extended import (
 from datetime import timedelta, datetime
 from app.api_v1 import api_v1
 from app.models import db, UserModel, UserRoleModel, PendingRegistrationModel, OnboardingCodeModel, OneTimeTokenModel
-from app.ots import OTSClient
+from app.ots import OTSClient, new_password_error
 from app.exceptions import AuthenticationError, AuthorizationError, BadRequestError
 from app.email import send_html_email
 import secrets
@@ -582,6 +582,10 @@ def register():
     # Validate email format (basic check)
     if '@' not in data['email'] or '.' not in data['email']:
         return jsonify({'error': 'Invalid email format'}), 400
+
+    password_error = new_password_error(data['password'])
+    if password_error:
+        return jsonify({'error': password_error}), 400
 
     # Check for duplicate username in existing users
     existing_user = UserModel.get_user_by_username(username)
@@ -1231,6 +1235,10 @@ def change_password():
         if not new_password:
             return jsonify({'error': 'New password is required'}), 400
 
+        password_error = new_password_error(new_password)
+        if password_error:
+            return jsonify({'error': password_error}), 400
+
         if len(new_password) < 8:
             return jsonify({'error': 'Password must be at least 8 characters'}), 400
 
@@ -1292,6 +1300,10 @@ def set_password():
         new_password = data.get('newPassword')
         if not new_password:
             return jsonify({'error': 'Password is required'}), 400
+
+        password_error = new_password_error(new_password)
+        if password_error:
+            return jsonify({'error': password_error}), 400
 
         if len(new_password) < 8:
             return jsonify({'error': 'Password must be at least 8 characters'}), 400
@@ -1441,6 +1453,10 @@ def reset_password():
 
         if not token or not new_password:
             return jsonify({'error': 'Token and new password are required'}), 400
+
+        password_error = new_password_error(new_password)
+        if password_error:
+            return jsonify({'error': password_error}), 400
 
         if len(new_password) < 8:
             return jsonify({'error': 'Password must be at least 8 characters long'}), 400

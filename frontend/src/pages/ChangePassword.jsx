@@ -6,6 +6,7 @@ import './ChangePassword.css';
 
 // Import the centralized API helper
 import { authAPI } from '../services/api';
+import { isValidNewPassword } from '../utils/passwordRules';
 
 export default function ChangePassword() {
   const { t } = useTranslation();
@@ -67,8 +68,7 @@ export default function ChangePassword() {
     }
 
     // Check for disallowed characters
-    const disallowedChars = /[&^$]/;
-    if (disallowedChars.test(formData.newPassword)) {
+    if (!isValidNewPassword(formData.newPassword)) {
       setError(t('profile.passwordDisallowedChars'));
       return;
     }

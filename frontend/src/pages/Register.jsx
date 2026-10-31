@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { onboardingCodesAPI, settingsAPI } from '../services/api';
+import { isValidNewPassword } from '../utils/passwordRules';
 import AuthLayout from '../components/AuthLayout';
 import './Auth.css';
 
@@ -91,8 +92,7 @@ function Register() {
     }
 
     // Check for disallowed characters in password
-    const disallowedChars = /[&^$]/;
-    if (disallowedChars.test(formData.password)) {
+    if (!isValidNewPassword(formData.password)) {
       setError(t('auth.passwordNoSpecial'));
       return;
     }

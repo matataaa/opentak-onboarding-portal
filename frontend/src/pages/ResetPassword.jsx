@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import { settingsAPI } from '../services/api';
+import { isValidNewPassword } from '../utils/passwordRules';
 import AuthLayout from '../components/AuthLayout';
 import './Auth.css';
 
@@ -58,8 +59,7 @@ function ResetPassword() {
     }
 
     // Check for disallowed characters
-    const disallowedChars = /[&^$]/;
-    if (disallowedChars.test(newPassword)) {
+    if (!isValidNewPassword(newPassword)) {
       setError(t('auth.passwordNoSpecial'));
       return;
     }
