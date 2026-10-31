@@ -587,7 +587,7 @@ export const oidcAPI = {
 // Kiosk API (session management uses raw axios - no auth needed for create/poll)
 export const kioskAPI = {
   createSession: () =>
-    axios.post(`${API_BASE_URL}/api/v1/kiosk/session`),
+    axios.post(`${API_BASE_URL}/api/v1/kiosk/session`, undefined, { timeout: 30000 }),
 
   getSessionStatus: (sessionId) =>
     axios.get(`${API_BASE_URL}/api/v1/kiosk/session/${sessionId}/status`),
