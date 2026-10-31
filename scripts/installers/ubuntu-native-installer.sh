@@ -110,7 +110,7 @@ Group=opentak-portal
 WorkingDirectory=/opt/opentak-onboarding-portal
 Environment="PATH=/opt/opentak-onboarding-portal/venv/bin"
 Environment="PYTHONUNBUFFERED=1"
-ExecStart=/opt/opentak-onboarding-portal/venv/bin/gunicorn -w 1 -t 60 app:app -b 0.0.0.0:5000
+ExecStart=/opt/opentak-onboarding-portal/venv/bin/gunicorn -w 1 -t 300 app:app -b 0.0.0.0:5000
 Restart=always
 RestartSec=5
 
@@ -135,6 +135,7 @@ echo "2. Configure at minimum:"
 echo "   - OTS_URL (your OpenTAK Server URL)"
 echo "   - OTS_USERNAME (admin username)"
 echo "   - OTS_PASSWORD (admin password)"
+echo "   - FRONTEND_URL (the portal's public URL)"
 echo ""
 echo "3. Start the service:"
 echo "   sudo systemctl start opentak-portal"

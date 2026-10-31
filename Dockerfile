@@ -74,7 +74,7 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 COPY docker-backup-sqlite.py /app/docker-backup-sqlite.py
 
 # Create necessary directories and set permissions
-RUN mkdir -p /app/data_packages /app/instance && \
+RUN mkdir -p /app/datapackages /app/instance && \
     useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app && \
     chmod +x /app/docker-entrypoint.sh
