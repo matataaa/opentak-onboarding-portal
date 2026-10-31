@@ -7,7 +7,7 @@ from datetime import datetime
 import pytest
 from flask_jwt_extended import create_access_token
 
-from app.models import (EventLinkModel, EventModel, EventSessionModel, EventTeamModel,
+from app.models import (EventLeaderSessionModel, EventLinkModel, EventModel, EventSessionModel, EventTeamModel,
                         SystemSettingsModel, UserModel, UserRoleModel)
 
 
@@ -31,7 +31,7 @@ def _clean_events(db):
     SystemSettingsModel.set_setting('events_enabled', True)
     yield
     db.session.rollback()
-    for model in (EventSessionModel, EventLinkModel, EventModel, EventTeamModel):
+    for model in (EventLeaderSessionModel, EventSessionModel, EventLinkModel, EventModel, EventTeamModel):
         model.query.delete()
     db.session.commit()
     SystemSettingsModel.set_setting('events_enabled', old_enabled)

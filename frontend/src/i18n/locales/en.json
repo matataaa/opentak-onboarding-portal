@@ -604,9 +604,37 @@
     "reapplyHint": "Save the current settings again to retry the device accounts that could not be updated",
     "hqPrintLabel": "HQ - sees all teams",
     "eudsUnavailable": "Could not read device information from OpenTAK Server.",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "enrolledBy": "Enrolled by {{name}}",
+    "leaderSessions": "Leaders",
+    "leaderSessionsNotice": "Everyone who joined through a leader link. Revoking ends that person's access without regenerating the link; the devices they enrolled stay open (close them below if needed).",
+    "leaderSessionName": "Name",
+    "leaderSessionJoined": "Joined",
+    "leaderSessionDevices": "Open devices",
+    "leaderSessionsEmpty": "No one has joined through a leader link yet.",
+    "leaderSessionRevokedAt": "Revoked on {{date}}",
+    "leaderSessionRevoke": "Revoke",
+    "leaderSessionRevokeConfirm": "Revoke the leader access of {{name}}? The devices they enrolled stay open.",
+    "leaderSessionEnded": "Ended",
+    "teamLeaders": "Team leaders (accounts)",
+    "teamLeadersNotice": "Portal users who lead a team in this event with their own account. They keep their normal login and rights and see \"My team\" for that team while the event is open. Someone who scans a leader link while logged in is added here automatically; regenerating that link ends it again.",
+    "teamLeadersEmpty": "No team leaders with their own account yet.",
+    "teamLeaderSearch": "Search users",
+    "teamLeaderUser": "User",
+    "teamLeaderSelectUser": "Choose user",
+    "teamLeaderAdd": "Add",
+    "teamLeaderRemove": "Remove",
+    "teamLeaderRemoveConfirm": "Remove {{name}} as team leader? Their access to the team page ends at once; the devices they enrolled stay open.",
+    "teamLeaderSource": "Added via",
+    "teamLeaderSourceAdmin": "Admin",
+    "teamLeaderSourceLink": "Leader link",
+    "leaderSessionAccount": "Own account: {{username}}",
+    "leaderSessionAccountRevokeConfirm": "Remove {{name}} as team leader? Their access to the team page ends at once; the devices they enrolled stay open."
   },
   "eventsMyTeam": {
+    "chooseTeam": "Choose your team",
+    "hq": "HQ",
+    "otherTeam": "Switch to another team",
     "loading": "Loading…",
     "loadFailed": "Could not load your team.",
     "playerLink": "Player join link",
@@ -639,7 +667,9 @@
     "moveConfirm": "Move this device to another team? It will leave your team.",
     "addToMyTeam": "Add to my team",
     "addConfirm": "Add this device to your team?",
-    "actionFailed": "The change could not be made."
+    "actionFailed": "The change could not be made.",
+    "leaderName": "Leader: {{name}}",
+    "enrolledBy": "Enrolled by {{name}}"
   },
   "eventsShared": {
     "openInAtak": "Open in ATAK",
@@ -655,7 +685,10 @@
     "failed": "This link is not valid.",
     "sharedIntro": "Scan this code in ATAK to join your team.",
     "scanAtak": "ATAK → enrollment → scan this QR code.",
-    "noEnrollment": "No enrollment is available right now."
+    "noEnrollment": "No enrollment is available right now.",
+    "leaderNameLabel": "Your name",
+    "leaderNameHint": "Shown to the organisers so they can see who is using the leader access.",
+    "leaderJoin": "Continue"
   },
   "admin": {
     "dashboard": {

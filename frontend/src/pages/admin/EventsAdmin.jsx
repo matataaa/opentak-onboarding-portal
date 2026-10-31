@@ -54,6 +54,10 @@ export default function EventsAdmin() {
   const [printPerPage, setPrintPerPage] = useState(1);
   const [qrLink, setQrLink] = useState(null); // {url, label} shown in the QR panel
   const [accounts, setAccounts] = useState([]);
+  const [leaderSessions, setLeaderSessions] = useState([]);
+  const [teamLeaders, setTeamLeaders] = useState([]); // personal leaders (own accounts) of the open event
+  const [teamLeaderForm, setTeamLeaderForm] = useState({ teamId: '', search: '', userId: '' });
+  const [userOptions, setUserOptions] = useState([]);
   const [eudsAvailable, setEudsAvailable] = useState(true);
   const [notice, setNotice] = useState('');
   const [linkRemaining, setLinkRemaining] = useState({}); // linkId -> open accounts left after a close
@@ -163,6 +167,58 @@ export default function EventsAdmin() {
     }
   };
 
+  const loadTeamLeaders = async (eventId) => {
+    try {
+      const r = await eventsAPI.listTeamLeaders(eventId);
+      setTeamLeaders(r.data.teamLeaders || []);
+    } catch { setTeamLeaders([]); }
+  };
+
+  // Users matching the search text (at least 2 characters), for the team leader picker
+  useEffect(() => {
+    const search = teamLeaderForm.search.trim();
+    if (!openLinksFor || !canEdit || search.length < 2) {
+      setUserOptions([]);
+      return undefined;
+    }
+    const params = { search };
+    if (teamLeaderForm.teamId) params.teamId = Number(teamLeaderForm.teamId);
+    const timer = setTimeout(() => {
+      eventsAPI.teamLeaderCandidates(openLinksFor, params)
+        .then((r) => setUserOptions(r.data.users || []))
+        .catch(() => setUserOptions([]));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [teamLeaderForm.search, teamLeaderForm.teamId, openLinksFor, canEdit]);
+
+  const addTeamLeader = () => call(
+    () => eventsAPI.addTeamLeader(openLinksFor, {
+      teamId: Number(teamLeaderForm.teamId), userId: Number(teamLeaderForm.userId),
+    }),
+    () => setTeamLeaderForm((f) => ({ ...f, userId: '' })),
+  ).then(() => { loadTeamLeaders(openLinksFor); loadLeaderSessions(openLinksFor); });
+
+  const removeTeamLeader = (d) => {
+    if (!window.confirm(t('events.teamLeaderRemoveConfirm', { name: d.user?.username || d.userId }))) return;
+    call(() => eventsAPI.removeTeamLeader(openLinksFor, d.id))
+      .then(() => { loadTeamLeaders(openLinksFor); loadLeaderSessions(openLinksFor); });
+  };
+
+  const loadLeaderSessions = async (eventId) => {
+    try {
+      const r = await eventsAPI.listLeaderSessions(eventId);
+      setLeaderSessions(r.data.leaderSessions || []);
+    } catch { setLeaderSessions([]); }
+  };
+
+  // Ends one person's leader session; the link and the devices they created stay
+  const revokeLeaderSession = (s) => {
+    const confirmKey = s.kind === 'account' ? 'events.leaderSessionAccountRevokeConfirm' : 'events.leaderSessionRevokeConfirm';
+    if (!window.confirm(t(confirmKey, { name: s.displayName }))) return;
+    call(() => eventsAPI.revokeLeaderSession(openLinksFor, s.id))
+      .then(() => { loadLeaderSessions(openLinksFor); loadTeamLeaders(openLinksFor); });
+  };
+
   const moveAccount = (a, value) => {
     if (value === '' && !window.confirm(t('events.parkConfirm'))) return;
     call(() => eventsAPI.moveAccount(openLinksFor, a.id, value === '' ? null : Number(value)))
@@ -199,7 +255,12 @@ export default function EventsAdmin() {
     setLinkRemaining({});
     setLinkRetry({});
     setAccounts([]);
+    setLeaderSessions([]);
+    setTeamLeaders([]);
+    setTeamLeaderForm({ teamId: '', search: '', userId: '' });
     loadAccounts(eventId);
+    loadLeaderSessions(eventId);
+    loadTeamLeaders(eventId);
     setNewLink(null);
     setPrintSheet([]);
     setQrLink(null);
@@ -234,7 +295,8 @@ export default function EventsAdmin() {
 
   const regenerate = (l) => {
     if (!window.confirm(t('events.regenerateConfirm'))) return;
-    call(() => eventsAPI.revokeLink(l.id), (res) => { setQrLink(null); addGenerated(res.data); }).then(() => loadLinks(openLinksFor));
+    call(() => eventsAPI.revokeLink(l.id), (res) => { setQrLink(null); addGenerated(res.data); })
+      .then(() => { loadLinks(openLinksFor); loadLeaderSessions(openLinksFor); loadTeamLeaders(openLinksFor); });
   };
 
   const createLink = () => {
@@ -488,7 +550,7 @@ export default function EventsAdmin() {
                         notifyHq(res.data);
                         setPrintSheet((p) => p.filter((x) => x.id !== l.id));
                         setQrLink((q) => (q?.id === l.id ? null : q));
-                      }).then(() => loadLinks(openLinksFor))}>{t('common.delete')}</button>
+                      }).then(() => { loadLinks(openLinksFor); loadLeaderSessions(openLinksFor); loadTeamLeaders(openLinksFor); })}>{t('common.delete')}</button>
                       </div>
                     </td>
                   </tr>
@@ -516,6 +578,94 @@ export default function EventsAdmin() {
             </select>
           </div>
 
+          {/* Personal leaders: portal users who lead a team in the selected event with their own account */}
+          <h3>{t('events.teamLeaders')}</h3>
+          <p className="events-hint">{t('events.teamLeadersNotice')}</p>
+          {canEdit && (
+            <div className="events-form-row">
+              <select aria-label={t('events.team')} value={teamLeaderForm.teamId} onChange={(e) => setTeamLeaderForm({ ...teamLeaderForm, teamId: e.target.value })}>
+                <option value="">{t('events.selectTeam')}</option>
+                {teams.filter((tm) => links.some((l) => l.eventTeamId === tm.id)).map((tm) => <option key={tm.id} value={tm.id}>{tm.name}</option>)}
+              </select>
+              <input
+                type="text"
+                aria-label={t('events.teamLeaderSearch')}
+                placeholder={t('events.teamLeaderSearch')}
+                value={teamLeaderForm.search}
+                onChange={(e) => setTeamLeaderForm({ ...teamLeaderForm, search: e.target.value, userId: '' })}
+              />
+              <select aria-label={t('events.teamLeaderUser')} value={teamLeaderForm.userId} onChange={(e) => setTeamLeaderForm({ ...teamLeaderForm, userId: e.target.value })}>
+                <option value="">{t('events.teamLeaderSelectUser')}</option>
+                {userOptions.map((u) => <option key={u.id} value={u.id}>{u.callsign ? `${u.username} (${u.callsign})` : u.username}</option>)}
+              </select>
+              <button className="btn btn-sm btn-primary" onClick={addTeamLeader} disabled={!teamLeaderForm.teamId || !teamLeaderForm.userId}>{t('events.teamLeaderAdd')}</button>
+            </div>
+          )}
+          <div className="admin-table-container">
+            <table className="admin-table">
+              <thead><tr><th>{t('events.teamLeaderUser')}</th><th>{t('events.team')}</th><th>{t('events.teamLeaderSource')}</th><th>{t('events.accountStatus')}</th>{canEdit && <th></th>}</tr></thead>
+              <tbody>
+                {teamLeaders.length === 0 && <tr><td colSpan={canEdit ? 5 : 4}>{t('events.teamLeadersEmpty')}</td></tr>}
+                {teamLeaders.map((d) => (
+                  <tr key={d.id}>
+                    <td>
+                      {d.user?.username || d.userId}
+                      {d.user?.callsign && <div className="events-hint">{d.user.callsign}</div>}
+                    </td>
+                    <td>{d.team?.name || '-'}</td>
+                    <td>{t(d.source === 'link' ? 'events.teamLeaderSourceLink' : 'events.teamLeaderSourceAdmin')}</td>
+                    <td>{t(d.status === 'active' ? 'events.accountActive' : 'events.leaderSessionEnded')}</td>
+                    {canEdit && (
+                      <td>
+                        <div className="table-actions">
+                          <button className="btn btn-sm btn-danger" onClick={() => removeTeamLeader(d)}>{t('events.teamLeaderRemove')}</button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* People who joined through a leader link of the selected event */}
+          <h3>{t('events.leaderSessions')}</h3>
+          <p className="events-hint">{t('events.leaderSessionsNotice')}</p>
+          <div className="events-form-row">
+            <button className="btn btn-sm btn-secondary" onClick={() => loadLeaderSessions(openLinksFor)}>{t('events.refresh')}</button>
+          </div>
+          <div className="admin-table-container">
+            <table className="admin-table">
+              <thead><tr><th>{t('events.leaderSessionName')}</th><th>{t('events.team')}</th><th>{t('events.leaderSessionJoined')}</th><th>{t('events.leaderSessionDevices')}</th><th>{t('events.accountStatus')}</th>{canEdit && <th></th>}</tr></thead>
+              <tbody>
+                {leaderSessions.length === 0 && <tr><td colSpan={canEdit ? 6 : 5}>{t('events.leaderSessionsEmpty')}</td></tr>}
+                {leaderSessions.map((s) => (
+                  <tr key={s.id}>
+                    <td>
+                      {s.displayName}
+                      {s.kind === 'account' && <div className="events-hint">{t('events.leaderSessionAccount', { username: s.username || '-' })}</div>}
+                    </td>
+                    <td>{s.team?.name || '-'}</td>
+                    <td>{formatDateTime(s.createdAt, dateFormat, { utc: true }) || '-'}</td>
+                    <td>{s.deviceCount}</td>
+                    <td>{s.status === 'revoked'
+                      ? t('events.leaderSessionRevokedAt', { date: formatDateTime(s.revokedAt, dateFormat) })
+                      : t(s.status === 'ended' ? 'events.leaderSessionEnded' : 'events.accountActive')}</td>
+                    {canEdit && (
+                      <td>
+                        {!s.revokedAt && (
+                          <div className="table-actions">
+                            <button className="btn btn-sm btn-danger" onClick={() => revokeLeaderSession(s)}>{t('events.leaderSessionRevoke')}</button>
+                          </div>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
           {/* Device accounts of the selected event */}
           <h3>{t('events.accounts')}</h3>
           <p className="events-hint">{t('events.accountsNotice')}</p>
@@ -536,12 +686,13 @@ export default function EventsAdmin() {
                       <div className="events-hint">{a.otsUsername}</div>
                     </td>
                     <td>
-                      {a.team?.name || '-'}
+                      {a.parked ? '-' : (a.team?.name || '-')}
                       {!a.parked && a.team && a.team.id === hqTeamId && <span className="badge badge-primary" style={{ marginLeft: '0.5rem' }}>{t('events.hqBadge')}</span>}
                     </td>
                     <td>
                       {a.legacy ? t('events.accountLegacy') : (a.parked ? t('events.accountParked') : t('events.accountActive'))}
                       {a.role === 'leader' && <span className="badge badge-primary" style={{ marginLeft: '0.5rem' }}>{t('events.accountLeader')}</span>}
+                      {a.leaderName && <div className="events-hint">{t('events.enrolledBy', { name: a.leaderName })}</div>}
                     </td>
                     <td>{formatDateTime(a.createdAt, dateFormat, { utc: true }) || '-'}</td>
                     {canEdit && (

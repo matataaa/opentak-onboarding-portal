@@ -36,6 +36,8 @@ def remove_expired_accounts():
                 # Flush first so a local delete that cannot succeed (FK constraints) is
                 # found before OTS is touched; then OTS, then commit. A failure keeps
                 # the user and is retried next night.
+                from app.api_v1.events import remove_user_leader_designations
+                remove_user_leader_designations(user.id)
                 db.session.delete(user)
                 db.session.flush()
                 otsClient.delete_user(username)

@@ -2260,6 +2260,60 @@ class EventSessionModel(db.Model):
     # memberships are keyed by name, names never change in the portal, and a
     # deleted local group row must not hide a removal.
     organizerGrant = Column(Text, nullable=True)
+    # The leader session (event_leader_sessions.id) that created this device; NULL =
+    # not created by a leader. No FK: the device ledger outlives leader sessions.
+    leaderSessionId = Column(Integer, nullable=True)
 
     event = relationship("EventModel")
     team = relationship("EventTeamModel")
+
+
+class EventLeaderSessionModel(db.Model):
+    """One person who joined through a team's leader link (shared leader account).
+
+    The leader JWT carries this row's id (claim event_leader_session); revoking the
+    row ends that person's session without regenerating the link.
+    """
+    __tablename__ = 'event_leader_sessions'
+
+    id = Column(Integer, primary_key=True)
+    eventId = Column(Integer, ForeignKey('events.id'), nullable=False)
+    eventTeamId = Column(Integer, ForeignKey('event_teams.id'), nullable=False)
+    # No FKs: the audit trail survives link deletion; userId is for personal leader logins
+    eventLinkId = Column(Integer, nullable=True)
+    userId = Column(Integer, nullable=True)
+    displayName = Column(String(80), nullable=False)
+    createdAt = Column(DateTime, default=datetime.datetime.utcnow)
+    revokedAt = Column(DateTime, nullable=True)
+    revokedBy = Column(Integer, nullable=True)
+
+    team = relationship("EventTeamModel")
+
+
+class EventTeamLeaderModel(db.Model):
+    """A portal user designated as leader of a team for one event (personal leader).
+
+    They keep their own login and rights and get the team's leader page while the
+    event is open. source 'admin' = set by an admin; 'link' = bound by scanning the
+    team's leader link while logged in, valid only while that link keeps the same
+    version and nonce (eventLinkId has no FK, like the leader session ledger).
+    """
+    __tablename__ = 'event_team_leaders'
+    __table_args__ = (
+        UniqueConstraint('eventId', 'eventTeamId', 'userId', name='uq_event_team_leaders_event_team_user'),
+    )
+
+    id = Column(Integer, primary_key=True)
+    eventId = Column(Integer, ForeignKey('events.id'), nullable=False)
+    eventTeamId = Column(Integer, ForeignKey('event_teams.id'), nullable=False)
+    userId = Column(Integer, ForeignKey('users.id'), nullable=False)
+    source = Column(String(10), nullable=False, default='admin')  # admin | link
+    eventLinkId = Column(Integer, nullable=True)
+    linkVersion = Column(Integer, nullable=True)
+    linkNonce = Column(String(64), nullable=True)
+    createdAt = Column(DateTime, default=datetime.datetime.utcnow)
+    createdBy = Column(Integer, nullable=True)
+
+    event = relationship("EventModel")
+    team = relationship("EventTeamModel")
+    user = relationship("UserModel")

@@ -6,7 +6,7 @@ import pytest
 from flask_jwt_extended import create_access_token
 
 from app.api_v1 import events as events_mod
-from app.models import (EventLinkModel, EventModel, EventSessionModel, EventTeamModel,
+from app.models import (EventLeaderSessionModel, EventLinkModel, EventModel, EventSessionModel, EventTeamModel,
                         SystemSettingsModel, UserModel, UserRoleModel)
 
 STRONG = 'a-strong-secret-key-for-tests-0123456789'
@@ -46,7 +46,7 @@ def strong_key(app):
 def _clean_events(db):
     yield
     db.session.rollback()
-    for model in (EventSessionModel, EventLinkModel, EventModel, EventTeamModel):
+    for model in (EventLeaderSessionModel, EventSessionModel, EventLinkModel, EventModel, EventTeamModel):
         model.query.delete()
     db.session.commit()
 

@@ -630,12 +630,27 @@ export const eventsAPI = {
   moveAccount: (eventId, sessionId, teamId) => api.post(`/events/${eventId}/accounts/${sessionId}/move`, { teamId }),
   closeAccount: (eventId, sessionId) => api.post(`/events/${eventId}/accounts/${sessionId}/close`),
 
-  join: (token) => axios.post(`${API_BASE_URL}/api/v1/events/join/${token}`),
+  listLeaderSessions: (eventId) => api.get(`/events/${eventId}/leader-sessions`),
+  revokeLeaderSession: (eventId, sessionId) => api.post(`/events/${eventId}/leader-sessions/${sessionId}/revoke`),
 
-  myTeam: () => api.get('/events/my-team'),
-  myTeamEnrollment: (data) => api.post('/events/my-team/enrollment', data),
-  myTeamAccounts: () => api.get('/events/my-team/accounts'),
-  myTeamMoveAccount: (sessionId, teamId) => api.post(`/events/my-team/accounts/${sessionId}/move`, { teamId }),
+  listTeamLeaders: (eventId) => api.get(`/events/${eventId}/team-leaders`),
+  // params: { search (at least 2 characters), teamId (leave out users already leading it) }
+  teamLeaderCandidates: (eventId, params) => api.get(`/events/${eventId}/team-leader-candidates`, { params }),
+  addTeamLeader: (eventId, data) => api.post(`/events/${eventId}/team-leaders`, data),
+  removeTeamLeader: (eventId, id) => api.delete(`/events/${eventId}/team-leaders/${id}`),
+
+  // data: { displayName } for leader links (the first call without it answers 400 display_name_required).
+  // asUser: send it with the normal session's token, so a leader link makes that user a
+  // personal leader (mode 'leader-account') instead of issuing a shared leader session.
+  join: (token, data, asUser = false) => (asUser
+    ? api.post(`/events/join/${token}`, data)
+    : axios.post(`${API_BASE_URL}/api/v1/events/join/${token}`, data)),
+
+  // scope: { eventId, teamId } of a personal leader; ignored for shared leader sessions
+  myTeam: (scope) => api.get('/events/my-team', { params: scope }),
+  myTeamEnrollment: (data, scope) => api.post('/events/my-team/enrollment', data, { params: scope }),
+  myTeamAccounts: (scope) => api.get('/events/my-team/accounts', { params: scope }),
+  myTeamMoveAccount: (sessionId, teamId, scope) => api.post(`/events/my-team/accounts/${sessionId}/move`, { teamId }, { params: scope }),
 };
 
 export default api;

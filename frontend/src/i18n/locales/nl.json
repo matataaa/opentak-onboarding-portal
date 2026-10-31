@@ -604,9 +604,37 @@
     "reapplyHint": "De huidige instellingen opnieuw opslaan om de apparaataccounts die niet konden worden bijgewerkt nogmaals te proberen",
     "hqPrintLabel": "HQ - ziet alle teams",
     "eudsUnavailable": "Apparaatgegevens konden niet uit OpenTAK Server worden gelezen.",
-    "refresh": "Vernieuwen"
+    "refresh": "Vernieuwen",
+    "enrolledBy": "Aangemeld door {{name}}",
+    "leaderSessions": "Leiders",
+    "leaderSessionsNotice": "Iedereen die via een leiderlink is binnengekomen. Intrekken beëindigt de toegang van die persoon zonder de link opnieuw te genereren; de apparaten die hij of zij heeft aangemeld blijven open (sluit ze hieronder indien nodig).",
+    "leaderSessionName": "Naam",
+    "leaderSessionJoined": "Binnengekomen",
+    "leaderSessionDevices": "Open apparaten",
+    "leaderSessionsEmpty": "Nog niemand is via een leiderlink binnengekomen.",
+    "leaderSessionRevokedAt": "Ingetrokken op {{date}}",
+    "leaderSessionRevoke": "Intrekken",
+    "leaderSessionRevokeConfirm": "De leidertoegang van {{name}} intrekken? De apparaten die hij of zij heeft aangemeld blijven open.",
+    "leaderSessionEnded": "Beëindigd",
+    "teamLeaders": "Teamleiders (accounts)",
+    "teamLeadersNotice": "Portalgebruikers die met hun eigen account een team leiden in dit evenement. Ze houden hun normale login en rechten en zien \"Mijn team\" voor dat team zolang het evenement open is. Wie ingelogd een leiderlink scant, komt hier vanzelf bij; als je die link opnieuw genereert, vervalt dat weer.",
+    "teamLeadersEmpty": "Nog geen teamleiders met een eigen account.",
+    "teamLeaderSearch": "Gebruikers zoeken",
+    "teamLeaderUser": "Gebruiker",
+    "teamLeaderSelectUser": "Kies gebruiker",
+    "teamLeaderAdd": "Toevoegen",
+    "teamLeaderRemove": "Verwijderen",
+    "teamLeaderRemoveConfirm": "{{name}} verwijderen als teamleider? De toegang tot de teampagina stopt direct; de apparaten die hij of zij heeft aangemeld blijven open.",
+    "teamLeaderSource": "Toegevoegd via",
+    "teamLeaderSourceAdmin": "Beheerder",
+    "teamLeaderSourceLink": "Leiderlink",
+    "leaderSessionAccount": "Eigen account: {{username}}",
+    "leaderSessionAccountRevokeConfirm": "{{name}} verwijderen als teamleider? De toegang tot de teampagina stopt direct; de apparaten die hij of zij heeft aangemeld blijven open."
   },
   "eventsMyTeam": {
+    "chooseTeam": "Kies je team",
+    "hq": "HQ",
+    "otherTeam": "Naar een ander team",
     "loading": "Laden…",
     "loadFailed": "Kon je team niet laden.",
     "playerLink": "Deelnamelink voor spelers",
@@ -639,7 +667,9 @@
     "moveConfirm": "Dit apparaat naar een ander team verplaatsen? Het verlaat jouw team.",
     "addToMyTeam": "Aan mijn team toevoegen",
     "addConfirm": "Dit apparaat aan je team toevoegen?",
-    "actionFailed": "De wijziging kon niet worden doorgevoerd."
+    "actionFailed": "De wijziging kon niet worden doorgevoerd.",
+    "leaderName": "Leider: {{name}}",
+    "enrolledBy": "Aangemeld door {{name}}"
   },
   "eventsShared": {
     "openInAtak": "Openen in ATAK",
@@ -655,7 +685,10 @@
     "failed": "Deze link is niet geldig.",
     "sharedIntro": "Scan deze code in ATAK om bij je team te komen.",
     "scanAtak": "ATAK → enrollment → scan deze QR-code.",
-    "noEnrollment": "Er is nu geen enrollment beschikbaar."
+    "noEnrollment": "Er is nu geen enrollment beschikbaar.",
+    "leaderNameLabel": "Je naam",
+    "leaderNameHint": "Zichtbaar voor de organisatie, zodat die ziet wie de leidertoegang gebruikt.",
+    "leaderJoin": "Doorgaan"
   },
   "admin": {
     "dashboard": {

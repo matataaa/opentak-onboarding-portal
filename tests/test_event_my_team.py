@@ -9,8 +9,8 @@ import pytest
 from flask_jwt_extended import create_access_token
 
 from app.api_v1 import events as events_mod
-from app.models import (EventLinkModel, EventModel, EventSessionModel, EventTeamModel, OTSGroupModel,
-                        SystemSettingsModel, UserModel, UserRoleModel)
+from app.models import (EventLeaderSessionModel, EventLinkModel, EventModel, EventSessionModel,
+                        EventTeamModel, OTSGroupModel, SystemSettingsModel, UserModel, UserRoleModel)
 
 STRONG = 'a-strong-secret-key-for-tests-0123456789'
 
@@ -58,7 +58,7 @@ def strong_key(app):
 def _clean(db):
     yield
     db.session.rollback()
-    for model in (EventSessionModel, EventLinkModel, EventTeamModel, EventModel):
+    for model in (EventLeaderSessionModel, EventSessionModel, EventLinkModel, EventTeamModel, EventModel):
         model.query.delete()
     db.session.commit()
 
@@ -103,12 +103,27 @@ def _leader_link(team, event):
     return link
 
 
-def _leader_headers(user, team, event, **extra):
+def _leader_session(team, event, link, name='Tester'):
+    """A ledger row as _join_as_leader writes it."""
+    from app.models import db
+    row = EventLeaderSessionModel(eventId=event.id, eventTeamId=team.id, eventLinkId=link.id,
+                                  displayName=name)
+    db.session.add(row)
+    db.session.commit()
+    return row
+
+
+def _leader_claims(team, event, name='Tester'):
     link = _leader_link(team, event)
-    claims = {'event_leader_team': team.id, 'event_leader_event': event.id,
-              'event_leader_until': 9999999999,
-              'event_leader_link': link.id, 'event_leader_link_version': link.tokenVersion,
-              'event_leader_link_nonce': link.tokenNonce}
+    return {'event_leader_team': team.id, 'event_leader_event': event.id,
+            'event_leader_until': 9999999999,
+            'event_leader_link': link.id, 'event_leader_link_version': link.tokenVersion,
+            'event_leader_link_nonce': link.tokenNonce,
+            'event_leader_session': _leader_session(team, event, link, name).id}
+
+
+def _leader_headers(user, team, event, **extra):
+    claims = _leader_claims(team, event)
     claims.update(extra)
     return {'Authorization': 'Bearer ' + create_access_token(
         identity=str(user.id), additional_claims=claims)}
@@ -267,7 +282,7 @@ def test_enrollment_ots_failure(client, db, strong_key, world, ots):
 # --- leader link binding, events switch, refresh ---------------------------
 def _join_leader(client, w):
     link = _leader_link(w['ta'], w['event'])
-    r = client.post('/api/v1/events/join/leader-tok-%d' % w['ta'].id)
+    r = client.post('/api/v1/events/join/leader-tok-%d' % w['ta'].id, json={'displayName': 'Anna'})
     assert r.status_code == 200, r.get_data(as_text=True)
     return link, r.get_json()
 
@@ -438,7 +453,7 @@ def test_real_revoke_and_delete_endpoints_end_session(client, db, strong_key, wo
     # a session joined on the regenerated link works, then dies on delete
     db.session.expire_all()
     link = EventLinkModel.query.get(link.id)
-    r = client.post('/api/v1/events/join/' + events_mod._derive_link_token(link))
+    r = client.post('/api/v1/events/join/' + events_mod._derive_link_token(link), json={'displayName': 'Bob'})
     assert r.status_code == 200
     h2 = _bearer(r.get_json()['access_token'])
     assert client.get('/api/v1/events/my-team', headers=h2).status_code == 200
@@ -458,7 +473,7 @@ def test_legacy_null_nonce_link_joins_and_is_bound(client, db, strong_key, world
     link.tokenNonce = None
     db.session.commit()
     old_hash = link.tokenHash
-    r = client.post('/api/v1/events/join/leader-tok-%d' % w['ta'].id)
+    r = client.post('/api/v1/events/join/leader-tok-%d' % w['ta'].id, json={'displayName': 'Anna'})
     assert r.status_code == 200
     db.session.expire_all()
     link = EventLinkModel.query.get(link.id)

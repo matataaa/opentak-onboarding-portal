@@ -364,6 +364,8 @@ export const AuthProvider = ({ children }) => {
 
   const isLeaderSession = isLeaderOnly(permissions.roles);
   const isEventLeader = (permissions.roles || []).includes('event_leader');
+  // Personal leaders: normal sessions designated as leader of a team in an open event
+  const leaderDesignations = permissions.leaderDesignations || [];
 
   const value = {
     user,
@@ -384,6 +386,7 @@ export const AuthProvider = ({ children }) => {
     // and must never be sent to the profile/password completion pages.
     isEventLeader,
     isLeaderSession,
+    leaderDesignations,
     needsProfileCompletion: needsProfileCompletion && !isEventLeader,
     needsPasswordSet: needsPasswordSet && !isEventLeader,
     impersonating,

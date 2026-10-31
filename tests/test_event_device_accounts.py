@@ -11,7 +11,7 @@ from app import jobs
 from app.exceptions import BadRequestError
 from app.api_v1 import events as events_mod
 from app.extensions import scheduler
-from app.models import (EventLinkModel, EventModel, EventSessionModel, EventTeamModel,
+from app.models import (EventLeaderSessionModel, EventLinkModel, EventModel, EventSessionModel, EventTeamModel,
                         OTSGroupModel, SystemSettingsModel, UserModel)
 from app.services import event_team_colors as etc
 
@@ -116,7 +116,8 @@ def ots(monkeypatch):
 def _clean(db):
     yield
     db.session.rollback()
-    for model in (EventSessionModel, EventLinkModel, EventTeamModel, EventModel, OTSGroupModel):
+    for model in (EventLeaderSessionModel, EventSessionModel, EventLinkModel, EventTeamModel, EventModel,
+                  OTSGroupModel):
         model.query.delete()
     db.session.commit()
 

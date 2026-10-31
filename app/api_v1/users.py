@@ -4,7 +4,7 @@ CRUD operations for user management
 """
 
 from flask import request, jsonify, current_app
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from app.api_v1 import api_v1
 from app.models import UserModel, UserRoleModel, OTSGroupModel, GroupUserAssociation, db
 from app.ots import OTSClient
@@ -486,6 +486,9 @@ def delete_user(user_id):
 
         # Delete from local database
         current_app.logger.info(f"Deleting user '{username}' from local database")
+        # Personal event leader designations reference the user (committed with the delete)
+        from app.api_v1.events import remove_user_leader_designations
+        remove_user_leader_designations(user_id, int(get_jwt_identity()))
         result = UserModel.delete_user_by_id(user_id)
 
         if isinstance(result, dict) and 'error' in result:

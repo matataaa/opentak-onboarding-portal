@@ -7,28 +7,57 @@ import { useAuth } from '../contexts/AuthContext';
 import EnrollmentLink from '../components/EnrollmentLink';
 import './EventsJoin.css';
 
+// Convenience only: the name last used on this browser for a leader link
+const LEADER_NAME_KEY = 'eventLeaderName';
+const LEADER_NAME_MAX = 80;
+
+const readLeaderName = () => {
+  try { return localStorage.getItem(LEADER_NAME_KEY) || ''; } catch { return ''; }
+};
+
+const saveLeaderName = (name) => {
+  try { localStorage.setItem(LEADER_NAME_KEY, name); } catch { /* storage unavailable */ }
+};
+
+// Only follow internal redirects from the server
+const internalPath = (value) =>
+  typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') ? value : '/events/my-team';
+
 export default function EventsJoin() {
   const { token } = useParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { oidcLogin } = useAuth();
-  const [state, setState] = useState('loading'); // loading | player | error
+  const { oidcLogin, updateUser, user, isLeaderSession, loading: authLoading } = useAuth();
+  // A normal (not shared leader) session joins with its token: a leader link then makes
+  // this user a personal leader and the session stays as it is
+  const asUser = !!user && !isLeaderSession;
+  const [state, setState] = useState('loading'); // loading | name | player | error
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [leaderName, setLeaderName] = useState('');
+  const [nameError, setNameError] = useState('');
+  const [joining, setJoining] = useState(false);
 
   // Each join creates a device account, so it must be sent exactly once per
   // token. oidcLogin/t/navigate change identity while auth loads (and StrictMode
   // re-runs effects in dev); keep them in a ref and guard the request by token.
+  // It waits for auth to load, so a logged-in user's join carries their session.
   const latest = useRef({});
-  latest.current = { navigate, oidcLogin, t };
+  latest.current = { navigate, oidcLogin, updateUser, t, asUser };
   const joinedToken = useRef(null);
 
   useEffect(() => {
-    if (joinedToken.current === token) return;
+    if (authLoading || joinedToken.current === token) return;
     joinedToken.current = token;
-    eventsAPI.join(token)
+    eventsAPI.join(token, undefined, latest.current.asUser)
       .then(async (res) => {
         const d = res.data;
+        if (d.mode === 'leader-account') {
+          // Bound to the user's own account: refresh permissions for the team page
+          await latest.current.updateUser();
+          latest.current.navigate(internalPath(d.redirect));
+          return;
+        }
         if (d.role === 'leader') {
           await latest.current.oidcLogin(d.access_token, d.refresh_token);
           latest.current.navigate('/events/my-team');
@@ -42,13 +71,65 @@ export default function EventsJoin() {
         setState('player');
       })
       .catch((e) => {
+        // Leader links ask who is joining before the leader session is issued
+        if (e.response?.status === 400 && e.response?.data?.code === 'display_name_required') {
+          setLeaderName(readLeaderName());
+          setState('name');
+          return;
+        }
         setError(e.response?.data?.error || latest.current.t('eventsJoin.failed'));
         setState('error');
       });
-  }, [token]);
+  }, [token, authLoading]);
+
+  const joinAsLeader = async (e) => {
+    e.preventDefault();
+    const name = leaderName.trim();
+    if (!name) return;
+    setJoining(true);
+    setNameError('');
+    try {
+      const d = (await eventsAPI.join(token, { displayName: name }, asUser)).data;
+      saveLeaderName(name);
+      if (d.mode === 'leader-account') {
+        await updateUser();
+        navigate(internalPath(d.redirect));
+        return;
+      }
+      await oidcLogin(d.access_token, d.refresh_token);
+      navigate('/events/my-team');
+    } catch (err) {
+      setNameError(err.response?.data?.error || t('eventsJoin.failed'));
+      setJoining(false);
+    }
+  };
 
   if (state === 'loading') {
     return <div className="events-join"><p>{t('eventsJoin.loading')}</p></div>;
+  }
+  if (state === 'name') {
+    return (
+      <div className="events-join">
+        <h1>{t('eventsJoin.title')}</h1>
+        <form className="events-join-name" onSubmit={joinAsLeader}>
+          <label htmlFor="events-join-leader-name">{t('eventsJoin.leaderNameLabel')}</label>
+          <input
+            id="events-join-leader-name"
+            type="text"
+            value={leaderName}
+            maxLength={LEADER_NAME_MAX}
+            autoComplete="name"
+            autoFocus
+            onChange={(e) => setLeaderName(e.target.value)}
+          />
+          <p className="events-join-hint">{t('eventsJoin.leaderNameHint')}</p>
+          <button type="submit" className="btn btn-primary" disabled={joining || !leaderName.trim()}>
+            {joining ? t('eventsJoin.loading') : t('eventsJoin.leaderJoin')}
+          </button>
+          {nameError && <p className="events-join-error">{nameError}</p>}
+        </form>
+      </div>
+    );
   }
   if (state === 'error') {
     return (

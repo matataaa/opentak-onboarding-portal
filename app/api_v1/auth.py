@@ -347,6 +347,7 @@ def refresh():
         claims['event_leader_link'] = jwt_data.get('event_leader_link')
         claims['event_leader_link_version'] = jwt_data.get('event_leader_link_version')
         claims['event_leader_link_nonce'] = jwt_data.get('event_leader_link_nonce')
+        claims['event_leader_session'] = jwt_data.get('event_leader_session')
         remaining = int(jwt_data.get('event_leader_until') or 0) - int(time.time())
         if remaining <= 0:
             return jsonify({'error': 'Session expired'}), 401
@@ -1529,10 +1530,18 @@ def get_user_permissions():
     # Check if user has any admin role
     is_admin = any(role in ADMIN_ROLES for role in user_roles)
 
+    # Personal event leaders (normal sessions only): the teams whose leader page they may open
+    claims = get_jwt()
+    designations = []
+    if claims.get('event_leader_team') is None and not claims.get('kiosk_session'):
+        from app.api_v1.events import leader_designations_for
+        designations = leader_designations_for(get_jwt_identity())
+
     return jsonify({
         'roles': user_roles,
         'modules': accessible_modules,
-        'isAdmin': is_admin
+        'isAdmin': is_admin,
+        'leaderDesignations': designations
     }), 200
 
 

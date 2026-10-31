@@ -9,10 +9,10 @@ from flask_jwt_extended import create_access_token, create_refresh_token
 
 from app import create_app
 from app.api_v1 import leader_scope
-from app.models import (EventModel, EventLinkModel, EventSessionModel, EventTeamModel,
-                        SystemSettingsModel, UserModel, UserRoleModel)
-from tests.test_event_my_team import (STRONG, _leader_headers, _leader_link, _team, _user,
-                                      strong_key)  # noqa: F401
+from app.models import (EventLeaderSessionModel, EventModel, EventLinkModel, EventSessionModel,
+                        EventTeamModel, SystemSettingsModel, UserModel, UserRoleModel)
+from tests.test_event_my_team import (STRONG, _leader_claims, _leader_headers, _leader_link, _team,
+                                      _user, strong_key)  # noqa: F401
 from tests.test_event_device_accounts import ots  # noqa: F401  (fake OTS)
 
 DENIED_MSG = 'Not available for event leader sessions'
@@ -40,7 +40,7 @@ NON_ALLOWLISTED = [
 def _clean(db):
     yield
     db.session.rollback()
-    for model in (EventSessionModel, EventLinkModel, EventTeamModel, EventModel):
+    for model in (EventLeaderSessionModel, EventSessionModel, EventLinkModel, EventTeamModel, EventModel):
         model.query.delete()
     db.session.commit()
 
@@ -60,11 +60,7 @@ def world(db, strong_key):
 
 
 def _claims(w):
-    link = _leader_link(w['team'], w['event'])
-    return {'event_leader_team': w['team'].id, 'event_leader_event': w['event'].id,
-            'event_leader_until': 9999999999, 'event_leader_link': link.id,
-            'event_leader_link_version': link.tokenVersion,
-            'event_leader_link_nonce': link.tokenNonce}
+    return _leader_claims(w['team'], w['event'])
 
 
 def _call(client, method, path, headers=None):

@@ -139,8 +139,9 @@ const ProtectedRoute = ({ children, adminOnly = false, allowIncomplete = false }
     return <Navigate to={`/login?next=${next}`} replace />;
   }
 
-  // Event leaders share one account: they cannot edit its profile or password
-  if (allowIncomplete && isEventLeader) {
+  // Event leaders share one account and may only use their team page: every other
+  // page (dashboard, profile, password, admin, ...) would only produce 403s
+  if (isEventLeader && location.pathname !== '/events/my-team') {
     return <Navigate to="/events/my-team" replace />;
   }
 
