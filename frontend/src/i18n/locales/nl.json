@@ -362,7 +362,8 @@
     "rejectConfirm": "Registratie afwijzen voor {{username}}?\n\nDeze actie kan niet ongedaan worden gemaakt. De gebruiker wordt op de hoogte gesteld.",
     "rejectRegistration": "Registratie afwijzen",
     "failedApprove": "Goedkeuren van registratie mislukt",
-    "failedReject": "Afwijzen van registratie mislukt"
+    "failedReject": "Afwijzen van registratie mislukt",
+    "cannotApprove": "Je kunt dit niet goedkeuren: de code geeft rechten die je zelf niet hebt."
   },
   "layout": {
     "myTeam": "Mijn team",
@@ -789,7 +790,90 @@
       "deleteRole": "Rol verwijderen",
       "failedCreate": "Aanmaken van rol mislukt",
       "failedUpdate": "Bijwerken van rol mislukt",
-      "failedDelete": "Verwijderen van rol mislukt"
+      "failedDelete": "Verwijderen van rol mislukt",
+      "customRoles": "Aangepaste rollen",
+      "customRolesHelp": "Rollen die je zelf samenstelt.",
+      "noCustomRoles": "Nog geen aangepaste rollen.",
+      "systemRoles": "Systeemrollen",
+      "systemRolesHelp": "De ingebouwde rollen en rollen uit OTS. Ze blijven werken zoals nu en zijn vergrendeld. Dupliceer er een om hem aan te passen.",
+      "showAll": "Toon alle {{count}}",
+      "collapse": "Inklappen",
+      "newRole": "Nieuwe rol",
+      "overviewLink": "Overzicht rollen en modules",
+      "rights": "Rechten",
+      "duplicate": "Dupliceren",
+      "modules": "Modules",
+      "users": "Gebruikers",
+      "codes": "Codes",
+      "role": "Rol",
+      "locked": "Vergrendeld",
+      "noRights": "Geen rechten",
+      "allModules": "Alle {{count}} modules",
+      "level": {
+        "none": "Geen",
+        "view": "Zien",
+        "partial": "Deels",
+        "full": "Volledig"
+      },
+      "levelHelp": {
+        "none": "geen toegang",
+        "view": "alleen bekijken",
+        "partial": "een deel wijzigen",
+        "full": "alles binnen de module"
+      },
+      "moduleOff": "Module uit",
+      "moduleOffTag": "module uit",
+      "moduleOffNotice": "Deze module staat uit in Instellingen. De rechten blijven bewaard, maar werken pas als de module weer aan staat.",
+      "duplicateTitle": "Rol \"{{name}}\" dupliceren",
+      "duplicateHelp": "De kopie krijgt dezelfde rechten onder een nieuwe naam. Gebruikers, codes en doelgroepen worden niet gekopieerd.",
+      "failedDuplicate": "Dupliceren van rol mislukt",
+      "beyondLevel": "Deze rol heeft rechten die je zelf niet hebt",
+      "editTitle": "Rol bewerken",
+      "viewTitle": "Rol bekijken",
+      "createHelp": "Maak eerst de rol aan en stel daarna de rechten samen.",
+      "audience": "Deze rol is ook doelgroep van {{profiles}} en {{channels}}. Dat blijft los van de rechten hieronder.",
+      "audienceProfiles_one": "{{count}} TAK-profiel",
+      "audienceProfiles_other": "{{count}} TAK-profielen",
+      "audienceChannels_one": "{{count}} Meshtastic-kanaal",
+      "audienceChannels_other": "{{count}} Meshtastic-kanalen",
+      "functionColumn": "Pagina of functie",
+      "viewColumn": "Zien",
+      "editColumn": "Wijzigen",
+      "checkboxView": "{{label}}: zien",
+      "checkboxEdit": "{{label}}: wijzigen",
+      "quickAllView": "Alles zien",
+      "quickAll": "Alles",
+      "quickNone": "Niets",
+      "sensitive": "Gevoelig",
+      "administratorOnly": "Alleen administrator",
+      "administratorOnlyHelp": "Niet toe te kennen aan een andere rol.",
+      "notGrantable": "Je hebt dit recht zelf niet, dus je kunt het niet toekennen.",
+      "legend": "Wijzigen zet Zien automatisch aan. Zet je Zien uit, dan gaat Wijzigen ook uit. Rechten die een ander recht nodig heeft gaan mee. Een gevoelig recht kan toegang geven tot accounts of geheimen.",
+      "lockedSystem": "Dit is een systeemrol: de rechten liggen vast. Dupliceer hem om je eigen versie samen te stellen.",
+      "lockedAboveLevel": "Deze rol heeft rechten die je zelf niet hebt, dus je kunt hem niet wijzigen.",
+      "readOnly": "Je kunt de rechten van deze rol bekijken, maar niet wijzigen.",
+      "noChanges": "Geen wijzigingen",
+      "unsaved_one": "1 wijziging nog niet opgeslagen",
+      "unsaved_other": "{{count}} wijzigingen nog niet opgeslagen",
+      "impact": "Na opslaan geldt dit direct voor {{users}} en {{codes}}.",
+      "impactUsers_one": "{{count}} gebruiker",
+      "impactUsers_other": "{{count}} gebruikers",
+      "impactCodes_one": "{{count}} onboardingcode",
+      "impactCodes_other": "{{count}} onboardingcodes",
+      "impactChecking": "Nagaan voor wie dit geldt...",
+      "sensitiveCount_one": "Deze rol bevat 1 gevoelig recht.",
+      "sensitiveCount_other": "Deze rol bevat {{count}} gevoelige rechten.",
+      "missingRights": "Je hebt zelf niet: {{rights}}",
+      "undo": "Wijzigingen ongedaan maken",
+      "save": "Rol opslaan",
+      "saved": "Rol opgeslagen",
+      "failedSave": "Opslaan van rol mislukt",
+      "failedLoad": "Laden van rol mislukt",
+      "overviewTitle": "Overzicht rollen en modules",
+      "showSystemRoles": "Systeemrollen tonen",
+      "module": "Module",
+      "userCountShort_one": "{{count}} gebruiker",
+      "userCountShort_other": "{{count}} gebruikers"
     },
     "groups": {
       "title": "OTS-groepenbeheer",
@@ -1643,6 +1727,261 @@
     "packages": {
       "title": "Pakketbeheer",
       "comingSoon": "ATAK-pakket CRUD-interface komt binnenkort. Gebruik de API op /api/v1/packages"
+    },
+    "permissions": {
+      "ignoredFields": "Opgeslagen, maar deze velden zijn niet gewijzigd omdat je het recht mist: {{fields}}",
+      "needsView": "Je hebt het recht Zien op {{module}} nodig om uit deze lijst te kiezen.",
+      "notAllowed": "Je hebt niet het recht om dit te wijzigen.",
+      "roleBeyondLevel": "Deze rol heeft rechten die je zelf niet hebt",
+      "hiddenValue": "Verborgen",
+      "codeAboveLevel": "Geeft rechten die je zelf niet hebt: voor jou alleen-lezen."
+    }
+  },
+  "permissions": {
+    "modules": {
+      "users": "Gebruikers",
+      "roles": "Rollen",
+      "onboarding": "Onboardingcodes",
+      "registrations": "Aanmeldingen",
+      "tak_profiles": "TAK-profielen",
+      "meshtastic": "Meshtastic",
+      "radios": "Radio's",
+      "announcements": "Aankondigingen",
+      "settings": "Instellingen",
+      "api_keys": "API-sleutels",
+      "api_docs": "API-documentatie",
+      "groups": "OTS-groepen",
+      "events": "Events"
+    },
+    "functions": {
+      "users__accounts": {
+        "label": "Accounts",
+        "description": "Lijst en gegevens van anderen. Wijzigen omvat e-mail en vervaldatum."
+      },
+      "users__create": {
+        "label": "Gebruiker aanmaken",
+        "description": "Nieuw account in OTS en het portaal."
+      },
+      "users__delete": {
+        "label": "Gebruiker verwijderen",
+        "description": "Verwijdert het account ook uit OTS."
+      },
+      "users__roles__assign": {
+        "label": "Rollen toewijzen",
+        "description": "Alleen rollen met rechten die je zelf ook hebt."
+      },
+      "users__groups__assign": {
+        "label": "OTS-groepen toewijzen",
+        "description": "Groepen van een gebruiker wijzigen."
+      },
+      "users__password__reset": {
+        "label": "Wachtwoord resetten",
+        "description": "Nieuw wachtwoord voor een ander instellen."
+      },
+      "users__impersonate": {
+        "label": "Gebruiker imiteren",
+        "description": "Inloggen als een andere gebruiker."
+      },
+      "roles": {
+        "label": "Rollen",
+        "description": "Naam en beschrijving van aangepaste rollen."
+      },
+      "roles__delete": {
+        "label": "Rol verwijderen",
+        "description": "Alleen aangepaste rollen."
+      },
+      "roles__permissions": {
+        "label": "Rechten van rollen wijzigen",
+        "description": "Dit scherm gebruiken."
+      },
+      "onboarding": {
+        "label": "Codes",
+        "description": "Zien toont ook de code zelf."
+      },
+      "onboarding__delete": {
+        "label": "Code verwijderen",
+        "description": ""
+      },
+      "onboarding__roles__assign": {
+        "label": "Rollen op een code zetten",
+        "description": "Ook de goedkeurende rol. Alleen binnen je eigen rechten."
+      },
+      "onboarding__groups__assign": {
+        "label": "Groepen op een code zetten",
+        "description": ""
+      },
+      "registrations": {
+        "label": "Aanmeldingen",
+        "description": "Openstaande aanmeldingen bekijken en bewerken."
+      },
+      "registrations__approve": {
+        "label": "Goedkeuren",
+        "description": "Maakt het account aan."
+      },
+      "registrations__delete": {
+        "label": "Verwijderen en opschonen",
+        "description": ""
+      },
+      "tak_profiles": {
+        "label": "Profielen",
+        "description": "Profielen en bestanden."
+      },
+      "tak_profiles__assign": {
+        "label": "Aan rollen koppelen",
+        "description": "Bepalen wie een profiel krijgt."
+      },
+      "tak_profiles__delete": {
+        "label": "Profiel verwijderen",
+        "description": ""
+      },
+      "meshtastic__channels": {
+        "label": "Kanalen",
+        "description": "De kanaal-URL bevat de sleutel."
+      },
+      "meshtastic__channels__delete": {
+        "label": "Kanaal verwijderen",
+        "description": ""
+      },
+      "meshtastic__channels__sync": {
+        "label": "Kanalen synchroniseren",
+        "description": ""
+      },
+      "meshtastic__groups": {
+        "label": "Kanaalgroepen",
+        "description": "Groepen, kanaalvolgorde en URL's."
+      },
+      "meshtastic__groups__delete": {
+        "label": "Kanaalgroep verwijderen",
+        "description": ""
+      },
+      "radios": {
+        "label": "Inventaris",
+        "description": "Alle radio's. Eigen radio's blijven voor iedereen zichtbaar."
+      },
+      "radios__assign": {
+        "label": "Radio toewijzen",
+        "description": "Eigenaar of gebruiker instellen."
+      },
+      "radios__delete": {
+        "label": "Radio verwijderen",
+        "description": ""
+      },
+      "radios__claim_code": {
+        "label": "Claimcode opvragen",
+        "description": ""
+      },
+      "radios__program": {
+        "label": "Programmeren en valideren",
+        "description": "Geeft toegang tot kanaal-URL's."
+      },
+      "announcements": {
+        "label": "Aankondigingen",
+        "description": "Lijst, details en bewerken."
+      },
+      "announcements__email_details": {
+        "label": "E-maildetails",
+        "description": "Ontvangers en foutmeldingen, anders gemaskeerd."
+      },
+      "announcements__delete": {
+        "label": "Aankondiging verwijderen",
+        "description": ""
+      },
+      "announcements__send": {
+        "label": "Verzenden en inplannen",
+        "description": "Direct of op een gekozen tijd verzenden."
+      },
+      "settings": {
+        "label": "Instellingen bekijken",
+        "description": "Alle algemene instellingen."
+      },
+      "settings__general": {
+        "label": "Algemeen",
+        "description": "Naam, help, iconen en installatie-QR."
+      },
+      "settings__branding": {
+        "label": "Huisstijl",
+        "description": "Logo, achtergrond en weergave."
+      },
+      "settings__registration": {
+        "label": "Registratie en meldingen",
+        "description": "Goedkeuring, opschonen en wachtwoord vergeten."
+      },
+      "settings__enrollment": {
+        "label": "QR en kiosk",
+        "description": ""
+      },
+      "settings__radios": {
+        "label": "Radio-instellingen",
+        "description": "Wat gebruikers met hun radio mogen."
+      },
+      "settings__modules": {
+        "label": "Modules aan en uit",
+        "description": "Meshtastic, Radio's en Events."
+      },
+      "settings__security": {
+        "label": "Inlogbeveiliging",
+        "description": "OIDC aan/uit en magic links."
+      },
+      "settings__oidc": {
+        "label": "OIDC-providers",
+        "description": "Een eigen provider kan elk account overnemen."
+      },
+      "api_keys": {
+        "label": "API-sleutels",
+        "description": "Aanmaken, wijzigen en vernieuwen."
+      },
+      "api_keys__delete": {
+        "label": "Sleutel verwijderen",
+        "description": ""
+      },
+      "api_docs": {
+        "label": "API-documentatie",
+        "description": "Pagina in het beheermenu."
+      },
+      "groups": {
+        "label": "Groepen",
+        "description": "Groepen bekijken en bewerken."
+      },
+      "groups__members": {
+        "label": "Groepsleden",
+        "description": "Leden en hun richting (IN/OUT)."
+      },
+      "groups__delete": {
+        "label": "Groep verwijderen",
+        "description": "Verwijdert de groep ook uit OTS."
+      },
+      "groups__sync": {
+        "label": "Synchroniseren met OTS",
+        "description": "Groepen ophalen uit OpenTAK Server."
+      },
+      "events": {
+        "label": "Events",
+        "description": "Events bekijken en bewerken."
+      },
+      "events__delete": {
+        "label": "Events en teams verwijderen",
+        "description": ""
+      },
+      "events__teams": {
+        "label": "Teams beheren",
+        "description": "Teams aanmaken en hun gedeelde leidersaccount instellen."
+      },
+      "events__links": {
+        "label": "Toegangslinks",
+        "description": "Links aanmaken, wijzigen en intrekken."
+      },
+      "events__links__reveal": {
+        "label": "Link-URL tonen",
+        "description": "De volledige link opnieuw opvragen, ook als QR-code."
+      },
+      "events__leaders": {
+        "label": "Teamleiders",
+        "description": "Teamleiders en hun sessies."
+      },
+      "events__accounts": {
+        "label": "Deelnemersaccounts",
+        "description": "Verplaatsen tussen teams en sluiten."
+      }
     }
   }
 }

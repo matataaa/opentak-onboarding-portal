@@ -10,8 +10,9 @@ function ApiKeysList() {
   const { t } = useTranslation();
   const dateFormat = useDateFormat();
   const { showSuccess, showError, confirm } = useNotification();
-  const { hasRole } = useAuth();
-  const canEdit = hasRole('api_key_admin') || hasRole('administrator');
+  const { can } = useAuth();
+  const canEdit = can('api_keys.edit');
+  const canDelete = can('api_keys.delete');
   const [apiKeys, setApiKeys] = useState([]);
   const [availablePermissions, setAvailablePermissions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -281,7 +282,7 @@ function ApiKeysList() {
                           {apiKey.is_active ? t('admin.apiKeys.deactivate') : t('admin.apiKeys.activate')}
                         </button>
                       )}
-                      {canEdit && (
+                      {canDelete && (
                         <button className="btn-small btn-delete" onClick={() => handleDelete(apiKey)} title={t('common.delete')}>
                           {t('common.delete')}
                         </button>

@@ -1116,8 +1116,11 @@ function OIDCProviderModal({ provider, roles, onSave, onClose, saving, error: ex
 
 function Settings() {
   const { t } = useTranslation();
-  const { hasRole, updateUser } = useAuth();
-  const canEdit = hasRole('settings_admin') || hasRole('administrator');
+  const { can, updateUser } = useAuth();
+  // Settings are authorised per key: the server marks each one editable or not
+  const canEditBranding = can('settings.branding.edit');
+  const canManageOidc = can('settings.oidc.view');
+  const canEditOidc = can('settings.oidc.edit');
   const queryClient = useQueryClient();
 
   const [settings, setSettings] = useState({});
@@ -1141,17 +1144,34 @@ function Settings() {
       const response = await rolesAPI.getAll();
       return response.data;
     },
+    enabled: canManageOidc,
   });
   const roles = rolesData?.roles || [];
+
+  // Without branding rights the admin logo endpoint refuses: show the logo from the public settings instead
+  const { data: publicSettings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: async () => (await settingsAPI.get()).data,
+    enabled: !canEditBranding,
+  });
+  const shownLogoSettings = canEditBranding ? logoSettings : publicSettings && {
+    ...publicSettings,
+    custom_logo_enabled: publicSettings.custom_logo_enabled === true || publicSettings.custom_logo_enabled === 'true',
+  };
 
   // Paired settings - these have both _enabled and _value (or _url) variants
   const pairedSettingKeys = ['brand_name', 'atak_installer_qr', 'itak_installer_qr', 'meshtastic_installer_qr_android', 'meshtastic_installer_qr_iphone', 'help_link', 'help_email'];
 
   useEffect(() => {
     fetchSettings();
-    fetchLogoSettings();
-    fetchOidcProviders();
-  }, []);
+    if (canEditBranding) fetchLogoSettings();
+  }, [canEditBranding]);
+
+  useEffect(() => {
+    if (canManageOidc) {
+      fetchOidcProviders();
+    }
+  }, [canManageOidc]);
 
   const fetchSettings = async () => {
     try {
@@ -1390,7 +1410,7 @@ function Settings() {
             type="checkbox"
             checked={isEnabled}
             onChange={() => handleToggle(setting.id, setting.value)}
-            disabled={saving || !canEdit}
+            disabled={saving || !setting.editable}
           />
           <span className="toggle-slider"></span>
         </label>
@@ -1405,7 +1425,7 @@ function Settings() {
         setting={setting}
         onSave={handleTextChange}
         saving={saving}
-        canEdit={canEdit}
+        canEdit={setting.editable}
       />
     );
   };
@@ -1498,7 +1518,7 @@ function Settings() {
             onToggle={handleToggle}
             onSave={handleTextChange}
             saving={saving}
-            canEdit={canEdit}
+            canEdit={enabledSetting.editable && (!valueSetting || valueSetting.editable)}
           />
         ))}
         {/* Render numeric settings */}
@@ -1567,7 +1587,7 @@ function Settings() {
               options={dropdownOptions[setting.key] || []}
               onSave={handleTextChange}
               saving={saving}
-              canEdit={canEdit}
+              canEdit={setting.editable}
             />
           ))}
           {backgroundSetting && (
@@ -1576,7 +1596,7 @@ function Settings() {
               onUpload={handleLoginBackgroundUpload}
               onDelete={handleLoginBackgroundDelete}
               saving={saving}
-              canEdit={canEdit}
+              canEdit={canEditBranding}
             />
           )}
           {renderCategorySettings(loginSettings)}
@@ -1585,7 +1605,7 @@ function Settings() {
               setting={heroSetting}
               onSave={handleTextChange}
               saving={saving}
-              canEdit={canEdit}
+              canEdit={heroSetting.editable}
             />
           )}
         </div>
@@ -1603,12 +1623,12 @@ function Settings() {
       <div className="settings-list">
         {groupId === 'branding' && (
           <LogoUploadSetting
-            logoSettings={logoSettings}
+            logoSettings={shownLogoSettings}
             onUpload={handleLogoUpload}
             onDelete={handleLogoDelete}
             onDisplayModeChange={handleDisplayModeChange}
             saving={saving}
-            canEdit={canEdit}
+            canEdit={canEditBranding}
           />
         )}
         {/* Color Settings */}
@@ -1618,7 +1638,7 @@ function Settings() {
             setting={setting}
             onSave={handleTextChange}
             saving={saving}
-            canEdit={canEdit}
+            canEdit={setting.editable}
           />
         ))}
         {renderCategorySettings(mainGroupSettings(groupId, groupSettings))}
@@ -1630,7 +1650,7 @@ function Settings() {
             options={dropdownOptions[setting.key] || []}
             onSave={handleTextChange}
             saving={saving}
-            canEdit={canEdit}
+            canEdit={setting.editable}
           />
         ))}
       </div>
@@ -1639,7 +1659,7 @@ function Settings() {
       {groupId === 'branding' && renderLoginPageSettings(groupSettings.filter(s => LOGIN_PAGE_SETTING_KEYS.includes(s.key)))}
 
       {/* OIDC Providers (part of Security) */}
-      {groupId === 'security' && (
+      {groupId === 'security' && canManageOidc && (
         <div className="settings-subsection">
           <div className="oidc-section-header">
             <h3>{t('admin.settings.oidcProviders')}</h3>
@@ -1647,7 +1667,7 @@ function Settings() {
               className="btn btn-primary"
               onClick={() => { setEditingProvider(null); setOidcModalError(''); setShowOidcModal(true); }}
               style={{ fontSize: '0.875rem', padding: '0.5rem 1rem' }}
-              disabled={!canEdit}
+              disabled={!canEditOidc}
             >
               {t('admin.settings.addProvider')}
             </button>
@@ -1701,7 +1721,7 @@ function Settings() {
                     <button
                       className="btn-save-setting"
                       onClick={() => { setEditingProvider(provider); setOidcModalError(''); setShowOidcModal(true); }}
-                      disabled={!canEdit}
+                      disabled={!canEditOidc}
                     >
                       {t('common.edit')}
                     </button>
@@ -1709,7 +1729,7 @@ function Settings() {
                       className="btn-cancel-setting"
                       onClick={() => handleOidcDelete(provider)}
                       style={{ color: '#c33' }}
-                      disabled={!canEdit}
+                      disabled={!canEditOidc}
                     >
                       {t('common.delete')}
                     </button>

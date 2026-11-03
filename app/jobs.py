@@ -3,6 +3,7 @@ from app.models import UserModel, AnnouncementModel, OneTimeTokenModel, EventSes
 from datetime import datetime, timedelta
 from flask import current_app
 from app.ots import otsClient, delete_user_if_present
+from app.rbac import has_privileged_role, is_service_account
 from app.settings import MAIL_ENABLED
 from app.services.event_team_colors import sync_event_team_colors, remove_event_colors_for_username, read_profiles
 import json
@@ -25,8 +26,11 @@ def remove_expired_accounts():
         today = datetime.now()
         expired_users = []
         for user in UserModel.query.filter(UserModel.expiryDate < today).all():
-            if any(r.name in ('administrator', 'admin') for r in user.roles):
+            if has_privileged_role(user):
                 print(f"Expired accounts: skipping administrator {user.username}")
+                continue
+            if is_service_account(user.username):
+                print(f"Expired accounts: skipping service account {user.username}")
                 continue
             expired_users.append(user)
         print(f"Expired accounts to remove: {len(expired_users)} {[u.username for u in expired_users]}")

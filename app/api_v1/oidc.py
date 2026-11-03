@@ -24,7 +24,7 @@ from joserfc.jwk import KeySet
 
 from app.api_v1 import api_v1
 from app.models import db, UserModel, UserRoleModel, OIDCProviderModel, SystemSettingsModel
-from app.rbac import require_role
+from app.rbac import require_permission
 from app.ots import OTSClient
 
 
@@ -410,7 +410,7 @@ def oidc_callback(provider_id):
 
 @api_v1.route('/admin/oidc/providers', methods=['GET'])
 @jwt_required()
-@require_role('administrator', 'settings_admin')
+@require_permission('settings.oidc.view')
 def get_admin_oidc_providers():
     """List all OIDC providers (admin view, secrets masked)"""
     providers = OIDCProviderModel.query.order_by(OIDCProviderModel.id).all()
@@ -421,7 +421,7 @@ def get_admin_oidc_providers():
 
 @api_v1.route('/admin/oidc/providers', methods=['POST'])
 @jwt_required()
-@require_role('administrator', 'settings_admin')
+@require_permission('settings.oidc.edit')
 def create_oidc_provider():
     """Create a new OIDC provider"""
     data = request.get_json()
@@ -466,7 +466,7 @@ def create_oidc_provider():
 
 @api_v1.route('/admin/oidc/providers/<int:provider_id>', methods=['PUT'])
 @jwt_required()
-@require_role('administrator', 'settings_admin')
+@require_permission('settings.oidc.edit')
 def update_oidc_provider(provider_id):
     """Update an existing OIDC provider"""
     provider = OIDCProviderModel.query.get(provider_id)
@@ -510,7 +510,7 @@ def update_oidc_provider(provider_id):
 
 @api_v1.route('/admin/oidc/providers/<int:provider_id>', methods=['DELETE'])
 @jwt_required()
-@require_role('administrator', 'settings_admin')
+@require_permission('settings.oidc.edit')
 def delete_oidc_provider(provider_id):
     """Delete an OIDC provider"""
     provider = OIDCProviderModel.query.get(provider_id)
@@ -539,7 +539,7 @@ ICON_MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
 
 @api_v1.route('/admin/oidc/providers/<int:provider_id>/icon', methods=['POST'])
 @jwt_required()
-@require_role('administrator', 'settings_admin')
+@require_permission('settings.oidc.edit')
 def upload_oidc_icon(provider_id):
     """Upload an icon for an OIDC provider"""
     provider = OIDCProviderModel.query.get(provider_id)
@@ -596,7 +596,7 @@ def upload_oidc_icon(provider_id):
 
 @api_v1.route('/admin/oidc/providers/<int:provider_id>/icon', methods=['DELETE'])
 @jwt_required()
-@require_role('administrator', 'settings_admin')
+@require_permission('settings.oidc.edit')
 def delete_oidc_icon(provider_id):
     """Delete the icon for an OIDC provider"""
     provider = OIDCProviderModel.query.get(provider_id)

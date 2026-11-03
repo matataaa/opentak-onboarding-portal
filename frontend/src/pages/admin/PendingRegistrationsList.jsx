@@ -6,6 +6,7 @@ import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatDateTime, useDateFormat } from '../../utils/formatDate';
 import { isValidNewPassword } from '../../utils/passwordRules';
+import { moduleLabel } from '../../utils/permissions';
 import './PendingRegistrationsList.css';
 
 function PendingRegistrationsList() {
@@ -18,7 +19,8 @@ function PendingRegistrationsList() {
   const [modalMode, setModalMode] = useState('create'); // 'create' or 'edit'
   const [selectedPending, setSelectedPending] = useState(null);
   const [onboardingCodes, setOnboardingCodes] = useState([]);
-  const [allowManualApproval, setAllowManualApproval] = useState(true);
+  // Off until the setting says otherwise (without settings.view it stays off)
+  const [allowManualApproval, setAllowManualApproval] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -32,15 +34,20 @@ function PendingRegistrationsList() {
   const [formLoading, setFormLoading] = useState(false);
   const navigate = useNavigate();
   const { showSuccess, showError, confirm } = useNotification();
-  const { hasRole } = useAuth();
-  const canEdit = hasRole('registration_admin') || hasRole('administrator');
+  const { can } = useAuth();
+  const canEdit = can('registrations.edit');
+  const canApprove = can('registrations.approve');
+  const canDelete = can('registrations.delete');
+  // The code picker reads onboarding codes, the manual-approval switch reads settings
+  const canViewCodes = can('onboarding.view');
+  const canViewSettings = can('settings.view');
 
   const API_URL = window.location.origin;
 
   useEffect(() => {
     fetchPendingRegistrations();
-    fetchOnboardingCodes();
-    fetchSettings();
+    if (canViewCodes) fetchOnboardingCodes();
+    if (canViewSettings) fetchSettings();
   }, []);
 
   const fetchSettings = async () => {
@@ -322,7 +329,7 @@ function PendingRegistrationsList() {
               {t('admin.pendingRegistrations.createNew')}
             </button>
           )}
-          {canEdit && (
+          {canDelete && (
             <button onClick={handleCleanupExpired} className="btn-warning">
               {t('admin.pendingRegistrations.cleanUpExpired')}
             </button>
@@ -402,7 +409,8 @@ function PendingRegistrationsList() {
                     )}
                   </td>
                   <td className="actions">
-                    {canEdit && allowManualApproval && pending.approval_status !== 'pending_approval' && (
+                    {/* Also for registrations waiting on their approver role: the server checks the code's level */}
+                    {canApprove && allowManualApproval && (
                       <button
                         onClick={() => handleApprove(pending.id, pending.username)}
                         className="btn-small btn-success"
@@ -429,7 +437,7 @@ function PendingRegistrationsList() {
                         {pending.is_expired ? t('admin.pendingRegistrations.restart') : t('admin.pendingRegistrations.resend')}
                       </button>
                     )}
-                    {canEdit && (
+                    {canDelete && (
                       <button
                         onClick={() => handleDelete(pending.id, pending.username)}
                         className="btn-small btn-danger"
@@ -573,11 +581,18 @@ function PendingRegistrationsList() {
                   <option value="">{t('admin.pendingRegistrations.selectCode')}</option>
                   {onboardingCodes.map((code) => (
                     <option key={code.id} value={code.id}>
-                      {code.name} ({code.onboardingCode})
+                      {code.onboardingCode ? `${code.name} (${code.onboardingCode})` : code.name}
                     </option>
                   ))}
+                  {/* Without the code list, keep the current code so saving does not change it */}
+                  {!canViewCodes && selectedPending?.onboarding_code && (
+                    <option value={selectedPending.onboarding_code_id}>{selectedPending.onboarding_code.name}</option>
+                  )}
                 </select>
-                {onboardingCodes.length === 0 && (
+                {!canViewCodes && (
+                  <small style={{ display: 'block' }}>{t('admin.permissions.needsView', { module: moduleLabel(t, 'onboarding') })}</small>
+                )}
+                {canViewCodes && onboardingCodes.length === 0 && (
                   <small style={{ color: '#dc3545', fontWeight: '500', display: 'block', marginTop: '0.5rem' }}>
                     {t('admin.pendingRegistrations.noCodesWarning')}
                   </small>

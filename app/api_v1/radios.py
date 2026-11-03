@@ -6,6 +6,7 @@ CRUD operations for radio device management
 from flask import request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from app.api_v1 import api_v1
+from app.rbac import drop_fields_without_permission, has_permission, ignored_fields_body, require_permission
 from app.models import RadioModel, UserModel, MeshtasticChannelGroup, MeshtasticModel, SystemSettingsModel
 from app.pagination import search_and_paginate
 from datetime import datetime
@@ -62,14 +63,6 @@ def get_model_name(model_value):
     return model_value
 
 
-def require_admin_role():
-    """Check for radio_admin or administrator role"""
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'radio_admin']):
-        return jsonify({'error': 'Radio admin access required'}), 403
-    return None
-
-
 RADIO_TYPES = ('meshtastic', 'other')
 
 
@@ -113,16 +106,18 @@ def check_radio_duplicates(data, exclude_id=None):
     return None
 
 
+ASSIGNMENT_FIELDS = {'radios.assign': ('assignedTo', 'assignedToId', 'owner', 'ownerId')}
+
+
 @api_v1.route('/radios', methods=['GET'])
 @jwt_required()
 def get_radios():
     """Get all radios (admin/readonly) or user's radios, optionally filtered by search and paginated
     (all radios when per_page is omitted)"""
-    from app.rbac import has_any_role
     current_user_id = int(get_jwt_identity())  # Convert string to int
     claims = get_jwt()
     is_kiosk = claims.get('kiosk_session', False)
-    is_admin = has_any_role(['administrator', 'radio_admin', 'radio_readonly'])
+    is_admin = has_permission('radios.view')
 
     if is_admin and not is_kiosk:
         query = RadioModel.query
@@ -167,9 +162,8 @@ def get_radio(radio_id):
         return jsonify({'error': 'Radio not found'}), 404
 
     # Check access
-    from app.rbac import has_any_role
     current_user_id = int(get_jwt_identity())  # Convert string to int
-    is_admin = has_any_role(['administrator', 'radio_admin', 'radio_readonly'])
+    is_admin = has_permission('radios.view')
 
     if not is_admin and radio.assignedTo != current_user_id and radio.owner != current_user_id:
         return jsonify({'error': 'Access denied'}), 403
@@ -198,13 +192,11 @@ def get_radio(radio_id):
 
 @api_v1.route('/radios', methods=['POST'])
 @jwt_required()
+@require_permission('radios.edit')
 def create_radio():
     """Create a new radio (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     data = request.get_json()
+    ignored = drop_fields_without_permission(data, ASSIGNMENT_FIELDS)
 
     required_fields = ['name']
     for field in required_fields:
@@ -245,7 +237,8 @@ def create_radio():
                 'id': radio.id,
                 'name': radio.name,
                 'mac': radio.mac
-            }
+            },
+            **ignored_fields_body(ignored)
         }), 201
 
     except Exception as e:
@@ -254,17 +247,15 @@ def create_radio():
 
 @api_v1.route('/radios/<int:radio_id>', methods=['PUT'])
 @jwt_required()
+@require_permission('radios.edit')
 def update_radio(radio_id):
     """Update radio (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     radio = RadioModel.get_by_id(radio_id)
     if not radio:
         return jsonify({'error': 'Radio not found'}), 404
 
     data = request.get_json()
+    ignored = drop_fields_without_permission(data, ASSIGNMENT_FIELDS)
 
     type_error = invalid_radio_type(data)
     if type_error:
@@ -315,7 +306,7 @@ def update_radio(radio_id):
         radio.updatedAt = datetime.utcnow()
         RadioModel.update(radio)
 
-        return jsonify({'message': 'Radio updated successfully'}), 200
+        return jsonify({'message': 'Radio updated successfully', **ignored_fields_body(ignored)}), 200
 
     except Exception as e:
         return jsonify({'error': f'Failed to update radio: {str(e)}'}), 400
@@ -323,12 +314,9 @@ def update_radio(radio_id):
 
 @api_v1.route('/radios/<int:radio_id>/assign', methods=['PUT'])
 @jwt_required()
+@require_permission('radios.assign')
 def assign_radio(radio_id):
     """Assign radio to user (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     radio = RadioModel.get_by_id(radio_id)
     if not radio:
         return jsonify({'error': 'Radio not found'}), 404
@@ -378,15 +366,12 @@ def claim_radio(radio_id):
 
 @api_v1.route('/radios/<int:radio_id>/claim-code', methods=['GET'])
 @jwt_required()
+@require_permission('radios.claim_code')
 def get_claim_code(radio_id):
     """
     Get the claim code for a radio (admin only).
     The claim code is the radio's MAC address.
     """
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'radio_admin', 'radio_readonly']):
-        return jsonify({'error': 'Admin access required'}), 403
-
     radio = RadioModel.get_by_id(radio_id)
     if not radio:
         return jsonify({'error': 'Radio not found'}), 404
@@ -512,12 +497,9 @@ def enroll_radio():
 
 @api_v1.route('/radios/<int:radio_id>', methods=['DELETE'])
 @jwt_required()
+@require_permission('radios.delete')
 def delete_radio(radio_id):
     """Delete radio (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     radio = RadioModel.get_by_id(radio_id)
     if not radio:
         return jsonify({'error': 'Radio not found'}), 404
@@ -569,9 +551,8 @@ def get_program_config(radio_id):
     Output: { radio: {}, channels: [], yaml_config: string, combined_url: string }
     Resolves placeholders: ${shortName}, ${longName}, ${mac}, ${callsign}
     """
-    from app.rbac import has_any_role
     current_user_id = int(get_jwt_identity())
-    is_admin = has_any_role(['administrator', 'radio_admin', 'radio_readonly'])
+    is_admin = has_permission('radios.program')
 
     radio = RadioModel.get_by_id(radio_id)
     if not radio:
@@ -686,9 +667,8 @@ def compare_config(radio_id):
         target_config: { ... }
     }
     """
-    from app.rbac import has_any_role
     current_user_id = int(get_jwt_identity())
-    is_admin = has_any_role(['administrator', 'radio_admin', 'radio_readonly'])
+    is_admin = has_permission('radios.program')
 
     radio = RadioModel.get_by_id(radio_id)
     if not radio:

@@ -6,6 +6,7 @@ Upload and manage custom logo for the portal
 from flask import request, jsonify, current_app, send_from_directory
 from flask_jwt_extended import jwt_required
 from app.api_v1 import api_v1
+from app.rbac import require_permission
 from app.models import SystemSettingsModel
 from app import db
 from werkzeug.utils import secure_filename
@@ -80,6 +81,7 @@ def _remove_upload(path):
 
 @api_v1.route('/admin/logo', methods=['POST'])
 @jwt_required()
+@require_permission('settings.branding.edit')
 def upload_logo():
     """
     Upload a custom logo (admin only)
@@ -106,10 +108,6 @@ def upload_logo():
       500:
         description: Failed to upload logo
     """
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'settings_admin']):
-        return jsonify({'error': 'Settings admin access required'}), 403
-
     if 'logo' not in request.files:
         return jsonify({'error': 'No logo file provided'}), 400
 
@@ -174,6 +172,7 @@ def upload_logo():
 
 @api_v1.route('/admin/logo', methods=['DELETE'])
 @jwt_required()
+@require_permission('settings.branding.edit')
 def delete_logo():
     """
     Delete custom logo and reset to default
@@ -190,10 +189,6 @@ def delete_logo():
       500:
         description: Failed to delete logo
     """
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'settings_admin']):
-        return jsonify({'error': 'Settings admin access required'}), 403
-
     try:
         _remove_upload(SystemSettingsModel.get_setting('custom_logo_path'))
 
@@ -220,6 +215,7 @@ def delete_logo():
 
 @api_v1.route('/admin/login-background', methods=['POST'])
 @jwt_required()
+@require_permission('settings.branding.edit')
 def upload_login_background():
     """
     Upload a login page background image (admin only)
@@ -246,10 +242,6 @@ def upload_login_background():
       500:
         description: Failed to upload background
     """
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'settings_admin']):
-        return jsonify({'error': 'Settings admin access required'}), 403
-
     if 'background' not in request.files:
         return jsonify({'error': 'No background file provided'}), 400
 
@@ -289,6 +281,7 @@ def upload_login_background():
 
 @api_v1.route('/admin/login-background', methods=['DELETE'])
 @jwt_required()
+@require_permission('settings.branding.edit')
 def delete_login_background():
     """
     Delete the login page background image
@@ -305,10 +298,6 @@ def delete_login_background():
       500:
         description: Failed to delete background
     """
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'settings_admin']):
-        return jsonify({'error': 'Settings admin access required'}), 403
-
     try:
         _remove_upload(SystemSettingsModel.get_setting('login_background_path'))
 
@@ -329,6 +318,7 @@ def delete_login_background():
 
 @api_v1.route('/admin/logo', methods=['GET'])
 @jwt_required()
+@require_permission('settings.branding.edit')
 def get_logo_settings():
     """
     Get current logo settings
@@ -354,10 +344,6 @@ def get_logo_settings():
       403:
         description: Admin access required
     """
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'settings_admin']):
-        return jsonify({'error': 'Settings admin access required'}), 403
-
     enabled = SystemSettingsModel.get_setting('custom_logo_enabled')
     custom_logo_enabled = enabled and str(enabled).lower() == 'true'
 

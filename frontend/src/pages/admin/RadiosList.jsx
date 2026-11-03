@@ -10,6 +10,7 @@ import { getModelOptions } from '../../constants/hardwareModels';
 import ProgramRadioModal from '../../components/ProgramRadioModal';
 import ConfigValidatorModal from '../../components/ConfigValidatorModal';
 import Pagination from '../../components/Pagination';
+import { moduleLabel, warnIgnoredFields } from '../../utils/permissions';
 import '../../components/AdminTable.css';
 
 const FRONTEND_URL = window.location.origin;
@@ -18,9 +19,15 @@ function RadiosList() {
   const { t } = useTranslation();
   const { radioId } = useParams();
   const queryClient = useQueryClient();
-  const { showError, confirm } = useNotification();
-  const { hasRole } = useAuth();
-  const canEdit = hasRole('radio_admin') || hasRole('administrator');
+  const { showError, showWarning, confirm } = useNotification();
+  const { can } = useAuth();
+  const canEdit = can('radios.edit');
+  const canDelete = can('radios.delete');
+  const canAssign = can('radios.assign');
+  const canClaimCode = can('radios.claim_code');
+  const canProgram = can('radios.program');
+  // Names of assigned users and the assignment pickers come from the user list
+  const canViewUsers = can('users.accounts.view');
   const [showModal, setShowModal] = useState(false);
   const [showProgramModal, setShowProgramModal] = useState(false);
   const [programmingRadio, setProgrammingRadio] = useState(null);
@@ -84,6 +91,7 @@ function RadiosList() {
       const response = await usersAPI.getAll({ per_page: 1000 });
       return response.data;
     },
+    enabled: canViewUsers,
   });
 
   const { data: settingsData } = useQuery({
@@ -114,20 +122,22 @@ function RadiosList() {
 
   const createMutation = useMutation({
     mutationFn: (data) => radiosAPI.create(data),
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries(['radios']);
       setShowModal(false);
       resetForm();
+      warnIgnoredFields(response, showWarning, t);
     },
     onError: (err) => setError(err.response?.data?.error || t('admin.radios.failedCreate')),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => radiosAPI.update(id, data),
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries(['radios']);
       setShowModal(false);
       resetForm();
+      warnIgnoredFields(response, showWarning, t);
     },
     onError: (err) => setError(err.response?.data?.error || t('admin.radios.failedUpdate')),
   });
@@ -221,6 +231,11 @@ function RadiosList() {
       assignedTo: formData.assignedTo || null,
       owner: formData.owner || null
     };
+    // Leave out what this user may not set, so the server has nothing to ignore
+    if (!canAssign) {
+      delete submitData.assignedTo;
+      delete submitData.owner;
+    }
 
     if (editing) {
       updateMutation.mutate({ id: editing.id, data: submitData });
@@ -595,12 +610,12 @@ function RadiosList() {
                   <td>{radio.model || '-'}</td>
                   <td>{radio.mac || '-'}</td>
                   <td><code>{radio.meshtasticId || '-'}</code></td>
-                  <td>{users.find(u => u.id === radio.assignedTo)?.username || '-'}</td>
+                  <td>{users.find(u => u.id === radio.assignedTo)?.username || (radio.assignedTo ? `#${radio.assignedTo}` : '-')}</td>
                   <td>
                     <div className="table-actions">
                       {radio.radioType === 'meshtastic' && (
                         <>
-                          {meshtasticEnabled && (
+                          {meshtasticEnabled && canProgram && (
                             <>
                               <button
                                 className="btn btn-sm btn-secondary"
@@ -633,7 +648,7 @@ function RadiosList() {
                           )}
                         </>
                       )}
-                      {canEdit && claimRadioEnabled && !radio.assignedTo && radio.meshtasticId && (
+                      {canClaimCode && claimRadioEnabled && !radio.assignedTo && radio.meshtasticId && (
                         <button
                           className="btn btn-sm btn-info"
                           onClick={() => copyClaimUrl(radio)}
@@ -647,7 +662,7 @@ function RadiosList() {
                           {t('common.edit')}
                         </button>
                       )}
-                      {canEdit && (
+                      {canDelete && (
                         <button className="btn btn-sm btn-danger" onClick={async () => {
                           const confirmed = await confirm(t('admin.radios.deleteConfirm', { name: radio.name }), t('admin.radios.deleteRadio'));
                           if (confirmed) deleteMutation.mutate(radio.id);
@@ -800,21 +815,27 @@ function RadiosList() {
 
                 <div className="form-group">
                   <label>{t('admin.radios.assignedToLabel')}</label>
-                  <select value={formData.assignedTo || ''} onChange={(e) => setFormData({...formData, assignedTo: e.target.value ? parseInt(e.target.value) : null})}>
+                  <select value={formData.assignedTo || ''} disabled={!canAssign || !canViewUsers} onChange={(e) => setFormData({...formData, assignedTo: e.target.value ? parseInt(e.target.value) : null})}>
                     <option value="">{t('admin.radios.unassigned')}</option>
                     {users.map(user => (
                       <option key={user.id} value={user.id}>{user.username} ({user.firstName} {user.lastName})</option>
                     ))}
+                    {!canViewUsers && formData.assignedTo && <option value={formData.assignedTo}>#{formData.assignedTo}</option>}
                   </select>
                 </div>
 
+                {canAssign && !canViewUsers && (
+                  <span className="help-text">{t('admin.permissions.needsView', { module: moduleLabel(t, 'users') })}</span>
+                )}
+
                 <div className="form-group">
                   <label>{t('admin.radios.ownerLabel')}</label>
-                  <select value={formData.owner || ''} onChange={(e) => setFormData({...formData, owner: e.target.value ? parseInt(e.target.value) : null})}>
+                  <select value={formData.owner || ''} disabled={!canAssign || !canViewUsers} onChange={(e) => setFormData({...formData, owner: e.target.value ? parseInt(e.target.value) : null})}>
                     <option value="">{t('admin.radios.noOwner')}</option>
                     {users.map(user => (
                       <option key={user.id} value={user.id}>{user.username} ({user.firstName} {user.lastName})</option>
                     ))}
+                    {!canViewUsers && formData.owner && <option value={formData.owner}>#{formData.owner}</option>}
                   </select>
                 </div>
 
@@ -822,7 +843,7 @@ function RadiosList() {
 
               <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  {meshtasticEnabled && editing && editing.radioType === 'meshtastic' && (
+                  {meshtasticEnabled && canProgram && editing && editing.radioType === 'meshtastic' && (
                     <>
                       <button
                         type="button"

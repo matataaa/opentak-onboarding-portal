@@ -1,22 +1,20 @@
 """
 Role-Based Access Control (RBAC) helpers for the OpenTAK Onboarding Portal.
 
-Admin roles (stored in local database, not OTS):
-- administrator: Full access to everything
-- user_admin: Manage users
-- role_admin: Manage roles
-- onboarding_admin: Manage onboarding codes
-- registration_admin: Manage pending registrations
-- tak_profile_admin: Manage TAK profiles
-- meshtastic_admin: Manage Meshtastic configurations
-- radio_admin: Manage radios
-- announcement_admin: Manage announcements
-- settings_admin: Manage system settings
+Roles are stored in the local database, not in OTS, and are read on every request. Endpoints check
+permissions (catalogue in app/permissions.py), not role names:
+- administrator: all permissions
+- <x>_admin / <x>_readonly in ADMIN_ROLES: the permissions of their module(s), fixed in code
+- any other role that is not reserved (custom): the permissions in its role_permissions rows
+Audiences (who gets a TAK profile, an announcement, an approval) go by role id, not by permission.
 """
 
 from functools import wraps
-from flask import jsonify
+from flask import current_app, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity
+
+from app.permissions import (ALL_PERMISSIONS, ALSO_NEEDS_MODULE, ASSIGNABLE_PERMISSIONS, BUILTIN_ROLE_PERMISSIONS, CATALOGUE,
+                             PORTAL_MODULES, denied_message, enforce_requires, module_of, with_implied_views)
 
 # Define admin roles with description and display name
 # Format: role_name: (description, display_name)
@@ -65,6 +63,22 @@ MODULE_ROLES = {
     'events': ['administrator', 'events_admin', 'events_readonly'],
 }
 
+# Roles that grant full administrator rights in OTS (a row named admin/Admin counts too)
+PRIVILEGED_ROLE_NAMES = {'administrator', 'admin'}
+# Names a new or renamed role may not take: they have a fixed meaning in the portal or OTS
+RESERVED_ROLE_NAMES = PRIVILEGED_ROLE_NAMES | {'event_leader', 'user'} | set(ADMIN_ROLES)
+
+# Subset rule: nobody grants what they do not hold (see deny_beyond_actor)
+ROLE_BEYOND_ACTOR_ERROR = 'You cannot grant or remove a role with permissions you do not hold'
+APPROVER_BEYOND_ACTOR_ERROR = 'Only an administrator can set or replace an administrator role as approver'
+TARGET_BEYOND_ACTOR_ERROR = 'You cannot change a user with permissions you do not hold'
+CODE_BEYOND_ACTOR_ERROR = 'You cannot use an onboarding code that hands out permissions you do not hold'
+
+SERVICE_ACCOUNT_PASSWORD_ERROR = (
+    'The password of the portal service account cannot be changed through the portal: '
+    'change it in OpenTAK Server and in the portal configuration (OTS_PASSWORD)'
+)
+
 
 def get_user_roles():
     """Get the roles from the database for the current user (not from JWT)"""
@@ -101,89 +115,249 @@ def get_user_roles():
         return []
 
 
-def has_role(role_name):
-    """Check if user has a specific role (from database)"""
-    return role_name in get_user_roles()
+def get_effective_permissions():
+    """The permissions of the current user: the union over their roles, from the database.
 
-
-def has_any_role(role_names):
-    """Check if user has any of the specified roles (from database)"""
-    user_roles = get_user_roles()
-    return any(role in user_roles for role in role_names)
-
-
-def has_module_access(module_name):
-    """Check if user has access to a specific module"""
-    required_roles = MODULE_ROLES.get(module_name, ['administrator'])
-    return has_any_role(required_roles)
-
-
-def require_role(*allowed_roles):
+    Cached on the WSGI environ, so per request (flask.g lives as long as the app context).
+    Kiosk and event-leader sessions resolve to no permissions through get_user_roles().
     """
-    Decorator to require specific role(s) for an endpoint.
-    Checks roles from database, not JWT.
-    Administrator role always has access.
+    permissions = request.environ.get('portal.permissions')
+    if permissions is None:
+        permissions = _resolve_permissions(get_user_roles())
+        request.environ['portal.permissions'] = permissions
+    return permissions
 
-    Usage:
-        @require_role('user_admin')
-        def get_users():
-            ...
 
-        @require_role('role_admin', 'user_admin')
-        def some_endpoint():
-            ...
+def _resolve_permissions(role_names):
+    from app.models import RolePermissionModel, UserRoleModel
+
+    permissions = set()
+    custom_names = []
+    for name in role_names:
+        if name in BUILTIN_ROLE_PERMISSIONS:
+            permissions |= BUILTIN_ROLE_PERMISSIONS[name]
+        elif is_custom_role_name(name):
+            custom_names.append(name)
+    if custom_names:
+        rows = RolePermissionModel.query.join(UserRoleModel).filter(UserRoleModel.name.in_(custom_names)).all()
+        # A key can have left the catalogue since it was stored
+        permissions |= with_implied_views(row.permission for row in rows if row.permission in ASSIGNABLE_PERMISSIONS)
+        # Over all roles together: another role may hold what a key needs. Built-ins always meet their own.
+        permissions = enforce_requires(permissions)
+    return frozenset(permissions)
+
+
+def has_permission(key):
+    """Check if the current user holds a permission of the catalogue in app/permissions.py"""
+    return key in get_effective_permissions()
+
+
+def permission_denied(key):
+    return jsonify({'error': denied_message(key)}), 403
+
+
+def require_permission(key):
     """
+    Decorator to require a permission for an endpoint; goes below @jwt_required().
+    Field-level permissions and settings by key are checked in the endpoint with has_permission().
+    """
+    if key not in ALL_PERMISSIONS:
+        raise ValueError(f'Unknown permission: {key}')
+
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
-            user_roles = get_user_roles()
-
-            # Administrator always has access
-            if 'administrator' in user_roles:
-                return fn(*args, **kwargs)
-
-            # Check if user has any of the allowed roles
-            if any(role in user_roles for role in allowed_roles):
-                return fn(*args, **kwargs)
-
-            return jsonify({
-                'error': 'Access denied. Required role: ' + ' or '.join(allowed_roles)
-            }), 403
+            if not has_permission(key):
+                return permission_denied(key)
+            return fn(*args, **kwargs)
 
         return wrapper
     return decorator
 
 
-def require_any_admin_role():
-    """Check if user has any admin-level role (from database)"""
-    user_roles = get_user_roles()
-    admin_role_names = list(ADMIN_ROLES.keys())
-    if any(role in user_roles for role in admin_role_names):
+def drop_fields_without_permission(data, fields_by_permission):
+    """Remove request fields the current user may not set and return which were sent (see ignored_fields_body).
+
+    A form sends its whole record, so refusing the request would also refuse a save that changes nothing.
+    """
+    ignored = []
+    for key, fields in fields_by_permission.items():
+        if not has_permission(key):
+            ignored += [field for field in fields if field in data]
+            for field in fields:
+                data.pop(field, None)
+    return ignored
+
+
+def ignored_fields_body(ignored):
+    """For the response of a write: which fields of the request had no effect. Left out when there are none."""
+    return {'ignoredFields': sorted(ignored)} if ignored else {}
+
+
+def require_any_permission():
+    """Check if the user holds any permission (the admin pages use the role list as a picker)"""
+    if get_effective_permissions():
         return None
     return jsonify({'error': 'Administrator role required'}), 403
 
 
-def require_admin():
-    """Check for full administrator role (from database)"""
-    if 'administrator' not in get_user_roles():
-        return jsonify({'error': 'Administrator role required'}), 403
-    return None
+def _normalize_role_name(name):
+    return str(name or '').strip().casefold()
+
+
+def is_privileged_role(role):
+    """True for a role that grants full administrator rights, whatever its case or padding"""
+    return _normalize_role_name(role.name) in PRIVILEGED_ROLE_NAMES
+
+
+def is_reserved_role_name(name):
+    """True if a new or renamed role may not use this name"""
+    return _normalize_role_name(name) in RESERVED_ROLE_NAMES
+
+
+def is_custom_role_name(name):
+    """Only a custom role can bear permissions in the database: not a built-in, OTS or privileged name"""
+    return not is_reserved_role_name(name)
+
+
+def role_permission_keys(role):
+    """What this role itself holds: fixed for a built-in, stored rows for a custom role, nothing otherwise.
+
+    Without enforce_requires: a key that does nothing on its own starts to count next to another role,
+    so it counts when deciding who may hand out the role.
+    """
+    if role.name in BUILTIN_ROLE_PERMISSIONS:
+        return BUILTIN_ROLE_PERMISSIONS[role.name]
+    if not is_custom_role_name(role.name):
+        return frozenset()
+    return with_implied_views(row.permission for row in role.permissions if row.permission in ASSIGNABLE_PERMISSIONS)
+
+
+def _keys_to_hand_out(role):
+    """A privileged role also makes its holder an OTS administrator: only the administrator covers that"""
+    return ALL_PERMISSIONS if is_privileged_role(role) else role_permission_keys(role)
+
+
+def permissions_beyond_actor(roles):
+    """The keys of these roles the current user does not hold, sorted"""
+    keys = set().union(*map(_keys_to_hand_out, roles)) if roles else set()
+    return sorted(keys - get_effective_permissions())
+
+
+def deny_beyond_actor(error, roles):
+    """The 403 response if these roles hold anything the current user does not, else None"""
+    missing = permissions_beyond_actor(roles)
+    return (jsonify({'error': error, 'missingPermissions': missing}), 403) if missing else None
+
+
+def role_beyond_actor(role):
+    return bool(permissions_beyond_actor([role]))
+
+
+def holder_beyond_actor(holder):
+    """True if a user or onboarding code carries roles above the current user's level"""
+    return bool(permissions_beyond_actor(list(holder.roles)))
+
+
+def roles_from_ids(role_ids):
+    """The existing roles among the ids of a request"""
+    from app.models import UserRoleModel
+
+    if not isinstance(role_ids, list):
+        return []
+    return [role for role in (UserRoleModel.get_by_id(role_id) for role_id in role_ids if role_id is not None) if role]
+
+
+def code_hands_out_permissions(code):
+    """True if an account from this code gets any permission at all"""
+    return any(_keys_to_hand_out(role) for role in code.roles)
+
+
+def is_administrator():
+    """True if the current user holds the 'administrator' role (from database)"""
+    return 'administrator' in get_user_roles()
+
+
+def has_privileged_role(holder):
+    """True if a user or onboarding code carries a privileged role"""
+    return any(is_privileged_role(role) for role in holder.roles)
+
+
+def role_ids_include_privileged(role_ids):
+    """True if the roleIds of a request name a privileged role.
+
+    Anything but a list cannot be vetted, so it counts as privileged.
+    """
+    from app.models import UserRoleModel
+
+    if not role_ids:
+        return False
+    if not isinstance(role_ids, list):
+        return True
+    roles = [UserRoleModel.get_by_id(role_id) for role_id in role_ids]
+    return any(role and is_privileged_role(role) for role in roles)
+
+
+def role_ids_beyond_actor():
+    """Ids of all roles above the current user's level, to filter queries"""
+    from app.models import UserRoleModel
+
+    return [role.id for role in UserRoleModel.get_all_roles() if role_beyond_actor(role)]
+
+
+def visible_code_value(code):
+    """The value of an onboarding code, or None if the current user may not see it: it is a registration ticket"""
+    if holder_beyond_actor(code):
+        return None
+    return code.onboardingCode
+
+
+def is_service_account(username):
+    """True for the account the portal itself uses for every OTS call (OTS_USERNAME)"""
+    service_username = current_app.config.get('OTS_USERNAME')
+    # settings.py turns an unset OTS_USERNAME into the string 'None'
+    if not username or not service_username or service_username == 'None':
+        return False
+    return username.strip().casefold() == service_username.strip().casefold()
+
+
+def is_last_administrator(user):
+    """True if this user is the only one holding the 'administrator' role"""
+    from app.models import UserModel, UserRoleModel
+
+    if not any(role.name == 'administrator' for role in user.roles):
+        return False
+    return not UserModel.query.filter(
+        UserModel.id != user.id,
+        UserModel.roles.any(UserRoleModel.name == 'administrator')
+    ).first()
+
+
+def enabled_modules():
+    """The catalogue modules that are switched on, read once per request"""
+    from app.models import MODULE_SETTINGS, SystemSettingsModel
+
+    enabled = request.environ.get('portal.enabled_modules')
+    if enabled is None:
+        off = {module for module in MODULE_SETTINGS if not SystemSettingsModel.is_module_enabled(module)}
+        enabled = frozenset(CATALOGUE) - off
+        request.environ['portal.enabled_modules'] = enabled
+    return enabled
 
 
 def get_user_admin_modules():
     """Get list of modules the current user has access to (from database); disabled modules are left out"""
-    from app.models import MODULE_SETTINGS, SystemSettingsModel
+    permissions = get_effective_permissions()
+    enabled = enabled_modules()
+    return [module for module, catalogue_module in PORTAL_MODULES.items()
+            if catalogue_module in enabled and permissions.intersection(CATALOGUE[catalogue_module])]
 
-    user_roles = get_user_roles()
-    accessible_modules = []
 
-    for module, required_roles in MODULE_ROLES.items():
-        if module in MODULE_SETTINGS and not SystemSettingsModel.is_module_enabled(module):
-            continue
-        if any(role in user_roles for role in required_roles):
-            accessible_modules.append(module)
-
-    return accessible_modules
+def get_user_permissions_list():
+    """The current user's permissions, leaving out what a disabled module would refuse anyway"""
+    enabled = enabled_modules()
+    return sorted(key for key in get_effective_permissions()
+                  if module_of(key) in enabled and ALSO_NEEDS_MODULE.get(key, module_of(key)) in enabled)
 
 
 def seed_admin_roles(db, UserRoleModel):

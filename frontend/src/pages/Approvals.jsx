@@ -204,7 +204,8 @@ function Approvals() {
                   <button
                     className="btn btn-success"
                     onClick={() => handleApprove(pending)}
-                    disabled={actionLoading === pending.id || pending.is_expired}
+                    disabled={actionLoading === pending.id || pending.is_expired || pending.canApprove === false}
+                    title={pending.canApprove === false ? t('approvals.cannotApprove') : undefined}
                   >
                     {actionLoading === pending.id ? t('common.processing') : t('approvals.approve')}
                   </button>
@@ -216,6 +217,11 @@ function Approvals() {
                     {actionLoading === pending.id ? t('common.processing') : t('approvals.reject')}
                   </button>
                 </div>
+                {pending.canApprove === false && (
+                  <p style={{ margin: '0.5rem 0 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                    {t('approvals.cannotApprove')}
+                  </p>
+                )}
               </div>
             ))}
           </div>

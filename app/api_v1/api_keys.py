@@ -6,23 +6,9 @@ from flask import jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.api_v1 import api_v1
 from app.models import ApiKeyModel, db
-from app.rbac import has_any_role
+from app.rbac import require_permission
 import json
 from datetime import datetime
-
-
-def require_api_key_admin():
-    """Check if user has api_key_admin or administrator role (write access)"""
-    if not has_any_role(['administrator', 'api_key_admin']):
-        return jsonify({'error': 'API Key admin access required'}), 403
-    return None
-
-
-def require_api_key_view():
-    """Check if user has api_key_admin, api_key_readonly, or administrator role (read access)"""
-    if not has_any_role(['administrator', 'api_key_admin', 'api_key_readonly']):
-        return jsonify({'error': 'API Key admin or readonly access required'}), 403
-    return None
 
 
 # Available permissions that can be assigned to API keys
@@ -49,14 +35,11 @@ API_PERMISSIONS = [
 
 @api_v1.route('/admin/api-keys', methods=['GET'])
 @jwt_required()
+@require_permission('api_keys.view')
 def get_api_keys():
     """
     Get all API keys
     """
-    auth_error = require_api_key_view()
-    if auth_error:
-        return auth_error
-
     try:
         api_keys = ApiKeyModel.get_all()
         return jsonify({
@@ -89,14 +72,11 @@ def get_api_keys():
 
 @api_v1.route('/admin/api-keys/<int:key_id>', methods=['GET'])
 @jwt_required()
+@require_permission('api_keys.view')
 def get_api_key(key_id):
     """
     Get a single API key by ID
     """
-    auth_error = require_api_key_view()
-    if auth_error:
-        return auth_error
-
     try:
         api_key = ApiKeyModel.get_by_id(key_id)
         if not api_key:
@@ -127,15 +107,12 @@ def get_api_key(key_id):
 
 @api_v1.route('/admin/api-keys', methods=['POST'])
 @jwt_required()
+@require_permission('api_keys.edit')
 def create_api_key():
     """
     Create a new API key
     Returns the raw key only once - it cannot be retrieved later
     """
-    auth_error = require_api_key_admin()
-    if auth_error:
-        return auth_error
-
     try:
         data = request.get_json()
 
@@ -188,14 +165,11 @@ def create_api_key():
 
 @api_v1.route('/admin/api-keys/<int:key_id>', methods=['PUT'])
 @jwt_required()
+@require_permission('api_keys.edit')
 def update_api_key(key_id):
     """
     Update an API key (name, description, permissions, rate_limit, is_active, expires_at)
     """
-    auth_error = require_api_key_admin()
-    if auth_error:
-        return auth_error
-
     try:
         api_key = ApiKeyModel.get_by_id(key_id)
         if not api_key:
@@ -249,15 +223,12 @@ def update_api_key(key_id):
 
 @api_v1.route('/admin/api-keys/<int:key_id>/regenerate', methods=['POST'])
 @jwt_required()
+@require_permission('api_keys.edit')
 def regenerate_api_key(key_id):
     """
     Regenerate an API key - creates a new key value
     Returns the new raw key only once
     """
-    auth_error = require_api_key_admin()
-    if auth_error:
-        return auth_error
-
     try:
         api_key = ApiKeyModel.get_by_id(key_id)
         if not api_key:
@@ -285,14 +256,11 @@ def regenerate_api_key(key_id):
 
 @api_v1.route('/admin/api-keys/<int:key_id>', methods=['DELETE'])
 @jwt_required()
+@require_permission('api_keys.delete')
 def delete_api_key(key_id):
     """
     Delete an API key
     """
-    auth_error = require_api_key_admin()
-    if auth_error:
-        return auth_error
-
     try:
         api_key = ApiKeyModel.get_by_id(key_id)
         if not api_key:
@@ -314,12 +282,9 @@ def delete_api_key(key_id):
 
 @api_v1.route('/admin/api-keys/permissions', methods=['GET'])
 @jwt_required()
+@require_permission('api_keys.view')
 def get_available_permissions():
     """
     Get list of available permissions for API keys
     """
-    auth_error = require_api_key_view()
-    if auth_error:
-        return auth_error
-
     return jsonify({'permissions': API_PERMISSIONS}), 200

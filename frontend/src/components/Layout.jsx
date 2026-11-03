@@ -11,7 +11,7 @@ import './Layout.css';
 
 function Layout() {
   const { t } = useTranslation();
-  const { user, logout, hasAnyAdminRole, hasModuleAccess, permissions, approverStatus, impersonating, stopImpersonation, isLeaderSession, leaderDesignations } = useAuth();
+  const { user, logout, hasAnyAdminRole, hasModuleAccess, can, permissions, approverStatus, impersonating, stopImpersonation, isLeaderSession, leaderDesignations } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -138,8 +138,8 @@ function Layout() {
                 {hasModuleAccess('events') && <Link to="/admin/events">{t('layout.events')}</Link>}
                 {hasModuleAccess('pending_registrations') && <Link to="/admin/pending-registrations">{t('layout.pendingRegistrations')}</Link>}
                 {hasModuleAccess('tak_profiles') && <Link to="/admin/tak-profiles">{t('layout.takProfiles')}</Link>}
-                {hasModuleAccess('meshtastic') && <Link to="/admin/meshtastic">{t('layout.meshtasticChannels')}</Link>}
-                {hasModuleAccess('meshtastic') && <Link to="/admin/meshtastic/groups">{t('layout.meshtasticChannelGroups')}</Link>}
+                {can('meshtastic.channels.view') && <Link to="/admin/meshtastic">{t('layout.meshtasticChannels')}</Link>}
+                {can('meshtastic.groups.view') && <Link to="/admin/meshtastic/groups">{t('layout.meshtasticChannelGroups')}</Link>}
                 {hasModuleAccess('radios') && <Link to="/admin/radios">{t('layout.radios')}</Link>}
                 {hasModuleAccess('announcements') && <Link to="/admin/announcements">{t('layout.announcements')}</Link>}
                 {hasModuleAccess('settings') && <Link to="/admin/settings">{t('layout.settings')}</Link>}

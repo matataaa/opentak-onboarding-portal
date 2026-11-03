@@ -13,8 +13,10 @@ function MeshtasticList() {
   const dateFormat = useDateFormat();
   const queryClient = useQueryClient();
   const { showError, showSuccess, confirm } = useNotification();
-  const { hasRole } = useAuth();
-  const canEdit = hasRole('meshtastic_admin') || hasRole('administrator');
+  const { can } = useAuth();
+  const canEdit = can('meshtastic.channels.edit');
+  const canDelete = can('meshtastic.channels.delete');
+  const canSync = can('meshtastic.channels.sync');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [formData, setFormData] = useState({ name: '', url: '', description: '' });
@@ -129,7 +131,7 @@ function MeshtasticList() {
         <div>
           <h1>{t('admin.meshtastic.title')}</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
-            {t('admin.meshtastic.subtitle')} <a href="/admin/meshtastic/groups">{t('admin.meshtastic.manageGroups')}</a>
+            {t('admin.meshtastic.subtitle')} {can('meshtastic.groups.view') && <a href="/admin/meshtastic/groups">{t('admin.meshtastic.manageGroups')}</a>}
           </p>
         </div>
         <div className="admin-actions">
@@ -140,7 +142,7 @@ function MeshtasticList() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          {canEdit && (
+          {canSync && (
             <button className="btn btn-primary" onClick={handleSyncFromOts} disabled={syncing}>
               {syncing ? t('common.syncing') : t('admin.meshtastic.syncFromOts')}
             </button>
@@ -198,7 +200,7 @@ function MeshtasticList() {
                           }
                         }}>{t('common.edit')}</button>
                       )}
-                      {canEdit && !config.synced_at && config.url && (
+                      {canSync && !config.synced_at && config.url && (
                         <button
                           className="btn btn-sm btn-info"
                           onClick={() => syncToOtsMutation.mutate(config.id)}
@@ -207,7 +209,7 @@ function MeshtasticList() {
                           {t('admin.meshtastic.pushToOts')}
                         </button>
                       )}
-                      {canEdit && (
+                      {canDelete && (
                         <button className="btn btn-sm btn-danger" onClick={async () => {
                           const confirmed = await confirm(t('admin.meshtastic.deleteConfirm', { name: config.name }), t('admin.meshtastic.deleteConfig'));
                           if (confirmed) deleteMutation.mutate(config.id);

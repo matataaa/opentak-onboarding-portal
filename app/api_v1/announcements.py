@@ -7,30 +7,14 @@ from flask import request, jsonify, current_app, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.api_v1 import api_v1
 from app.models import AnnouncementModel, AnnouncementReadModel, UserModel, UserRoleModel, db
+from app.rbac import has_permission, permission_denied, require_permission
 from datetime import datetime
 import json
 
 
-def require_admin_role():
-    """Check for announcement_admin or administrator role (write access)"""
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'announcement_admin']):
-        return jsonify({'error': 'Announcement admin access required'}), 403
-    return None
-
-
-def require_view_role():
-    """Check for announcement_admin, announcement_readonly, or administrator role (read access)"""
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'announcement_admin', 'announcement_readonly']):
-        return jsonify({'error': 'Announcement admin or readonly access required'}), 403
-    return None
-
-
 def _can_see_email_details():
     """Recipient email addresses and raw delivery errors are hidden from the read-only role"""
-    from app.rbac import has_any_role
-    return has_any_role(['administrator', 'announcement_admin'])
+    return has_permission('announcements.email_details')
 
 
 def _get_total_targeted(announcement):
@@ -163,12 +147,9 @@ def _email_detail_fields(a, can_see_details=False):
 
 @api_v1.route('/admin/announcements', methods=['GET'])
 @jwt_required()
+@require_permission('announcements.view')
 def get_all_announcements():
     """Get all announcements (admin or readonly)"""
-    error = require_view_role()
-    if error:
-        return error
-
     announcements = AnnouncementModel.get_all()
     can_see = _can_see_email_details()
 
@@ -198,12 +179,9 @@ def get_all_announcements():
 
 @api_v1.route('/admin/announcements/<int:announcement_id>', methods=['GET'])
 @jwt_required()
+@require_permission('announcements.view')
 def get_announcement_admin(announcement_id):
     """Get announcement details (admin or readonly)"""
-    error = require_view_role()
-    if error:
-        return error
-
     announcement = AnnouncementModel.get_by_id(announcement_id)
     if not announcement:
         return jsonify({'error': 'Announcement not found'}), 404
@@ -247,14 +225,15 @@ def get_announcement_admin(announcement_id):
 
 @api_v1.route('/admin/announcements', methods=['POST'])
 @jwt_required()
+@require_permission('announcements.edit')
 def create_announcement():
     """Create a new announcement (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     data = request.get_json()
     current_user_id = int(get_jwt_identity())
+
+    # Publishing now or on a schedule goes out to its audience (and by mail) without another step
+    if (data.get('sendImmediately') or data.get('scheduledAt')) and not has_permission('announcements.send'):
+        return permission_denied('announcements.send')
 
     # Validate required fields
     if not data.get('title'):
@@ -334,12 +313,9 @@ def create_announcement():
 
 @api_v1.route('/admin/announcements/<int:announcement_id>', methods=['PUT'])
 @jwt_required()
+@require_permission('announcements.edit')
 def update_announcement(announcement_id):
     """Update an announcement (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     announcement = AnnouncementModel.get_by_id(announcement_id)
     if not announcement:
         return jsonify({'error': 'Announcement not found'}), 404
@@ -349,6 +325,10 @@ def update_announcement(announcement_id):
         return jsonify({'error': 'Cannot edit sent announcements'}), 400
 
     data = request.get_json()
+
+    # The job publishes a scheduled announcement as it is then: changing one decides what goes out
+    if (announcement.status == 'scheduled' or data.get('scheduledAt')) and not has_permission('announcements.send'):
+        return permission_denied('announcements.send')
 
     if data.get('targetType') and data['targetType'] not in ['all', 'roles', 'users']:
         return jsonify({'error': 'Invalid target type'}), 400
@@ -402,12 +382,9 @@ def update_announcement(announcement_id):
 
 @api_v1.route('/admin/announcements/<int:announcement_id>', methods=['DELETE'])
 @jwt_required()
+@require_permission('announcements.delete')
 def delete_announcement(announcement_id):
     """Delete an announcement (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     result = AnnouncementModel.delete_by_id(announcement_id)
     if 'error' in result:
         return jsonify(result), 404
@@ -417,12 +394,9 @@ def delete_announcement(announcement_id):
 
 @api_v1.route('/admin/announcements/<int:announcement_id>/send', methods=['POST'])
 @jwt_required()
+@require_permission('announcements.send')
 def send_announcement_now(announcement_id):
     """Send an announcement immediately (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     announcement = AnnouncementModel.get_by_id(announcement_id)
     if not announcement:
         return jsonify({'error': 'Announcement not found'}), 404

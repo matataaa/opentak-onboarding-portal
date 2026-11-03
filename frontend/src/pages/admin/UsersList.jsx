@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { usersAPI, rolesAPI, groupsAPI } from '../../services/api';
 import { formatDate, useDateFormat } from '../../utils/formatDate';
 import { isValidNewPassword } from '../../utils/passwordRules';
+import { isPrivilegedRole } from '../../utils/roles';
+import { moduleLabel, warnIgnoredFields } from '../../utils/permissions';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import '../../components/AdminTable.css';
@@ -14,9 +16,18 @@ function UsersList() {
   const dateFormat = useDateFormat();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { showError, showSuccess, confirm } = useNotification();
-  const { hasRole, isAdmin, startImpersonation, user: currentUser } = useAuth();
-  const canEdit = hasRole('user_admin') || hasRole('administrator');
+  const { showError, showSuccess, showWarning, confirm } = useNotification();
+  const { hasRole, can, startImpersonation, user: currentUser } = useAuth();
+  const canCreate = can('users.create');
+  const canEditAccount = can('users.accounts.edit');
+  const canAssignRoles = can('users.roles.assign');
+  const canAssignGroups = can('users.groups.assign');
+  const canResetPassword = can('users.password.reset');
+  const canDelete = can('users.delete');
+  const canImpersonate = can('users.impersonate');
+  const canEdit = canEditAccount || canAssignRoles || canAssignGroups || canResetPassword;
+  const canViewGroups = can('groups.view');
+  const isProtectedTarget = (user) => !hasRole('administrator') && user.roles?.some(r => isPrivilegedRole(r.name));
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -65,25 +76,27 @@ function UsersList() {
     },
   });
 
-  // Fetch groups for the form
+  // Fetch groups for the form (the list needs view access to OTS groups)
   const { data: groupsData } = useQuery({
     queryKey: ['groups'],
     queryFn: async () => {
       const response = await groupsAPI.getAll();
       return response.data;
     },
+    enabled: canViewGroups,
   });
 
   // Create mutation
   const createMutation = useMutation({
     mutationFn: (data) => usersAPI.create(data),
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries(['users']);
       queryClient.invalidateQueries(['groups']);
       queryClient.invalidateQueries(['group-members']);
       setShowModal(false);
       resetForm();
       showSuccess(t('admin.users.userCreated'));
+      warnIgnoredFields(response, showWarning, t);
     },
     onError: (err) => {
       setError(err.response?.data?.error || t('admin.users.failedCreate'));
@@ -104,6 +117,7 @@ function UsersList() {
       } else {
         showSuccess(t('admin.users.userUpdated'));
       }
+      warnIgnoredFields(response, showWarning, t);
     },
     onError: (err) => {
       setError(err.response?.data?.error || t('admin.users.failedUpdate'));
@@ -245,6 +259,12 @@ function UsersList() {
       delete submitData.password;
     }
 
+    // Leave out what this user may not set, so the server has nothing to ignore
+    const editable = fieldEditable();
+    Object.keys(submitData).forEach((field) => {
+      if (field !== 'username' && !editable[field]) delete submitData[field];
+    });
+
     if (editingUser) {
       updateMutation.mutate({ id: editingUser.id, data: submitData });
     } else {
@@ -254,6 +274,23 @@ function UsersList() {
       }
       createMutation.mutate(submitData);
     }
+  };
+
+  // Which form fields the current user may set (the server drops the rest)
+  const fieldEditable = () => {
+    const ownProfile = editingUser && editingUser.id === currentUser?.id;
+    const basics = !editingUser || canEditAccount || ownProfile;
+    return {
+      email: !editingUser || ownProfile || (canEditAccount && canResetPassword),
+      firstName: basics,
+      lastName: basics,
+      callsign: basics,
+      expiryDate: !editingUser || canEditAccount,
+      password: !editingUser || canResetPassword,
+      roleIds: canAssignRoles,
+      // Groups can only be picked from the list, which needs view access to OTS groups
+      groups: canAssignGroups && canViewGroups,
+    };
   };
 
   const handleRoleToggle = (roleName) => {
@@ -271,6 +308,7 @@ function UsersList() {
 
   const users = usersData?.users || [];
   const total = usersData?.total || 0;
+  const editable = fieldEditable();
   const perPage = usersData?.per_page || 20;
   const totalPages = Math.ceil(total / perPage);
 
@@ -286,7 +324,7 @@ function UsersList() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          {canEdit && (
+          {canCreate && (
             <button className="btn btn-primary" onClick={handleCreate}>
               {t('admin.users.addUser')}
             </button>
@@ -310,7 +348,7 @@ function UsersList() {
                   <th>{t('admin.users.callsign')}</th>
                   <th>{t('admin.users.roles')}</th>
                   <th>{t('admin.users.expiryDate')}</th>
-                  {canEdit && <th>{t('common.actions')}</th>}
+                  {(canEdit || canDelete || canImpersonate) && <th>{t('common.actions')}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -328,20 +366,24 @@ function UsersList() {
                       ))}
                     </td>
                     <td>{user.expiryDate ? formatDate(user.expiryDate, dateFormat) : t('common.never')}</td>
-                    {canEdit && (
+                    {(canEdit || canDelete || canImpersonate) && (
                       <td>
                         <div className="table-actions">
-                          <button className="btn btn-sm btn-secondary" onClick={() => handleEdit(user)}>
-                            {t('common.edit')}
-                          </button>
-                          {isAdmin() && user.id !== currentUser?.id && (
+                          {canEdit && (!isProtectedTarget(user) || user.id === currentUser?.id) && (
+                            <button className="btn btn-sm btn-secondary" onClick={() => handleEdit(user)}>
+                              {t('common.edit')}
+                            </button>
+                          )}
+                          {canImpersonate && user.id !== currentUser?.id && (
                             <button className="btn btn-sm btn-warning" onClick={() => handleImpersonate(user)}>
                               {t('admin.users.impersonate')}
                             </button>
                           )}
-                          <button className="btn btn-sm btn-danger" onClick={() => handleDelete(user)}>
-                            {t('common.delete')}
-                          </button>
+                          {canDelete && !isProtectedTarget(user) && (
+                            <button className="btn btn-sm btn-danger" onClick={() => handleDelete(user)}>
+                              {t('common.delete')}
+                            </button>
+                          )}
                         </div>
                       </td>
                     )}
@@ -408,6 +450,7 @@ function UsersList() {
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     required
+                    disabled={!editable.email}
                   />
                 </div>
 
@@ -418,6 +461,7 @@ function UsersList() {
                     value={formData.firstName}
                     onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                     required
+                    disabled={!editable.firstName}
                   />
                 </div>
 
@@ -428,6 +472,7 @@ function UsersList() {
                     value={formData.lastName}
                     onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                     required
+                    disabled={!editable.lastName}
                   />
                 </div>
 
@@ -438,6 +483,7 @@ function UsersList() {
                     value={formData.callsign}
                     onChange={(e) => setFormData({ ...formData, callsign: e.target.value })}
                     required
+                    disabled={!editable.callsign}
                   />
                 </div>
 
@@ -448,6 +494,7 @@ function UsersList() {
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     required={!editingUser}
+                    disabled={!editable.password}
                   />
                   <span className="help-text">
                     {t('admin.users.passwordHelp')}
@@ -460,6 +507,7 @@ function UsersList() {
                     type="date"
                     value={formData.expiryDate}
                     onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
+                    disabled={!editable.expiryDate}
                   />
                   <span className="help-text">{t('admin.users.expiryDateHelp')}</span>
                 </div>
@@ -467,12 +515,17 @@ function UsersList() {
                 <div className="form-group">
                   <label>{t('admin.users.roles')}</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {rolesData?.roles?.map(role => (
-                      <label key={role.name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'normal' }}>
+                    {rolesData?.roles?.filter(role => hasRole('administrator') || !isPrivilegedRole(role.name)).map(role => (
+                      <label
+                        key={role.name}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'normal' }}
+                        title={role.assignable === false ? t('admin.permissions.roleBeyondLevel') : undefined}
+                      >
                         <input
                           type="checkbox"
                           checked={formData.roles.includes(role.name)}
                           onChange={() => handleRoleToggle(role.name)}
+                          disabled={!editable.roleIds || role.assignable === false}
                         />
                         {role.displayName || role.name}
                       </label>
@@ -482,7 +535,18 @@ function UsersList() {
 
                 <div className="form-group">
                   <label>{t('admin.users.otsGroups')}</label>
-                  {groupsData?.groups?.length > 0 ? (
+                  {!canViewGroups ? (
+                    <div>
+                      {formData.groups.length > 0 && (
+                        <div>
+                          {(editingUser?.groups || []).map(g => (
+                            <span key={g.id} className="badge badge-success">{g.displayName || g.name}</span>
+                          ))}
+                        </div>
+                      )}
+                      <span className="help-text">{t('admin.permissions.needsView', { module: moduleLabel(t, 'groups') })}</span>
+                    </div>
+                  ) : groupsData?.groups?.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                       {groupsData.groups.filter(g => g.missingInOts ? formData.groups.some(fg => fg.id === g.id) : g.active).map(group => {
                         const groupEntry = formData.groups.find(fg => fg.id === group.id);
@@ -492,7 +556,7 @@ function UsersList() {
                             <input
                               type="checkbox"
                               checked={isSelected}
-                              disabled={group.missingInOts && !isSelected}
+                              disabled={!editable.groups || (group.missingInOts && !isSelected)}
                               onChange={() => setFormData(prev => ({
                                 ...prev,
                                 groups: isSelected
@@ -509,7 +573,7 @@ function UsersList() {
                             {isSelected && (
                               <select
                                 value={groupEntry.direction}
-                                disabled={group.missingInOts}
+                                disabled={!editable.groups || group.missingInOts}
                                 onChange={(e) => setFormData(prev => ({
                                   ...prev,
                                   groups: prev.groups.map(fg =>

@@ -5,6 +5,7 @@ import { takProfilesAPI, rolesAPI } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import Pagination from '../../components/Pagination';
+import { warnIgnoredFields } from '../../utils/permissions';
 import '../../components/AdminTable.css';
 import './TakProfilesList.css';
 
@@ -12,8 +13,11 @@ function TakProfilesList() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { showError, showWarning, confirm } = useNotification();
-  const { hasRole } = useAuth();
-  const canEdit = hasRole('tak_profile_admin') || hasRole('administrator');
+  const { can } = useAuth();
+  const canEdit = can('tak_profiles.edit');
+  const canDelete = can('tak_profiles.delete');
+  // Who gets a profile: public flag and roles
+  const canAssign = can('tak_profiles.assign');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [formData, setFormData] = useState({
@@ -68,20 +72,22 @@ function TakProfilesList() {
 
   const createMutation = useMutation({
     mutationFn: (formData) => takProfilesAPI.create(formData),
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries(['takProfiles']);
       setShowModal(false);
       resetForm();
+      warnIgnoredFields(response, showWarning, t);
     },
     onError: (err) => setError(err.response?.data?.error || t('admin.takProfiles.failedCreate')),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, formData }) => takProfilesAPI.update(id, formData),
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries(['takProfiles']);
       setShowModal(false);
       resetForm();
+      warnIgnoredFields(response, showWarning, t);
     },
     onError: (err) => setError(err.response?.data?.error || t('admin.takProfiles.failedUpdate')),
   });
@@ -151,7 +157,8 @@ function TakProfilesList() {
     const data = new FormData();
     data.append('name', formData.name);
     data.append('description', formData.description);
-    data.append('isPublic', formData.isPublic.toString());
+    // Who gets the profile: only sent with the permission for it (the server ignores it otherwise)
+    if (canAssign) data.append('isPublic', formData.isPublic.toString());
     data.append('takPrefFileLocation', formData.takPrefFileLocation);
     data.append('injectCallsign', formData.injectCallsign.toString());
 
@@ -165,9 +172,11 @@ function TakProfilesList() {
     }
 
     // Add role IDs
-    formData.roleIds.forEach(roleId => {
-      data.append('roleIds[]', roleId);
-    });
+    if (canAssign) {
+      formData.roleIds.forEach(roleId => {
+        data.append('roleIds[]', roleId);
+      });
+    }
 
     if (editing) {
       updateMutation.mutate({ id: editing.id, formData: data });
@@ -333,7 +342,7 @@ function TakProfilesList() {
                           {t('common.edit')}
                         </button>
                       )}
-                      {canEdit && (
+                      {canDelete && (
                         <button className="btn btn-sm btn-danger" onClick={async () => {
                           const confirmed = await confirm(t('admin.takProfiles.deleteConfirm', { name: profile.name }), t('admin.takProfiles.deleteProfile'));
                           if (confirmed) deleteMutation.mutate(profile.id);
@@ -561,6 +570,7 @@ function TakProfilesList() {
                     <input
                       type="checkbox"
                       checked={formData.isPublic}
+                      disabled={!canAssign}
                       onChange={(e) => setFormData({...formData, isPublic: e.target.checked})}
                     />
                   </label>
@@ -574,6 +584,7 @@ function TakProfilesList() {
                         <span>{role.displayName || role.name}</span>
                         <input
                           type="checkbox"
+                          disabled={!canAssign}
                           checked={formData.roleIds.includes(role.id)}
                           onChange={() => setFormData(prev => ({
                             ...prev,

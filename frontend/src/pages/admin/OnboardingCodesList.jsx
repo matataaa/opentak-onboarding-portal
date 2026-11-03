@@ -5,6 +5,8 @@ import { onboardingCodesAPI, rolesAPI, usersAPI, groupsAPI } from '../../service
 import { formatDate, useDateFormat } from '../../utils/formatDate';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { isPrivilegedRole } from '../../utils/roles';
+import { moduleLabel, warnIgnoredFields } from '../../utils/permissions';
 import Pagination from '../../components/Pagination';
 import '../../components/AdminTable.css';
 
@@ -12,9 +14,15 @@ function OnboardingCodesList() {
   const { t } = useTranslation();
   const dateFormat = useDateFormat();
   const queryClient = useQueryClient();
-  const { showError, confirm } = useNotification();
-  const { hasRole } = useAuth();
-  const canEdit = hasRole('onboarding_admin') || hasRole('administrator');
+  const { showError, showWarning, confirm } = useNotification();
+  const { hasRole, can } = useAuth();
+  const canEdit = can('onboarding.edit');
+  const canDelete = can('onboarding.delete');
+  const canAssignRoles = can('onboarding.roles.assign');
+  const canAssignGroups = can('onboarding.groups.assign');
+  // Pickers that read other modules
+  const canViewGroups = can('groups.view');
+  const canViewUsers = can('users.accounts.view');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [formData, setFormData] = useState({
@@ -75,6 +83,7 @@ function OnboardingCodesList() {
       const response = await groupsAPI.getAll();
       return response.data;
     },
+    enabled: canViewGroups,
   });
 
   const { data: usersData } = useQuery({
@@ -83,24 +92,27 @@ function OnboardingCodesList() {
       const response = await usersAPI.getAll({ per_page: 1000 });
       return response.data;
     },
+    enabled: canViewUsers,
   });
 
   const createMutation = useMutation({
     mutationFn: (data) => onboardingCodesAPI.create(data),
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries(['onboardingCodes']);
       setShowModal(false);
       resetForm();
+      warnIgnoredFields(response, showWarning, t);
     },
     onError: (err) => setError(err.response?.data?.error || t('admin.onboardingCodes.failedCreate')),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => onboardingCodesAPI.update(id, data),
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries(['onboardingCodes']);
       setShowModal(false);
       resetForm();
+      warnIgnoredFields(response, showWarning, t);
     },
     onError: (err) => setError(err.response?.data?.error || t('admin.onboardingCodes.failedUpdate')),
   });
@@ -211,6 +223,11 @@ function OnboardingCodesList() {
       requireApproval: formData.requireApproval,
       approverRoleId: formData.approverRoleId || null
     };
+    // Leave out what this user may not set, so the server has nothing to ignore
+    if (!canAssignRoles) {
+      ['roleIds', 'autoApprove', 'requireApproval', 'approverRoleId'].forEach((field) => delete submitData[field]);
+    }
+    if (!canAssignGroups || !canViewGroups) delete submitData.groups;
 
     if (editing) {
       updateMutation.mutate({ id: editing.id, data: submitData });
@@ -273,8 +290,9 @@ function OnboardingCodesList() {
                   <strong>{code.name}</strong>
                   {code.autoApprove && <span className="badge badge-success" style={{ marginLeft: '0.5rem' }}>{t('admin.onboardingCodes.auto')}</span>}
                   {code.requireApproval && <span className="badge badge-warning" style={{ marginLeft: '0.5rem' }}>{t('admin.onboardingCodes.approval')}</span>}
+                  {code.aboveLevel && <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('admin.permissions.codeAboveLevel')}</div>}
                 </td>
-                  <td><code>{code.onboardingCode}</code></td>
+                  <td>{code.onboardingCode ? <code>{code.onboardingCode}</code> : <span className="badge badge-secondary">{t('admin.permissions.hiddenValue')}</span>}</td>
                   <td>{code.uses} / {code.maxUses || '∞'}</td>
                   <td>{code.onboardContact?.username || '-'}</td>
                   <td>{code.expiryDate ? formatDate(code.expiryDate, dateFormat) : t('common.never')}</td>
@@ -293,19 +311,22 @@ function OnboardingCodesList() {
                   </td>
                   <td>
                     <div className="table-actions">
-                      <button
-                        className="btn btn-sm btn-success"
-                        onClick={() => copyOnboardingUrl(code.onboardingCode, code.id)}
-                        title={t('common.copyUrl')}
-                      >
-                        {copiedCodeId === code.id ? t('common.copied') : t('common.copyUrl')}
-                      </button>
-                      {canEdit && (
+                      {code.onboardingCode && (
+                        <button
+                          className="btn btn-sm btn-success"
+                          onClick={() => copyOnboardingUrl(code.onboardingCode, code.id)}
+                          title={t('common.copyUrl')}
+                        >
+                          {copiedCodeId === code.id ? t('common.copied') : t('common.copyUrl')}
+                        </button>
+                      )}
+                      {/* A code handing out more than this user holds is read-only for them */}
+                      {canEdit && !code.aboveLevel && (
                         <button className="btn btn-sm btn-secondary" onClick={() => handleEdit(code)}>
                           {t('common.edit')}
                         </button>
                       )}
-                      {canEdit && (
+                      {canDelete && !code.aboveLevel && (
                         <button className="btn btn-sm btn-danger" onClick={async () => {
                           const confirmed = await confirm(t('admin.onboardingCodes.deleteConfirm', { name: code.name }), t('admin.onboardingCodes.deleteCode'));
                           if (confirmed) deleteMutation.mutate(code.id);
@@ -373,8 +394,15 @@ function OnboardingCodesList() {
                     {users.map(user => (
                       <option key={user.id} value={user.id}>{user.username}{(user.firstName || user.lastName) ? ` (${[user.firstName, user.lastName].filter(Boolean).join(' ')})` : ''}</option>
                     ))}
+                    {/* Without the user list, keep the current contact selectable so saving does not clear it */}
+                    {!canViewUsers && editing?.onboardContact && (
+                      <option value={editing.onboardContact.id}>{editing.onboardContact.username}</option>
+                    )}
                   </select>
                   <span className="help-text">{t('admin.onboardingCodes.contactHelp')}</span>
+                  {!canViewUsers && (
+                    <span className="help-text" style={{ display: 'block' }}>{t('admin.permissions.needsView', { module: moduleLabel(t, 'users') })}</span>
+                  )}
                 </div>
 
                 <div className="form-group">
@@ -398,11 +426,12 @@ function OnboardingCodesList() {
                 <div className="form-group">
                   <label>{t('common.roles')}</label>
                   <div className="checkbox-list">
-                    {roles.map(role => (
-                      <label key={role.id} className="checkbox-label">
+                    {roles.filter(role => hasRole('administrator') || !isPrivilegedRole(role.name)).map(role => (
+                      <label key={role.id} className="checkbox-label" title={role.assignable === false ? t('admin.permissions.roleBeyondLevel') : undefined}>
                         <span>{role.displayName || role.name}</span>
                         <input
                           type="checkbox"
+                          disabled={!canAssignRoles || role.assignable === false}
                           checked={formData.roleIds.includes(role.id)}
                           onChange={() => setFormData(prev => ({
                             ...prev,
@@ -419,7 +448,14 @@ function OnboardingCodesList() {
 
                 <div className="form-group">
                   <label>{t('admin.onboardingCodes.otsGroupsLabel')}</label>
-                  {otsGroups.length === 0 ? (
+                  {!canViewGroups ? (
+                    <div>
+                      {(editing?.groups || []).map(g => (
+                        <span key={g.id} className="badge badge-success">{g.displayName || g.name}</span>
+                      ))}
+                      <span className="help-text" style={{ display: 'block' }}>{t('admin.permissions.needsView', { module: moduleLabel(t, 'groups') })}</span>
+                    </div>
+                  ) : otsGroups.length === 0 ? (
                     <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', padding: '0.5rem 0' }}>
                       {t('admin.onboardingCodes.noGroupsAvailable')}
                     </div>
@@ -433,7 +469,7 @@ function OnboardingCodesList() {
                             <input
                               type="checkbox"
                               checked={isSelected}
-                              disabled={group.missingInOts && !isSelected}
+                              disabled={!canAssignGroups || (group.missingInOts && !isSelected)}
                               onChange={() => setFormData(prev => ({
                                 ...prev,
                                 groups: isSelected
@@ -450,7 +486,7 @@ function OnboardingCodesList() {
                             {isSelected && (
                               <select
                                 value={groupEntry.direction}
-                                disabled={group.missingInOts}
+                                disabled={!canAssignGroups || group.missingInOts}
                                 onChange={(e) => setFormData(prev => ({
                                   ...prev,
                                   groups: prev.groups.map(fg =>
@@ -485,6 +521,7 @@ function OnboardingCodesList() {
                     <input
                       type="checkbox"
                       checked={formData.autoApprove}
+                      disabled={!canAssignRoles}
                       onChange={(e) => setFormData({...formData, autoApprove: e.target.checked, requireApproval: e.target.checked ? false : formData.requireApproval})}
                       style={{ width: 'auto' }}
                     />
@@ -498,6 +535,7 @@ function OnboardingCodesList() {
                     <input
                       type="checkbox"
                       checked={formData.requireApproval}
+                      disabled={!canAssignRoles}
                       onChange={(e) => setFormData({...formData, requireApproval: e.target.checked, autoApprove: e.target.checked ? false : formData.autoApprove})}
                       style={{ width: 'auto' }}
                     />
@@ -512,11 +550,12 @@ function OnboardingCodesList() {
                     <select
                       value={formData.approverRoleId || ''}
                       onChange={(e) => setFormData({...formData, approverRoleId: e.target.value ? parseInt(e.target.value) : null})}
+                      disabled={!canAssignRoles}
                       required
                     >
                       <option value="">{t('admin.onboardingCodes.selectRole')}</option>
                       {roles.map(role => (
-                        <option key={role.id} value={role.id}>{role.displayName || role.name}</option>
+                        <option key={role.id} value={role.id} disabled={role.assignable === false}>{role.displayName || role.name}</option>
                       ))}
                     </select>
                     <span className="help-text">{t('admin.onboardingCodes.approverRoleHelp')}</span>

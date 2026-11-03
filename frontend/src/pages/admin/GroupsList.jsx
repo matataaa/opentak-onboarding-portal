@@ -6,6 +6,7 @@ import { formatDateTime, useDateFormat } from '../../utils/formatDate';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import Pagination from '../../components/Pagination';
+import { moduleLabel } from '../../utils/permissions';
 import '../../components/AdminTable.css';
 
 function GroupsList() {
@@ -13,8 +14,14 @@ function GroupsList() {
   const dateFormat = useDateFormat();
   const queryClient = useQueryClient();
   const { showError, confirm } = useNotification();
-  const { hasRole } = useAuth();
-  const canEdit = hasRole('group_admin') || hasRole('administrator');
+  const { can } = useAuth();
+  const canEdit = can('groups.edit');
+  const canDelete = can('groups.delete');
+  const canSync = can('groups.sync');
+  const canViewMembers = can('groups.members.view');
+  const canEditMembers = can('groups.members.edit');
+  // Adding members picks from the user list, which needs view access to users
+  const canPickUsers = canEditMembers && can('users.accounts.view');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [memberSearch, setMemberSearch] = useState('');
@@ -58,7 +65,7 @@ function GroupsList() {
       const response = await groupsAPI.getMembers(editing.id);
       return response.data;
     },
-    enabled: !!editing?.id,
+    enabled: !!editing?.id && canViewMembers,
   });
 
   const { data: usersData } = useQuery({
@@ -67,7 +74,7 @@ function GroupsList() {
       const response = await usersAPI.getAll({ per_page: 1000 });
       return response.data;
     },
-    enabled: showModal && canEdit,
+    enabled: showModal && canPickUsers,
   });
 
   const createMutation = useMutation({
@@ -198,6 +205,10 @@ function GroupsList() {
 
   // Build display list: current members first, then filtered non-members
   const displayUsers = useMemo(() => {
+    // Without the user list: the members as OTS reports them (no ids, so no adding or direction changes)
+    if (!canPickUsers) {
+      return Object.values(memberMap).map(m => ({ id: m.username, username: m.username, isMember: true, direction: m.direction }));
+    }
     const currentMembers = allUsers
       .filter(u => memberMap[u.username])
       .map(u => ({ ...u, isMember: true, direction: memberMap[u.username].direction }));
@@ -216,7 +227,7 @@ function GroupsList() {
       : [];
 
     return [...currentMembers, ...nonMembers.map(u => ({ ...u, isMember: false, direction: 'BOTH' }))];
-  }, [allUsers, memberMap, memberSearch]);
+  }, [allUsers, memberMap, memberSearch, canPickUsers]);
 
   const handleDelete = async (group) => {
     if (!group.missingInOts) {
@@ -273,7 +284,7 @@ function GroupsList() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          {canEdit && (
+          {canSync && (
             <button
               className="btn btn-secondary"
               onClick={() => syncMutation.mutate()}
@@ -364,7 +375,7 @@ function GroupsList() {
                       <button className="btn btn-sm btn-secondary" onClick={() => openEdit(group)}>
                         {t('common.edit')}
                       </button>
-                      {canEdit && (
+                      {canDelete && (
                         <button className="btn btn-sm btn-danger" onClick={() => handleDelete(group)}>
                           {group.missingInOts ? t('admin.groups.removeFromPortal') : t('common.delete')}
                         </button>
@@ -417,6 +428,7 @@ function GroupsList() {
                     type="text"
                     value={formData.displayName}
                     onChange={(e) => setFormData({...formData, displayName: e.target.value})}
+                    disabled={!canEdit}
                   />
                   <span className="help-text">{t('admin.groups.displayNameHelp')}</span>
                 </div>
@@ -426,6 +438,7 @@ function GroupsList() {
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
+                    disabled={!canEdit}
                   />
                 </div>
 
@@ -435,6 +448,7 @@ function GroupsList() {
                       type="checkbox"
                       checked={formData.active}
                       onChange={(e) => setFormData({...formData, active: e.target.checked})}
+                      disabled={!canEdit}
                       style={{ width: 'auto' }}
                     />
                     <span style={{ fontWeight: 'normal' }}>{t('common.active')}</span>
@@ -451,17 +465,22 @@ function GroupsList() {
                 )}
 
                 {/* Members section - only show when editing */}
-                {editing && (
+                {editing && canViewMembers && (
                   <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
                     <div className="form-group">
                       <label>{t('admin.groups.members')}</label>
-                      <input
-                        type="text"
-                        placeholder={t('admin.groups.searchUsers')}
-                        value={memberSearch}
-                        onChange={(e) => setMemberSearch(e.target.value)}
-                      />
+                      {canPickUsers && (
+                        <input
+                          type="text"
+                          placeholder={t('admin.groups.searchUsers')}
+                          value={memberSearch}
+                          onChange={(e) => setMemberSearch(e.target.value)}
+                        />
+                      )}
                       <span className="help-text">{t('admin.groups.membersHelp')}</span>
+                      {canEditMembers && !canPickUsers && (
+                        <span className="help-text" style={{ display: 'block' }}>{t('admin.permissions.needsView', { module: moduleLabel(t, 'users') })}</span>
+                      )}
                       <span className="help-text" style={{ display: 'block' }}>{t('admin.groups.directionHelp')}</span>
                     </div>
 
@@ -484,11 +503,12 @@ function GroupsList() {
                           const currentDirection = memberMap[user.username]?.direction || 'BOTH';
                           return (
                             <div key={user.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                              {/* Removing goes by username; adding needs the user's id from the user list */}
                               <input
                                 type="checkbox"
                                 checked={isMember}
                                 onChange={() => handleToggleMember(user)}
-                                disabled={addMemberMutation.isPending || removeMemberMutation.isPending}
+                                disabled={!canEditMembers || (!isMember && !canPickUsers) || addMemberMutation.isPending || removeMemberMutation.isPending}
                               />
                               <span style={{ minWidth: '150px' }}>
                                 {user.username}
@@ -498,7 +518,7 @@ function GroupsList() {
                                 <select
                                   value={currentDirection}
                                   onChange={(e) => handleDirectionChange(user, e.target.value)}
-                                  disabled={addMemberMutation.isPending || removeMemberMutation.isPending}
+                                  disabled={!canPickUsers || addMemberMutation.isPending || removeMemberMutation.isPending}
                                   style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem', background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border-input)', borderRadius: '4px' }}
                                 >
                                   <option value="BOTH">{t('common.both')}</option>
