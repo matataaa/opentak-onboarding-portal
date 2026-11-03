@@ -15,7 +15,7 @@ from datetime import timedelta, datetime
 from app.api_v1 import api_v1
 from app.models import db, UserModel, UserRoleModel, PendingRegistrationModel, OnboardingCodeModel, OneTimeTokenModel
 from app.ots import OTSClient, new_password_error
-from app.rbac import SERVICE_ACCOUNT_PASSWORD_ERROR, has_privileged_role, is_service_account
+from app.rbac import SERVICE_ACCOUNT_PASSWORD_ERROR, code_hands_out_permissions, has_privileged_role, is_service_account
 
 # Marks an approve link only mailed to administrators (token_urlsafe never contains a dot).
 # A code carrying a privileged role only accepts these, so older links are refused.
@@ -356,9 +356,9 @@ def impersonate_user(user_id):
     Impersonate another user (administrator only).
     Creates JWT tokens for the target user with impersonation claims.
     """
-    from app.rbac import has_role
+    from app.rbac import has_permission
 
-    if not has_role('administrator'):
+    if not has_permission('users.impersonate'):
         return jsonify({'error': 'Only administrators can impersonate users'}), 403
 
     admin_user_id = int(get_jwt_identity())
@@ -778,8 +778,8 @@ The OpenTAK Team"""
 
             # Generate verification and approval tokens
             verification_token = secrets.token_urlsafe(48)
-            privileged_code = has_privileged_role(onboarding_code)
-            approval_token = (ADMIN_ONLY_APPROVAL_TOKEN_PREFIX if privileged_code else '') + secrets.token_urlsafe(48)
+            administrators_only = code_hands_out_permissions(onboarding_code)
+            approval_token = (ADMIN_ONLY_APPROVAL_TOKEN_PREFIX if administrators_only else '') + secrets.token_urlsafe(48)
 
             # Set expiration (7 days for approval flow to give approvers time)
             expires_at = datetime.now() + timedelta(days=7)
@@ -816,8 +816,9 @@ The OpenTAK Team"""
             # Get approvers from the approver role
             approver_emails = set()
 
-            # The link creates the account without a login: for an admin account only administrators get it
-            if privileged_code:
+            # The link creates the account without a login, so it cannot check who clicks it: for an account with
+            # permissions only administrators get it. Other approvers use /approvals, which checks their level.
+            if administrators_only:
                 from app.models import UserRoleModel
                 admin_role = UserRoleModel.get_role_by_name('administrator')
                 for user in (admin_role.users if admin_role else []):
@@ -831,7 +832,7 @@ The OpenTAK Team"""
                         current_app.logger.info(f"Adding approver from role '{onboarding_code.approverRole.name}': {user.username} ({user.email})")
 
             # If no approver role set or no emails in that role, fall back to administrators
-            if not approver_emails and not privileged_code:
+            if not approver_emails and not administrators_only:
                 current_app.logger.info("No approvers with email found, falling back to administrators")
                 from app.models import UserRoleModel
                 # Case-insensitive search for administrator role
@@ -1545,10 +1546,11 @@ def get_user_permissions():
     {
         "roles": ["string"],
         "modules": ["string"],
+        "permissions": ["string"],
         "isAdmin": boolean
     }
     """
-    from app.rbac import get_user_roles, get_user_admin_modules, ADMIN_ROLES
+    from app.rbac import get_user_roles, get_user_admin_modules, get_user_permissions_list, ADMIN_ROLES
 
     user_roles = get_user_roles()
     accessible_modules = get_user_admin_modules()
@@ -1566,6 +1568,7 @@ def get_user_permissions():
     return jsonify({
         'roles': user_roles,
         'modules': accessible_modules,
+        'permissions': get_user_permissions_list(),
         'isAdmin': is_admin,
         'leaderDesignations': designations
     }), 200
@@ -1658,14 +1661,15 @@ def approve_registration(token):
             """, 400
 
         # This link may have been mailed to non-administrators
-        if has_privileged_role(onboarding_code) and not token.startswith(ADMIN_ONLY_APPROVAL_TOKEN_PREFIX):
+        if code_hands_out_permissions(onboarding_code) and not token.startswith(ADMIN_ONLY_APPROVAL_TOKEN_PREFIX):
             current_app.logger.warning(f"Refused approval link for {pending.username}: not issued to administrators only")
+            account_kind = 'an administrator account' if has_privileged_role(onboarding_code) else 'an account with management permissions'
             return f"""
             <html>
             <head><title>Registration Approval</title></head>
             <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; text-align: center;">
-                <h1 style="color: #dc3545;">Administrator Approval Required</h1>
-                <p>This registration would create an administrator account. An administrator must approve it in the portal.</p>
+                <h1 style="color: #dc3545;">Approval In The Portal Required</h1>
+                <p>This registration would create {account_kind}. It must be approved in the portal by someone who holds those permissions.</p>
             </body>
             </html>
             """, 403

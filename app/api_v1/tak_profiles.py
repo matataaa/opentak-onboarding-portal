@@ -8,7 +8,7 @@ from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity, verify_j
 from app.api_v1 import api_v1
 from app.models import TakProfileModel, UserRoleModel, UserModel, OneTimeTokenModel, db
 from app.pagination import search_and_paginate
-from app.rbac import is_administrator
+from app.rbac import has_permission, ignored_fields_body, is_administrator, require_permission
 from werkzeug.utils import secure_filename
 import os
 import zipfile
@@ -73,22 +73,6 @@ def jwt_required_with_query():
             return fn(*args, **kwargs)
         return decorator
     return wrapper
-
-
-def require_admin_role():
-    """Check for tak_profile_admin or administrator role (write access)"""
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'tak_profile_admin']):
-        return jsonify({'error': 'TAK profile admin access required'}), 403
-    return None
-
-
-def require_view_role():
-    """Check for tak_profile_admin, tak_profile_readonly, or administrator role (read access)"""
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'tak_profile_admin', 'tak_profile_readonly']):
-        return jsonify({'error': 'TAK profile admin or readonly access required'}), 403
-    return None
 
 
 @api_v1.route('/tak-profiles', methods=['GET'])
@@ -361,14 +345,18 @@ def download_tak_profile(profile_id, dl_token_override=None):
         return jsonify({'error': f'Failed to download profile: {str(e)}'}), 500
 
 
+def _ignored_form_fields():
+    """Who gets a profile: the fields that need tak_profiles.assign"""
+    if has_permission('tak_profiles.assign'):
+        return []
+    return [field for field in ('isPublic', 'roleIds[]') if field in request.form]
+
+
 @api_v1.route('/tak-profiles', methods=['POST'])
 @jwt_required()
+@require_permission('tak_profiles.edit')
 def create_tak_profile():
     """Create a new TAK profile (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     # Handle multipart/form-data for file upload
     if 'datapackage' not in request.files:
         return jsonify({'error': 'Datapackage file is required'}), 400
@@ -398,7 +386,7 @@ def create_tak_profile():
         # Get form data
         name = request.form.get('name', filename.replace('.zip', ''))
         description = request.form.get('description', '')
-        is_public = request.form.get('isPublic', 'false').lower() == 'true'
+        is_public = has_permission('tak_profiles.assign') and request.form.get('isPublic', 'false').lower() == 'true'
         tak_pref_file = request.form.get('takPrefFileLocation', '')
 
         inject_callsign = request.form.get('injectCallsign', 'false').lower() == 'true'
@@ -413,7 +401,7 @@ def create_tak_profile():
         )
 
         # Add roles
-        role_ids = request.form.getlist('roleIds[]')
+        role_ids = request.form.getlist('roleIds[]') if has_permission('tak_profiles.assign') else []
         for role_id in role_ids:
             role = UserRoleModel.get_by_id(int(role_id))
             if role:
@@ -427,7 +415,8 @@ def create_tak_profile():
             'profile': {
                 'id': profile.id,
                 'name': profile.name
-            }
+            },
+            **ignored_fields_body(_ignored_form_fields())
         }), 201
 
     except Exception as e:
@@ -436,12 +425,9 @@ def create_tak_profile():
 
 @api_v1.route('/tak-profiles/<int:profile_id>', methods=['PUT'])
 @jwt_required()
+@require_permission('tak_profiles.edit')
 def update_tak_profile(profile_id):
     """Update TAK profile (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     profile = TakProfileModel.get_tak_profile_by_id(profile_id)
     if not profile:
         return jsonify({'error': 'TAK profile not found'}), 404
@@ -461,7 +447,7 @@ def update_tak_profile(profile_id):
             profile.name = request.form.get('name')
         if 'description' in request.form:
             profile.description = request.form.get('description')
-        if 'isPublic' in request.form:
+        if 'isPublic' in request.form and has_permission('tak_profiles.assign'):
             profile.isPublic = request.form.get('isPublic').lower() == 'true'
         if 'takPrefFileLocation' in request.form:
             profile.takPrefFileLocation = request.form.get('takPrefFileLocation')
@@ -469,7 +455,7 @@ def update_tak_profile(profile_id):
             profile.injectCallsign = request.form.get('injectCallsign').lower() == 'true'
 
         # Update roles if roleIds[] is present in the request
-        if 'roleIds[]' in request.form or request.form:
+        if has_permission('tak_profiles.assign') and ('roleIds[]' in request.form or request.form):
             profile.roles.clear()
             role_ids = request.form.getlist('roleIds[]')
             for role_id in role_ids:
@@ -480,7 +466,7 @@ def update_tak_profile(profile_id):
         # Commit directly to ensure relationship changes are saved
         db.session.commit()
 
-        return jsonify({'message': 'TAK profile updated successfully'}), 200
+        return jsonify({'message': 'TAK profile updated successfully', **ignored_fields_body(_ignored_form_fields())}), 200
 
     except Exception as e:
         db.session.rollback()
@@ -489,12 +475,9 @@ def update_tak_profile(profile_id):
 
 @api_v1.route('/tak-profiles/<int:profile_id>/files', methods=['GET'])
 @jwt_required()
+@require_permission('tak_profiles.view')
 def get_tak_profile_files(profile_id):
     """Get file tree structure for TAK profile (admin or readonly)"""
-    error = require_view_role()
-    if error:
-        return error
-
     profile = TakProfileModel.get_tak_profile_by_id(profile_id)
     if not profile:
         return jsonify({'error': 'TAK profile not found'}), 404
@@ -537,12 +520,9 @@ def get_tak_profile_files(profile_id):
 
 @api_v1.route('/tak-profiles/<int:profile_id>', methods=['DELETE'])
 @jwt_required()
+@require_permission('tak_profiles.delete')
 def delete_tak_profile(profile_id):
     """Delete TAK profile (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     profile = TakProfileModel.get_tak_profile_by_id(profile_id)
     if not profile:
         return jsonify({'error': 'TAK profile not found'}), 404

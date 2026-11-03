@@ -362,7 +362,8 @@
     "rejectConfirm": "Registrierung für {{username}} ablehnen?\n\nDiese Aktion kann nicht rückgängig gemacht werden. Der Benutzer wird benachrichtigt.",
     "rejectRegistration": "Registrierung ablehnen",
     "failedApprove": "Genehmigung der Registrierung fehlgeschlagen",
-    "failedReject": "Ablehnung der Registrierung fehlgeschlagen"
+    "failedReject": "Ablehnung der Registrierung fehlgeschlagen",
+    "cannotApprove": "Sie können dies nicht genehmigen: Der Code vergibt Rechte, die Sie selbst nicht haben."
   },
   "layout": {
     "myTeam": "Mein Team",
@@ -789,7 +790,89 @@
       "deleteRole": "Rolle löschen",
       "failedCreate": "Rolle konnte nicht erstellt werden",
       "failedUpdate": "Rolle konnte nicht aktualisiert werden",
-      "failedDelete": "Rolle konnte nicht gelöscht werden"
+      "failedDelete": "Rolle konnte nicht gelöscht werden",
+      "customRoles": "Eigene Rollen",
+      "customRolesHelp": "Rollen, die Sie selbst zusammenstellen.",
+      "noCustomRoles": "Noch keine eigenen Rollen.",
+      "systemRoles": "Systemrollen",
+      "systemRolesHelp": "Die eingebauten Rollen und Rollen aus OTS. Sie funktionieren weiter wie bisher und sind gesperrt. Duplizieren Sie eine, um sie anzupassen.",
+      "showAll": "Alle {{count}} anzeigen",
+      "collapse": "Einklappen",
+      "newRole": "Neue Rolle",
+      "overviewLink": "Übersicht Rollen und Module",
+      "rights": "Rechte",
+      "duplicate": "Duplizieren",
+      "modules": "Module",
+      "users": "Benutzer",
+      "codes": "Codes",
+      "role": "Rolle",
+      "locked": "Gesperrt",
+      "noRights": "Keine Rechte",
+      "allModules": "Alle {{count}} Module",
+      "level": {
+        "none": "Keine",
+        "view": "Ansehen",
+        "partial": "Teilweise",
+        "full": "Vollständig"
+      },
+      "levelHelp": {
+        "none": "kein Zugriff",
+        "view": "nur ansehen",
+        "partial": "einen Teil ändern",
+        "full": "alles innerhalb des Moduls"
+      },
+      "moduleOff": "Modul aus",
+      "moduleOffTag": "Modul aus",
+      "moduleOffNotice": "Dieses Modul ist in den Einstellungen ausgeschaltet. Die Rechte bleiben erhalten, wirken aber erst, wenn das Modul wieder eingeschaltet ist.",
+      "duplicateTitle": "Rolle \"{{name}}\" duplizieren",
+      "duplicateHelp": "Die Kopie erhält dieselben Rechte unter einem neuen Namen. Benutzer, Codes und Zielgruppen werden nicht kopiert.",
+      "failedDuplicate": "Rolle konnte nicht dupliziert werden",
+      "beyondLevel": "Diese Rolle hat Rechte, die Sie selbst nicht haben",
+      "editTitle": "Rolle bearbeiten",
+      "viewTitle": "Rolle ansehen",
+      "createHelp": "Legen Sie zuerst die Rolle an und stellen Sie danach ihre Rechte zusammen.",
+      "audience": "Diese Rolle ist auch Zielgruppe von {{profiles}} und {{channels}}. Das ist unabhängig von den Rechten unten.",
+      "audienceProfiles_one": "{{count}} TAK-Profil",
+      "audienceProfiles_other": "{{count}} TAK-Profilen",
+      "audienceChannels_one": "{{count}} Meshtastic-Kanal",
+      "audienceChannels_other": "{{count}} Meshtastic-Kanälen",
+      "functionColumn": "Seite oder Funktion",
+      "viewColumn": "Ansehen",
+      "editColumn": "Ändern",
+      "checkboxView": "{{label}}: ansehen",
+      "checkboxEdit": "{{label}}: ändern",
+      "quickAllView": "Alles ansehen",
+      "quickAll": "Alles",
+      "quickNone": "Nichts",
+      "sensitive": "Sensibel",
+      "administratorOnly": "Nur Administrator",
+      "administratorOnlyHelp": "Kann keiner anderen Rolle gegeben werden.",
+      "notGrantable": "Sie haben dieses Recht selbst nicht und können es daher nicht vergeben.",
+      "legend": "Ändern schaltet Ansehen automatisch ein. Schalten Sie Ansehen aus, wird auch Ändern ausgeschaltet. Rechte, die ein anderes Recht braucht, werden mitgeschaltet. Ein sensibles Recht kann Zugriff auf Konten oder Geheimnisse geben.",
+      "lockedSystem": "Dies ist eine Systemrolle: Ihre Rechte sind festgelegt. Duplizieren Sie sie, um Ihre eigene Version zusammenzustellen.",
+      "lockedAboveLevel": "Diese Rolle hat Rechte, die Sie nicht haben, daher können Sie sie nicht ändern.",
+      "readOnly": "Sie können die Rechte dieser Rolle ansehen, aber nicht ändern.",
+      "noChanges": "Keine Änderungen",
+      "unsaved_one": "1 Änderung noch nicht gespeichert",
+      "unsaved_other": "{{count}} Änderungen noch nicht gespeichert",
+      "impact": "Nach dem Speichern gilt dies sofort für {{users}} und {{codes}}.",
+      "impactUsers_one": "{{count}} Benutzer",
+      "impactUsers_other": "{{count}} Benutzer",
+      "impactCodes_one": "{{count}} Onboarding-Code",
+      "impactCodes_other": "{{count}} Onboarding-Codes",
+      "impactChecking": "Es wird geprüft, wen dies betrifft...",
+      "sensitiveCount_one": "Diese Rolle hat 1 sensibles Recht.",
+      "sensitiveCount_other": "Diese Rolle hat {{count}} sensible Rechte.",
+      "missingRights": "Ihnen fehlt: {{rights}}",
+      "undo": "Änderungen verwerfen",
+      "save": "Rolle speichern",
+      "saved": "Rolle gespeichert",
+      "failedSave": "Rolle konnte nicht gespeichert werden",
+      "failedLoad": "Rolle konnte nicht geladen werden",
+      "overviewTitle": "Übersicht Rollen und Module",
+      "module": "Modul",
+      "userCountShort_one": "{{count}} Benutzer",
+      "userCountShort_other": "{{count}} Benutzer"
     },
     "groups": {
       "title": "OTS-Gruppenverwaltung",
@@ -1643,6 +1726,261 @@
     "packages": {
       "title": "Paketverwaltung",
       "comingSoon": "ATAK-Paket-CRUD-Oberfläche kommt bald. Verwenden Sie die API unter /api/v1/packages"
+    },
+    "permissions": {
+      "ignoredFields": "Gespeichert, aber diese Felder wurden nicht geändert, weil Ihnen das Recht fehlt: {{fields}}",
+      "needsView": "Sie brauchen Ansehen-Rechte für {{module}}, um aus dieser Liste zu wählen.",
+      "notAllowed": "Sie haben nicht das Recht, dies zu ändern.",
+      "roleBeyondLevel": "Diese Rolle hat Rechte, die Sie selbst nicht haben",
+      "hiddenValue": "Verborgen",
+      "codeAboveLevel": "Vergibt Rechte, die Sie selbst nicht haben: für Sie schreibgeschützt."
+    }
+  },
+  "permissions": {
+    "modules": {
+      "users": "Benutzer",
+      "roles": "Rollen",
+      "onboarding": "Onboarding-Codes",
+      "registrations": "Registrierungen",
+      "tak_profiles": "TAK-Profile",
+      "meshtastic": "Meshtastic",
+      "radios": "Funkgeräte",
+      "announcements": "Ankündigungen",
+      "settings": "Einstellungen",
+      "api_keys": "API-Schlüssel",
+      "api_docs": "API-Dokumentation",
+      "groups": "OTS-Gruppen",
+      "events": "Events"
+    },
+    "functions": {
+      "users__accounts": {
+        "label": "Konten",
+        "description": "Liste und Daten anderer Benutzer. Ändern umfasst E-Mail und Ablaufdatum."
+      },
+      "users__create": {
+        "label": "Benutzer anlegen",
+        "description": "Ein neues Konto in OTS und im Portal."
+      },
+      "users__delete": {
+        "label": "Benutzer löschen",
+        "description": "Entfernt das Konto auch aus OTS."
+      },
+      "users__roles__assign": {
+        "label": "Rollen zuweisen",
+        "description": "Nur Rollen mit Rechten, die Sie selbst haben."
+      },
+      "users__groups__assign": {
+        "label": "OTS-Gruppen zuweisen",
+        "description": "Die Gruppen eines Benutzers ändern."
+      },
+      "users__password__reset": {
+        "label": "Passwörter zurücksetzen",
+        "description": "Ein neues Passwort für eine andere Person festlegen."
+      },
+      "users__impersonate": {
+        "label": "Als Benutzer anmelden",
+        "description": "Sich als ein anderer Benutzer anmelden."
+      },
+      "roles": {
+        "label": "Rollen",
+        "description": "Name und Beschreibung eigener Rollen."
+      },
+      "roles__delete": {
+        "label": "Rollen löschen",
+        "description": "Nur eigene Rollen."
+      },
+      "roles__permissions": {
+        "label": "Rechte von Rollen ändern",
+        "description": "Diese Seite verwenden."
+      },
+      "onboarding": {
+        "label": "Codes",
+        "description": "Ansehen zeigt auch den Code selbst."
+      },
+      "onboarding__delete": {
+        "label": "Codes löschen",
+        "description": ""
+      },
+      "onboarding__roles__assign": {
+        "label": "Rollen auf einen Code setzen",
+        "description": "Auch die genehmigende Rolle. Nur innerhalb Ihrer eigenen Rechte."
+      },
+      "onboarding__groups__assign": {
+        "label": "Gruppen auf einen Code setzen",
+        "description": ""
+      },
+      "registrations": {
+        "label": "Registrierungen",
+        "description": "Offene Registrierungen ansehen und bearbeiten."
+      },
+      "registrations__approve": {
+        "label": "Genehmigen",
+        "description": "Legt das Konto an."
+      },
+      "registrations__delete": {
+        "label": "Löschen und aufräumen",
+        "description": ""
+      },
+      "tak_profiles": {
+        "label": "Profile",
+        "description": "Profile und ihre Dateien."
+      },
+      "tak_profiles__assign": {
+        "label": "Mit Rollen verknüpfen",
+        "description": "Festlegen, wer ein Profil erhält."
+      },
+      "tak_profiles__delete": {
+        "label": "Profile löschen",
+        "description": ""
+      },
+      "meshtastic__channels": {
+        "label": "Kanäle",
+        "description": "Die Kanal-URL enthält den Schlüssel."
+      },
+      "meshtastic__channels__delete": {
+        "label": "Kanäle löschen",
+        "description": ""
+      },
+      "meshtastic__channels__sync": {
+        "label": "Kanäle synchronisieren",
+        "description": ""
+      },
+      "meshtastic__groups": {
+        "label": "Kanalgruppen",
+        "description": "Gruppen, Kanalreihenfolge und URLs."
+      },
+      "meshtastic__groups__delete": {
+        "label": "Kanalgruppen löschen",
+        "description": ""
+      },
+      "radios": {
+        "label": "Bestand",
+        "description": "Alle Funkgeräte. Die eigenen Geräte bleiben für alle sichtbar."
+      },
+      "radios__assign": {
+        "label": "Funkgeräte zuweisen",
+        "description": "Besitzer oder Benutzer festlegen."
+      },
+      "radios__delete": {
+        "label": "Funkgeräte löschen",
+        "description": ""
+      },
+      "radios__claim_code": {
+        "label": "Claim-Codes abrufen",
+        "description": ""
+      },
+      "radios__program": {
+        "label": "Programmieren und prüfen",
+        "description": "Gibt Zugriff auf Kanal-URLs."
+      },
+      "announcements": {
+        "label": "Ankündigungen",
+        "description": "Liste, Details und Bearbeiten."
+      },
+      "announcements__email_details": {
+        "label": "E-Mail-Details",
+        "description": "Empfänger und Fehlermeldungen, sonst maskiert."
+      },
+      "announcements__delete": {
+        "label": "Ankündigungen löschen",
+        "description": ""
+      },
+      "announcements__send": {
+        "label": "Senden und planen",
+        "description": "Sofort oder zu einem festgelegten Zeitpunkt senden."
+      },
+      "settings": {
+        "label": "Einstellungen ansehen",
+        "description": "Alle allgemeinen Einstellungen."
+      },
+      "settings__general": {
+        "label": "Allgemein",
+        "description": "Name, Hilfe, Symbole und Installations-QR-Codes."
+      },
+      "settings__branding": {
+        "label": "Erscheinungsbild",
+        "description": "Logo, Hintergrund und Darstellung."
+      },
+      "settings__registration": {
+        "label": "Registrierung und Benachrichtigungen",
+        "description": "Genehmigung, Aufräumen und Passwort vergessen."
+      },
+      "settings__enrollment": {
+        "label": "QR und Kiosk",
+        "description": ""
+      },
+      "settings__radios": {
+        "label": "Funkgeräte-Einstellungen",
+        "description": "Was Benutzer mit ihrem Funkgerät tun dürfen."
+      },
+      "settings__modules": {
+        "label": "Module ein- und ausschalten",
+        "description": "Meshtastic, Funkgeräte und Events."
+      },
+      "settings__security": {
+        "label": "Anmeldesicherheit",
+        "description": "OIDC ein/aus und Magic Links."
+      },
+      "settings__oidc": {
+        "label": "OIDC-Anbieter",
+        "description": "Ein eigener Anbieter kann jedes Konto übernehmen."
+      },
+      "api_keys": {
+        "label": "API-Schlüssel",
+        "description": "Anlegen, ändern und neu erzeugen."
+      },
+      "api_keys__delete": {
+        "label": "Schlüssel löschen",
+        "description": ""
+      },
+      "api_docs": {
+        "label": "API-Dokumentation",
+        "description": "Seite im Admin-Menü."
+      },
+      "groups": {
+        "label": "Gruppen",
+        "description": "Gruppen ansehen und bearbeiten."
+      },
+      "groups__members": {
+        "label": "Gruppenmitglieder",
+        "description": "Mitglieder und ihre Richtung (IN/OUT)."
+      },
+      "groups__delete": {
+        "label": "Gruppen löschen",
+        "description": "Entfernt die Gruppe auch aus OTS."
+      },
+      "groups__sync": {
+        "label": "Mit OTS synchronisieren",
+        "description": "Gruppen vom OpenTAK Server abrufen."
+      },
+      "events": {
+        "label": "Events",
+        "description": "Events ansehen und bearbeiten."
+      },
+      "events__delete": {
+        "label": "Events und Teams löschen",
+        "description": ""
+      },
+      "events__teams": {
+        "label": "Teams verwalten",
+        "description": "Teams anlegen und ihr gemeinsames Leiterkonto festlegen."
+      },
+      "events__links": {
+        "label": "Zugangslinks",
+        "description": "Links anlegen, ändern und widerrufen."
+      },
+      "events__links__reveal": {
+        "label": "Link-URLs anzeigen",
+        "description": "Den vollständigen Link erneut abrufen, auch als QR-Code."
+      },
+      "events__leaders": {
+        "label": "Teamleiter",
+        "description": "Teamleiter und ihre Sitzungen."
+      },
+      "events__accounts": {
+        "label": "Teilnehmerkonten",
+        "description": "Zwischen Teams verschieben und schließen."
+      }
     }
   }
 }

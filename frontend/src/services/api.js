@@ -163,6 +163,18 @@ export const rolesAPI = {
 
   delete: (id) =>
     api.delete(`/roles/${id}`),
+
+  getPermissionCatalog: () =>
+    api.get('/roles/permission-catalog'),
+
+  setPermissions: (id, permissions) =>
+    api.put(`/roles/${id}/permissions`, { permissions }),
+
+  previewPermissions: (id, permissions) =>
+    api.post(`/roles/${id}/permissions/preview`, { permissions }),
+
+  duplicate: (id, data) =>
+    api.post(`/roles/${id}/duplicate`, data),
 };
 
 // Onboarding Codes API

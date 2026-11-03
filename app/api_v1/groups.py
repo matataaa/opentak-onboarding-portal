@@ -6,25 +6,10 @@ CRUD operations for OTS group management, syncing, and member management
 from flask import request, jsonify, current_app
 from flask_jwt_extended import jwt_required
 from app.api_v1 import api_v1
+from app.rbac import has_permission, require_permission
 from app.models import EventTeamModel, OTSGroupModel, UserModel, db
 from app.pagination import search_and_paginate
 import datetime
-
-
-def require_admin_role():
-    """Check for group_admin or administrator role (write access)"""
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'group_admin']):
-        return jsonify({'error': 'Group admin access required'}), 403
-    return None
-
-
-def require_view_role():
-    """Check for group_admin, group_readonly, or administrator role (read access)"""
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'group_admin', 'group_readonly']):
-        return jsonify({'error': 'Group admin or readonly access required'}), 403
-    return None
 
 
 def _ots_status_code(exc):
@@ -47,12 +32,9 @@ def _missing_fields(group):
 
 @api_v1.route('/groups', methods=['GET'])
 @jwt_required()
+@require_permission('groups.view')
 def get_groups():
     """Get OTS groups, optionally filtered by search and paginated (all groups when per_page is omitted)"""
-    error = require_view_role()
-    if error:
-        return error
-
     groups, meta = search_and_paginate(
         OTSGroupModel.query, OTSGroupModel.name,
         [OTSGroupModel.name, OTSGroupModel.display_name, OTSGroupModel.description])
@@ -75,12 +57,9 @@ def get_groups():
 
 @api_v1.route('/groups/<int:group_id>', methods=['GET'])
 @jwt_required()
+@require_permission('groups.view')
 def get_group(group_id):
     """Get group by ID with details including members"""
-    error = require_view_role()
-    if error:
-        return error
-
     group = OTSGroupModel.get_by_id(group_id)
     if not group:
         return jsonify({'error': 'Group not found'}), 404
@@ -93,7 +72,8 @@ def get_group(group_id):
         'active': group.active,
         'syncedAt': group.synced_at.isoformat() if group.synced_at else None,
         **_missing_fields(group),
-        'users': [{'id': u.id, 'username': u.username, 'callsign': u.callsign, 'email': u.email} for u in group.users],
+        **({'users': [{'id': u.id, 'username': u.username, 'callsign': u.callsign, 'email': u.email} for u in group.users]}
+           if has_permission('groups.members.view') else {}),
         'onboardingCodes': [{'id': c.id, 'name': c.name} for c in group.onboarding_codes],
         'eventTeams': _event_teams_of(group)
     }), 200
@@ -101,12 +81,9 @@ def get_group(group_id):
 
 @api_v1.route('/groups', methods=['POST'])
 @jwt_required()
+@require_permission('groups.edit')
 def create_group():
     """Create a new OTS group (locally and in OTS)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     data = request.get_json()
 
     if not data.get('name'):
@@ -180,12 +157,9 @@ def create_group():
 
 @api_v1.route('/groups/<int:group_id>', methods=['PUT'])
 @jwt_required()
+@require_permission('groups.edit')
 def update_group(group_id):
     """Update group local metadata"""
-    error = require_admin_role()
-    if error:
-        return error
-
     group = OTSGroupModel.get_by_id(group_id)
     if not group:
         return jsonify({'error': 'Group not found'}), 404
@@ -220,12 +194,9 @@ def update_group(group_id):
 
 @api_v1.route('/groups/<int:group_id>', methods=['DELETE'])
 @jwt_required()
+@require_permission('groups.delete')
 def delete_group(group_id):
     """Remove a group: from OTS first (unless it is already flagged as gone there), then locally"""
-    error = require_admin_role()
-    if error:
-        return error
-
     group = OTSGroupModel.get_by_id(group_id)
     if not group:
         return jsonify({'error': 'Group not found'}), 404
@@ -267,12 +238,9 @@ def delete_group(group_id):
 
 @api_v1.route('/groups/<int:group_id>/members', methods=['GET'])
 @jwt_required()
+@require_permission('groups.members.view')
 def get_group_members(group_id):
     """Get members of a group from OTS with direction info"""
-    error = require_view_role()
-    if error:
-        return error
-
     group = OTSGroupModel.get_by_id(group_id)
     if not group:
         return jsonify({'error': 'Group not found'}), 404
@@ -313,12 +281,9 @@ def get_group_members(group_id):
 
 @api_v1.route('/groups/<int:group_id>/members', methods=['POST'])
 @jwt_required()
+@require_permission('groups.members.edit')
 def add_group_member(group_id):
     """Add a user to a group in OTS with a specific direction"""
-    error = require_admin_role()
-    if error:
-        return error
-
     group = OTSGroupModel.get_by_id(group_id)
     if not group:
         return jsonify({'error': 'Group not found'}), 404
@@ -393,12 +358,9 @@ def add_group_member(group_id):
 
 @api_v1.route('/groups/<int:group_id>/members/<path:username>', methods=['DELETE'])
 @jwt_required()
+@require_permission('groups.members.edit')
 def remove_group_member(group_id, username):
     """Remove a user from a group in OTS for a specific direction"""
-    error = require_admin_role()
-    if error:
-        return error
-
     group = OTSGroupModel.get_by_id(group_id)
     if not group:
         return jsonify({'error': 'Group not found'}), 404
@@ -444,12 +406,9 @@ def remove_group_member(group_id, username):
 
 @api_v1.route('/groups/sync', methods=['POST'])
 @jwt_required()
+@require_permission('groups.sync')
 def sync_groups_from_ots():
     """Sync groups from OTS server to local database"""
-    error = require_admin_role()
-    if error:
-        return error
-
     try:
         from app.ots import otsClient
         from app.api_v1.events import EVENT_GROUP_RE

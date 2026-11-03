@@ -149,6 +149,14 @@ class UserRoleModel(db.Model):
         back_populates="roles"
     )
 
+    # ORM cascade as well as ON DELETE CASCADE: production SQLite does not enforce
+    # foreign keys, and a reused role id must not inherit rows.
+    permissions = relationship(
+        "RolePermissionModel",
+        back_populates="role",
+        cascade="all, delete-orphan"
+    )
+
     @staticmethod
     def create_role(name, description="", display_name=None):
         try:
@@ -196,6 +204,24 @@ class UserRoleModel(db.Model):
         else:
             return {"error": "role.not.exist"}
 
+
+
+class RolePermissionModel(db.Model):
+    """A permission key granted to a custom role."""
+    __tablename__ = "role_permissions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    role_id: Mapped[int] = mapped_column(
+        ForeignKey('user_roles.id', name='fk_role_permissions_role_id_user_roles', ondelete='CASCADE'),
+        nullable=False
+    )
+    permission: Mapped[str] = mapped_column(String(100), nullable=False)
+
+    role = relationship("UserRoleModel", back_populates="permissions")
+
+    __table_args__ = (
+        UniqueConstraint('role_id', 'permission', name='uq_role_permissions_role_id_permission'),
+    )
 
 
 class UserModel(db.Model):

@@ -3,13 +3,20 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { meshtasticGroupsAPI, meshtasticAPI, rolesAPI } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { warnIgnoredFields } from '../../utils/permissions';
 import { Link } from 'react-router-dom';
 import '../../components/AdminTable.css';
 
 function MeshtasticGroups() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const { showError, showSuccess, confirm } = useNotification();
+  const { showError, showSuccess, showWarning, confirm } = useNotification();
+  const { can } = useAuth();
+  const canEdit = can('meshtastic.groups.edit');
+  const canDelete = can('meshtastic.groups.delete');
+  // Channel URLs, the channel list and the device config need view access to the channels
+  const canViewChannels = can('meshtastic.channels.view');
   const [showModal, setShowModal] = useState(false);
   const [showSlotModal, setShowSlotModal] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -28,12 +35,13 @@ function MeshtasticGroups() {
   });
 
   // Fetch all channels (channels can now be in multiple groups)
-  const { data: allChannelsData, error: channelsError } = useQuery({
+  const { data: allChannelsData } = useQuery({
     queryKey: ['meshtasticAdmin'],
     queryFn: async () => {
       const response = await meshtasticAPI.getAllAdmin();
       return response.data;
     },
+    enabled: canViewChannels,
   });
 
   // Fetch roles
@@ -58,11 +66,12 @@ function MeshtasticGroups() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => meshtasticGroupsAPI.update(id, data),
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries(['meshtasticGroupsAdmin']);
       setShowModal(false);
       resetForm();
       showSuccess(t('admin.meshtasticGroups.groupUpdated'));
+      warnIgnoredFields(response, showWarning, t);
     },
     onError: (err) => setError(err.response?.data?.error || t('admin.meshtasticGroups.failedUpdate')),
   });
@@ -118,10 +127,12 @@ function MeshtasticGroups() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    // The device config comes back empty without access to the channels: do not send it back
+    const data = canViewChannels ? formData : Object.fromEntries(Object.entries(formData).filter(([key]) => key !== 'yamlConfig'));
     if (editing) {
-      updateMutation.mutate({ id: editing.id, data: formData });
+      updateMutation.mutate({ id: editing.id, data });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(data);
     }
   };
 
@@ -186,10 +197,12 @@ function MeshtasticGroups() {
         <div>
           <h1>{t('admin.meshtasticGroups.title')}</h1>
           <p style={{ color: '#666', fontSize: '0.9rem', marginTop: '0.25rem' }}>
-            {t('admin.meshtasticGroups.subtitle')} <Link to="/admin/meshtastic">{t('admin.meshtasticGroups.manageChannels')}</Link>
+            {t('admin.meshtasticGroups.subtitle')} {canViewChannels && <Link to="/admin/meshtastic">{t('admin.meshtasticGroups.manageChannels')}</Link>}
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => {resetForm(); setShowModal(true);}}>{t('admin.meshtasticGroups.createGroup')}</button>
+        {canEdit && (
+          <button className="btn btn-primary" onClick={() => {resetForm(); setShowModal(true);}}>{t('admin.meshtasticGroups.createGroup')}</button>
+        )}
       </div>
 
       <div className="admin-table-container">
@@ -221,6 +234,7 @@ function MeshtasticGroups() {
                   </div>
                 </div>
                 <div className="table-actions">
+                  {canEdit && (
                   <button className="btn btn-sm btn-secondary" onClick={async () => {
                     try {
                       const response = await meshtasticGroupsAPI.getById(group.id);
@@ -239,10 +253,13 @@ function MeshtasticGroups() {
                       showError(t('admin.meshtasticGroups.failedLoadDetails'));
                     }
                   }}>{t('common.edit')}</button>
+                  )}
+                  {canDelete && (
                   <button className="btn btn-sm btn-danger" onClick={async () => {
                     const confirmed = await confirm(t('admin.meshtasticGroups.deleteConfirm', { name: group.name }), t('admin.meshtasticGroups.deleteGroup'));
                     if (confirmed) deleteMutation.mutate(group.id);
                   }}>{t('common.delete')}</button>
+                  )}
                 </div>
               </div>
 
@@ -278,6 +295,7 @@ function MeshtasticGroups() {
                           <div style={{ fontSize: '0.85rem', fontWeight: 500, wordBreak: 'break-word' }}>
                             {channel.name}
                           </div>
+                          {canEdit && (
                           <button
                             className="btn btn-sm"
                             style={{ fontSize: '0.7rem', padding: '2px 6px', marginTop: '4px' }}
@@ -290,6 +308,7 @@ function MeshtasticGroups() {
                           >
                             {t('common.remove')}
                           </button>
+                          )}
                         </>
                       ) : (
                         <div style={{ color: '#999', fontSize: '0.8rem' }}>{t('common.empty')}</div>
@@ -300,7 +319,7 @@ function MeshtasticGroups() {
               </div>
 
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {group.channel_count < 8 && getAvailableChannelsForGroup(group).length > 0 && (
+                {canEdit && canViewChannels && group.channel_count < 8 && getAvailableChannelsForGroup(group).length > 0 && (
                   <button
                     className="btn btn-sm btn-info"
                     onClick={() => openAddChannelModal(group)}
@@ -308,7 +327,7 @@ function MeshtasticGroups() {
                     {t('admin.meshtasticGroups.addChannel')}
                   </button>
                 )}
-                {group.channel_count > 0 && (
+                {canEdit && group.channel_count > 0 && (
                   <button
                     className="btn btn-sm btn-secondary"
                     onClick={() => regenerateUrlMutation.mutate(group.id)}
@@ -327,7 +346,7 @@ function MeshtasticGroups() {
                   </code>
                 </div>
               )}
-              {!group.combined_url && group.channel_count > 0 && (
+              {canViewChannels && !group.combined_url && group.channel_count > 0 && (
                 <div style={{ marginTop: '1rem', padding: '0.5rem', background: '#fff3cd', borderRadius: '4px', color: '#856404' }}>
                   {t('admin.meshtasticGroups.noCombinedUrl')}
                 </div>
@@ -410,6 +429,7 @@ function MeshtasticGroups() {
                   <label>{t('admin.meshtasticGroups.deviceConfigLabel')}</label>
                   <textarea
                     value={formData.yamlConfig}
+                    disabled={!canViewChannels}
                     onChange={(e) => setFormData({...formData, yamlConfig: e.target.value})}
                     placeholder={`# Optional device settings for radio programming
 # Supports placeholders:
@@ -432,6 +452,9 @@ bluetooth:
                   <span className="help-text">
                     {t('admin.meshtasticGroups.deviceConfigHelp')}
                   </span>
+                  {!canViewChannels && (
+                    <span className="help-text" style={{ display: 'block' }}>{t('admin.permissions.notAllowed')}</span>
+                  )}
                 </div>
               </div>
               <div className="modal-footer">

@@ -33,9 +33,21 @@ const ORGANIZER_DIRECTIONS = [
 export default function EventsAdmin() {
   const { t } = useTranslation();
   const dateFormat = useDateFormat();
-  const { hasRole } = useAuth();
+  const { can } = useAuth();
   const { showSuccess, showWarning } = useNotification();
-  const canEdit = hasRole('events_admin') || hasRole('administrator');
+  const canEdit = can('events.edit');
+  const canDelete = can('events.delete');
+  const canEditTeams = can('events.teams.edit');
+  const canViewLinks = can('events.links.view');
+  const canEditLinks = can('events.links.edit');
+  const canRevealLinks = can('events.links.reveal');
+  const canViewLeaders = can('events.leaders.view');
+  const canEditLeaders = can('events.leaders.edit');
+  const canViewAccounts = can('events.accounts.view');
+  const canEditAccounts = can('events.accounts.edit');
+  // Pickers that read other modules
+  const canViewGroups = can('groups.view');
+  const canViewCodes = can('onboarding.view');
   const [teams, setTeams] = useState([]);
   const [events, setEvents] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -106,9 +118,9 @@ export default function EventsAdmin() {
 
   useEffect(() => {
     reload();
-    groupsAPI.getAll().then((r) => setGroups(r.data.groups || r.data || [])).catch(() => {});
-    onboardingCodesAPI.getAll({ per_page: 1000 }).then((r) => setCodes(r.data.onboardingCodes || r.data.codes || r.data || [])).catch(() => {});
-  }, [reload]);
+    if (canViewGroups) groupsAPI.getAll().then((r) => setGroups(r.data.groups || r.data || [])).catch(() => {});
+    if (canViewCodes) onboardingCodesAPI.getAll({ per_page: 1000 }).then((r) => setCodes(r.data.onboardingCodes || r.data.codes || r.data || [])).catch(() => {});
+  }, [reload, canViewGroups, canViewCodes]);
 
   const call = async (fn, after) => {
     setError('');
@@ -182,7 +194,7 @@ export default function EventsAdmin() {
   // Users matching the search text (at least 2 characters), for the team leader picker
   useEffect(() => {
     const search = teamLeaderForm.search.trim();
-    if (!openLinksFor || !canEdit || search.length < 2) {
+    if (!openLinksFor || !canEditLeaders || search.length < 2) {
       setUserOptions([]);
       return undefined;
     }
@@ -194,7 +206,7 @@ export default function EventsAdmin() {
         .catch(() => setUserOptions([]));
     }, 300);
     return () => clearTimeout(timer);
-  }, [teamLeaderForm.search, teamLeaderForm.teamId, openLinksFor, canEdit]);
+  }, [teamLeaderForm.search, teamLeaderForm.teamId, openLinksFor, canEditLeaders]);
 
   const addTeamLeader = () => call(
     () => eventsAPI.addTeamLeader(openLinksFor, {
@@ -263,9 +275,11 @@ export default function EventsAdmin() {
     setLeaderSessions([]);
     setTeamLeaders([]);
     setTeamLeaderForm({ teamId: '', search: '', userId: '' });
-    loadAccounts(eventId);
-    loadLeaderSessions(eventId);
-    loadTeamLeaders(eventId);
+    if (canViewAccounts) loadAccounts(eventId);
+    if (canViewLeaders) {
+      loadLeaderSessions(eventId);
+      loadTeamLeaders(eventId);
+    }
     setNewLink(null);
     setPrintSheet([]);
     setQrLink(null);
@@ -301,7 +315,7 @@ export default function EventsAdmin() {
   const regenerate = (l) => {
     if (!window.confirm(t('events.regenerateConfirm'))) return;
     call(() => eventsAPI.revokeLink(l.id), (res) => { setQrLink(null); addGenerated(res.data); })
-      .then(() => { loadLinks(openLinksFor); loadLeaderSessions(openLinksFor); loadTeamLeaders(openLinksFor); });
+      .then(() => { loadLinks(openLinksFor); if (canViewLeaders) { loadLeaderSessions(openLinksFor); loadTeamLeaders(openLinksFor); } });
   };
 
   const createLink = () => {
@@ -352,6 +366,7 @@ export default function EventsAdmin() {
       {/* Teams */}
       <section className="events-section">
         <h2>{t('events.teams')}</h2>
+        {canEditTeams && (
         <div className="events-form-row">
           <input placeholder={t('events.teamName')} value={teamForm.name} onChange={(e) => setTeamForm({ ...teamForm, name: e.target.value })} />
           <select value={teamForm.color} onChange={(e) => setTeamForm({ ...teamForm, color: e.target.value })}>
@@ -364,6 +379,7 @@ export default function EventsAdmin() {
           </select>
           <button className="btn btn-sm btn-primary" onClick={createTeam} disabled={!teamForm.name}>{t('events.addTeam')}</button>
         </div>
+        )}
         <div className="admin-table-container">
           <table className="admin-table">
             <thead><tr><th>{t('events.teamName')}</th><th>{t('events.color')}</th><th>{t('events.group')}</th><th>{t('events.leader')}</th><th></th></tr></thead>
@@ -381,7 +397,7 @@ export default function EventsAdmin() {
                     )}
                   </td>
                   <td>
-                    {team.leaderUser ? team.leaderUser.username : (
+                    {team.leaderUser ? team.leaderUser.username : !canEditLeaders ? '-' : (
                       <span className="events-leader-form">
                         <input placeholder={t('events.leaderUsername')} value={(leaderForm[team.id] || {}).username || ''} onChange={(e) => setLeaderForm((p) => ({ ...p, [team.id]: { ...(p[team.id] || {}), username: e.target.value } }))} />
                         <input type="password" placeholder={t('events.password')} value={(leaderForm[team.id] || {}).password || ''} onChange={(e) => setLeaderForm((p) => ({ ...p, [team.id]: { ...(p[team.id] || {}), password: e.target.value } }))} />
@@ -389,7 +405,7 @@ export default function EventsAdmin() {
                       </span>
                     )}
                   </td>
-                  <td><button className="btn btn-sm btn-danger" onClick={() => call(() => eventsAPI.deleteTeam(team.id), (res) => notifyHq(res.data))}>{t('common.delete')}</button></td>
+                  <td>{canDelete && <button className="btn btn-sm btn-danger" onClick={() => call(() => eventsAPI.deleteTeam(team.id), (res) => notifyHq(res.data))}>{t('common.delete')}</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -400,6 +416,7 @@ export default function EventsAdmin() {
       {/* Events */}
       <section className="events-section">
         <h2>{t('events.events')}</h2>
+        {canEdit && (
         <div className="events-form-row">
           <input placeholder={t('events.eventName')} value={eventForm.name} onChange={(e) => setEventForm({ ...eventForm, name: e.target.value })} />
           <label>{t('events.validFrom')}<input type="datetime-local" value={eventForm.validFrom} onChange={(e) => setEventForm({ ...eventForm, validFrom: e.target.value })} /></label>
@@ -414,7 +431,8 @@ export default function EventsAdmin() {
           </select>
           <button className="btn btn-sm btn-primary" onClick={createEvent} disabled={!eventForm.name || (eventForm.playerAccessMode === 'shared' && !eventForm.validUntil)}>{t('events.addEvent')}</button>
         </div>
-        {eventForm.playerAccessMode === 'shared' && !eventForm.validUntil && (
+        )}
+        {canEdit && eventForm.playerAccessMode === 'shared' && !eventForm.validUntil && (
           <p className="events-hint">{t('events.sharedNeedsEnd')}</p>
         )}
         <div className="admin-table-container">
@@ -429,6 +447,7 @@ export default function EventsAdmin() {
                   <td>{ev.accountCleanup}</td>
                   <td>
                     <div className="table-actions">
+                      {canViewLinks && (
                       <button
                         type="button"
                         className={`btn btn-sm ${ev.id === openLinksFor ? 'btn-info' : 'btn-secondary'}`}
@@ -438,9 +457,12 @@ export default function EventsAdmin() {
                       >
                         <span aria-hidden="true">{ev.id === openLinksFor ? '▾' : '▸'}</span> {t('events.links')}
                       </button>
+                      )}
+                      {canDelete && (
                       <button className="btn btn-sm btn-danger" onClick={() => call(() => eventsAPI.deleteEvent(ev.id), () => {
                         if (ev.id === openLinksFor) setOpenLinksFor(null);
                       })}>{t('common.delete')}</button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -496,6 +518,7 @@ export default function EventsAdmin() {
               <code>{newLink.url}</code>
             </div>
           )}
+          {canEditLinks && (
           <div className="events-form-row">
             <select value={linkForm.teamId} onChange={(e) => setLinkForm({ ...linkForm, teamId: e.target.value })}>
               <option value="">{t('events.selectTeam')}</option>
@@ -516,6 +539,7 @@ export default function EventsAdmin() {
             </select>
             <button className="btn btn-sm btn-primary" onClick={createLink} disabled={!linkForm.teamId}>{t('events.generateLink')}</button>
           </div>
+          )}
           <p className="events-hint">{t('events.directionHint')} {t('admin.groups.directionHelp')}</p>
           <div className="admin-table-container">
             <table className="admin-table">
@@ -529,7 +553,7 @@ export default function EventsAdmin() {
                     </td>
                     <td>{l.role}</td>
                     <td>
-                      {canEdit ? (
+                      {canEditLinks ? (
                         <>
                           <select aria-label={t('events.direction')} value={l.direction || 'BOTH'} onChange={(e) => changeDirection(l, e.target.value)}>
                             {LINK_DIRECTIONS.map(([value, key]) => <option key={value} value={value}>{t(key)}</option>)}
@@ -546,16 +570,16 @@ export default function EventsAdmin() {
                     <td>v{l.tokenVersion}</td>
                     <td>
                       <div className="table-actions">
-                        <button className="btn btn-sm btn-success" onClick={() => showQr(l)} disabled={!l.retrievable} title={l.retrievable ? '' : t('events.regenerateToShowQr')}>{t('events.qrLink')}</button>
-                        <button className="btn btn-sm btn-warning" onClick={() => regenerate(l)}>{t('events.regenerate')}</button>
-                        {canEdit && (
+                        {canRevealLinks && <button className="btn btn-sm btn-success" onClick={() => showQr(l)} disabled={!l.retrievable} title={l.retrievable ? '' : t('events.regenerateToShowQr')}>{t('events.qrLink')}</button>}
+                        {canEditLinks && <button className="btn btn-sm btn-warning" onClick={() => regenerate(l)}>{t('events.regenerate')}</button>}
+                        {canEditAccounts && (
                           <button className="btn btn-sm btn-danger" onClick={() => closeLinkAccounts(l)}>{linkRemaining[l.id] > 0 ? t('events.closeLinkAccountsMore', { remaining: linkRemaining[l.id] }) : t('events.closeLinkAccounts')}</button>
                         )}
-                        <button className="btn btn-sm btn-danger" onClick={() => call(() => eventsAPI.deleteLink(l.id), (res) => {
+                        {canEditLinks && <button className="btn btn-sm btn-danger" onClick={() => call(() => eventsAPI.deleteLink(l.id), (res) => {
                         notifyHq(res.data);
                         setPrintSheet((p) => p.filter((x) => x.id !== l.id));
                         setQrLink((q) => (q?.id === l.id ? null : q));
-                      }).then(() => { loadLinks(openLinksFor); loadLeaderSessions(openLinksFor); loadTeamLeaders(openLinksFor); })}>{t('common.delete')}</button>
+                      }).then(() => { loadLinks(openLinksFor); if (canViewLeaders) { loadLeaderSessions(openLinksFor); loadTeamLeaders(openLinksFor); } })}>{t('common.delete')}</button>}
                       </div>
                     </td>
                   </tr>
@@ -576,7 +600,7 @@ export default function EventsAdmin() {
             </div>
           )}
           <div className="events-form-row">
-            <button className="btn btn-sm btn-secondary" onClick={printAll} disabled={!links.some((l) => l.retrievable)}>{t('events.printAllQrs')}</button>
+            <button className="btn btn-sm btn-secondary" onClick={printAll} disabled={!canRevealLinks || !links.some((l) => l.retrievable)}>{t('events.printAllQrs')}</button>
             <select value={printPerPage} onChange={(e) => setPrintPerPage(Number(e.target.value))} aria-label={t('events.printLayout')}>
               <option value={1}>{t('events.printOnePerPage')}</option>
               <option value={2}>{t('events.printTwoPerPage')}</option>
@@ -584,9 +608,11 @@ export default function EventsAdmin() {
           </div>
 
           {/* Personal leaders: portal users who lead a team in the selected event with their own account */}
+          {canViewLeaders && (
+          <>
           <h3>{t('events.teamLeaders')}</h3>
           <p className="events-hint">{t('events.teamLeadersNotice')}</p>
-          {canEdit && (
+          {canEditLeaders && (
             <div className="events-form-row">
               <select aria-label={t('events.team')} value={teamLeaderForm.teamId} onChange={(e) => setTeamLeaderForm({ ...teamLeaderForm, teamId: e.target.value })}>
                 <option value="">{t('events.selectTeam')}</option>
@@ -608,9 +634,9 @@ export default function EventsAdmin() {
           )}
           <div className="admin-table-container">
             <table className="admin-table">
-              <thead><tr><th>{t('events.teamLeaderUser')}</th><th>{t('events.team')}</th><th>{t('events.teamLeaderSource')}</th><th>{t('events.accountStatus')}</th>{canEdit && <th></th>}</tr></thead>
+              <thead><tr><th>{t('events.teamLeaderUser')}</th><th>{t('events.team')}</th><th>{t('events.teamLeaderSource')}</th><th>{t('events.accountStatus')}</th>{canEditLeaders && <th></th>}</tr></thead>
               <tbody>
-                {teamLeaders.length === 0 && <tr><td colSpan={canEdit ? 5 : 4}>{t('events.teamLeadersEmpty')}</td></tr>}
+                {teamLeaders.length === 0 && <tr><td colSpan={canEditLeaders ? 5 : 4}>{t('events.teamLeadersEmpty')}</td></tr>}
                 {teamLeaders.map((d) => (
                   <tr key={d.id}>
                     <td>
@@ -620,7 +646,7 @@ export default function EventsAdmin() {
                     <td>{d.team?.name || '-'}</td>
                     <td>{t(d.source === 'link' ? 'events.teamLeaderSourceLink' : 'events.teamLeaderSourceAdmin')}</td>
                     <td>{t(d.status === 'active' ? 'events.accountActive' : 'events.leaderSessionEnded')}</td>
-                    {canEdit && (
+                    {canEditLeaders && (
                       <td>
                         <div className="table-actions">
                           <button className="btn btn-sm btn-danger" onClick={() => removeTeamLeader(d)}>{t('events.teamLeaderRemove')}</button>
@@ -641,9 +667,9 @@ export default function EventsAdmin() {
           </div>
           <div className="admin-table-container">
             <table className="admin-table">
-              <thead><tr><th>{t('events.leaderSessionName')}</th><th>{t('events.team')}</th><th>{t('events.leaderSessionJoined')}</th><th>{t('events.leaderSessionDevices')}</th><th>{t('events.accountStatus')}</th>{canEdit && <th></th>}</tr></thead>
+              <thead><tr><th>{t('events.leaderSessionName')}</th><th>{t('events.team')}</th><th>{t('events.leaderSessionJoined')}</th><th>{t('events.leaderSessionDevices')}</th><th>{t('events.accountStatus')}</th>{canEditLeaders && <th></th>}</tr></thead>
               <tbody>
-                {leaderSessions.length === 0 && <tr><td colSpan={canEdit ? 6 : 5}>{t('events.leaderSessionsEmpty')}</td></tr>}
+                {leaderSessions.length === 0 && <tr><td colSpan={canEditLeaders ? 6 : 5}>{t('events.leaderSessionsEmpty')}</td></tr>}
                 {leaderSessions.map((s) => (
                   <tr key={s.id}>
                     <td>
@@ -656,7 +682,7 @@ export default function EventsAdmin() {
                     <td>{s.status === 'revoked'
                       ? t('events.leaderSessionRevokedAt', { date: formatDateTime(s.revokedAt, dateFormat) })
                       : t(s.status === 'ended' ? 'events.leaderSessionEnded' : 'events.accountActive')}</td>
-                    {canEdit && (
+                    {canEditLeaders && (
                       <td>
                         {!s.revokedAt && (
                           <div className="table-actions">
@@ -671,7 +697,12 @@ export default function EventsAdmin() {
             </table>
           </div>
 
+          </>
+          )}
+
           {/* Device accounts of the selected event */}
+          {canViewAccounts && (
+          <>
           <h3>{t('events.accounts')}</h3>
           <p className="events-hint">{t('events.accountsNotice')}</p>
           {notice && <p className="events-hint">{notice}</p>}
@@ -681,9 +712,9 @@ export default function EventsAdmin() {
           </div>
           <div className="admin-table-container">
             <table className="admin-table">
-              <thead><tr><th>{t('events.accountCallsign')} / {t('events.accountUsername')}</th><th>{t('events.team')}</th><th>{t('events.accountStatus')}</th><th>{t('events.accountCreated')}</th>{canEdit && <th></th>}</tr></thead>
+              <thead><tr><th>{t('events.accountCallsign')} / {t('events.accountUsername')}</th><th>{t('events.team')}</th><th>{t('events.accountStatus')}</th><th>{t('events.accountCreated')}</th>{canEditAccounts && <th></th>}</tr></thead>
               <tbody>
-                {accounts.length === 0 && <tr><td colSpan={canEdit ? 5 : 4}>{t('events.accountsEmpty')}</td></tr>}
+                {accounts.length === 0 && <tr><td colSpan={canEditAccounts ? 5 : 4}>{t('events.accountsEmpty')}</td></tr>}
                 {accounts.map((a) => (
                   <tr key={a.id}>
                     <td>
@@ -700,7 +731,7 @@ export default function EventsAdmin() {
                       {a.leaderName && <div className="events-hint">{t('events.enrolledBy', { name: a.leaderName })}</div>}
                     </td>
                     <td>{formatDateTime(a.createdAt, dateFormat, { utc: true }) || '-'}</td>
-                    {canEdit && (
+                    {canEditAccounts && (
                       <td>
                         {!a.legacy && (
                           <div className="table-actions">
@@ -722,6 +753,9 @@ export default function EventsAdmin() {
               </tbody>
             </table>
           </div>
+
+          </>
+          )}
 
           {printSheet.length > 0 && (
             <div className="events-print-sheet">

@@ -9,43 +9,24 @@ from app.api_v1 import api_v1
 from app.api_v1.auth import get_frontend_url
 from app.models import PendingRegistrationModel, OnboardingCodeModel, UserModel
 from app.ots import new_password_error
-from app.rbac import has_privileged_role, is_administrator, visible_code_value
+from app.rbac import CODE_BEYOND_ACTOR_ERROR, deny_beyond_actor, has_privileged_role, is_administrator, require_permission, visible_code_value
 from datetime import datetime, timedelta
 import secrets
 import re
 
 
-def require_admin_role():
-    """Check for registration_admin or administrator role (write access)"""
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'registration_admin']):
-        return jsonify({'error': 'Registration admin access required'}), 403
-    return None
-
-
-def require_view_role():
-    """Check for registration_admin, registration_readonly, or administrator role (read access)"""
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'registration_admin', 'registration_readonly']):
-        return jsonify({'error': 'Registration admin or readonly access required'}), 403
-    return None
-
-
-def _privileged_code_denied(code):
-    """A code carrying a privileged role hands out admin accounts: only an administrator may use it here."""
+def _code_denied(code):
+    """An account from this code gets the code's roles: only for those who hold at least as much."""
     if code and has_privileged_role(code) and not is_administrator():
         return jsonify({'error': 'Only an administrator can use this onboarding code'}), 403
-    return None
+    return deny_beyond_actor(CODE_BEYOND_ACTOR_ERROR, list(code.roles)) if code else None
 
 
 @api_v1.route('/pending-registrations', methods=['GET'])
 @jwt_required()
+@require_permission('registrations.view')
 def get_pending_registrations():
     """Get all pending registrations (admin only)"""
-    error = require_view_role()
-    if error:
-        return error
-
     try:
         # Get all pending registrations
         pending = PendingRegistrationModel.query.all()
@@ -91,12 +72,9 @@ def get_pending_registrations():
 
 @api_v1.route('/pending-registrations/<int:pending_id>', methods=['GET'])
 @jwt_required()
+@require_permission('registrations.view')
 def get_pending_registration(pending_id):
     """Get specific pending registration (admin only)"""
-    error = require_view_role()
-    if error:
-        return error
-
     try:
         pending = PendingRegistrationModel.query.get(pending_id)
 
@@ -126,7 +104,7 @@ def get_pending_registration(pending_id):
             'expires_at': pending.expires_at.isoformat() if pending.expires_at else None,
             'is_expired': pending.expires_at < datetime.now() if pending.expires_at else False,
             # Admin can see token, unless it activates an account from a code they may not see
-            'verification_token': None if _privileged_code_denied(pending.onboarding_code) else pending.verification_token,
+            'verification_token': None if _code_denied(pending.onboarding_code) else pending.verification_token,
             'approval_status': pending.approval_status,
             'approved_at': pending.approved_at.isoformat() if pending.approved_at else None,
             'approved_by': {
@@ -144,12 +122,9 @@ def get_pending_registration(pending_id):
 
 @api_v1.route('/pending-registrations', methods=['POST'])
 @jwt_required()
+@require_permission('registrations.edit')
 def create_pending_registration():
     """Create a new pending registration manually (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     try:
         from app.email import send_html_email
 
@@ -200,7 +175,7 @@ def create_pending_registration():
         if not onboarding_code:
             return jsonify({'error': 'Invalid onboarding code'}), 400
 
-        denied = _privileged_code_denied(onboarding_code)
+        denied = _code_denied(onboarding_code)
         if denied:
             return denied
 
@@ -388,12 +363,9 @@ Welcome to the team!"""
 
 @api_v1.route('/pending-registrations/<int:pending_id>', methods=['PUT'])
 @jwt_required()
+@require_permission('registrations.edit')
 def update_pending_registration(pending_id):
     """Update a pending registration and resend verification email (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     try:
         from app.email import send_html_email
 
@@ -405,9 +377,9 @@ def update_pending_registration(pending_id):
 
         # Editing such a registration would let the editor take over the admin account it
         # will become (the verification email goes to the address set here).
-        denied = _privileged_code_denied(pending.onboarding_code)
+        denied = _code_denied(pending.onboarding_code)
         if not denied and 'onboarding_code_id' in data:
-            denied = _privileged_code_denied(OnboardingCodeModel.get_onboarding_code_by_id(data['onboarding_code_id']))
+            denied = _code_denied(OnboardingCodeModel.get_onboarding_code_by_id(data['onboarding_code_id']))
         if denied:
             return denied
 
@@ -514,12 +486,9 @@ Welcome to the team!"""
 
 @api_v1.route('/pending-registrations/<int:pending_id>', methods=['DELETE'])
 @jwt_required()
+@require_permission('registrations.delete')
 def delete_pending_registration(pending_id):
     """Delete pending registration (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     try:
         pending = PendingRegistrationModel.query.get(pending_id)
 
@@ -548,12 +517,9 @@ def delete_pending_registration(pending_id):
 
 @api_v1.route('/pending-registrations/cleanup-expired', methods=['POST'])
 @jwt_required()
+@require_permission('registrations.delete')
 def cleanup_expired_registrations():
     """Clean up all expired pending registrations (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     try:
         count = PendingRegistrationModel.cleanup_expired()
 
@@ -570,16 +536,13 @@ def cleanup_expired_registrations():
 
 @api_v1.route('/pending-registrations/<int:pending_id>/resend', methods=['POST'])
 @jwt_required()
+@require_permission('registrations.edit')
 def resend_verification_email(pending_id):
     """Resend verification email and extend expiry by 24 hours (admin only)
 
     Only works for registrations in 'pending_verification' status.
     For registrations pending approval, the approval workflow must be used.
     """
-    error = require_admin_role()
-    if error:
-        return error
-
     try:
         from app.email import send_html_email
         from datetime import timedelta
@@ -647,12 +610,9 @@ Welcome to the team!"""
 
 @api_v1.route('/pending-registrations/<int:pending_id>/approve', methods=['POST'])
 @jwt_required()
+@require_permission('registrations.approve')
 def approve_pending_registration(pending_id):
     """Manually approve a pending registration without email verification (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     try:
         from app.models import SystemSettingsModel, UserRoleModel
         from app.ots import OTSClient
@@ -672,7 +632,7 @@ def approve_pending_registration(pending_id):
         if not onboarding_code:
             return jsonify({'error': 'Onboarding code no longer valid'}), 400
 
-        denied = _privileged_code_denied(onboarding_code)
+        denied = _code_denied(onboarding_code)
         if denied:
             return denied
 

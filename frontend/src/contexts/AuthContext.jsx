@@ -358,6 +358,9 @@ export const AuthProvider = ({ children }) => {
     return permissions.modules.includes(moduleName);
   };
 
+  // A permission of the catalogue (app/permissions.py); the server leaves out those of disabled modules
+  const can = (key) => (permissions.permissions || []).includes(key);
+
   const hasAnyAdminRole = () => {
     // Check if user has access to at least one admin module (from database RBAC)
     return permissions.isAdmin || permissions.modules.length > 0;
@@ -380,6 +383,7 @@ export const AuthProvider = ({ children }) => {
     hasRole,
     hasModuleAccess,
     hasAnyAdminRole,
+    can,
     permissions,
     approverStatus,
     refreshApproverStatus,

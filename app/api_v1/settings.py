@@ -7,6 +7,8 @@ from flask import jsonify, current_app, request
 from flask_jwt_extended import jwt_required, get_jwt
 from app.api_v1 import api_v1
 from app.models import SystemSettingsModel
+from app.permissions import SETTING_PERMISSIONS, SETTINGS_EDIT_PERMISSIONS
+from app.rbac import has_permission, is_administrator, permission_denied
 from app import db
 import json
 
@@ -23,6 +25,16 @@ LOGIN_ENUM_SETTINGS = {
     'radios_enabled': ('true', 'false'),
     'events_enabled': ('true', 'false'),
 }
+
+
+def _can_edit_some_setting():
+    return any(has_permission(key) for key in SETTINGS_EDIT_PERMISSIONS)
+
+
+def _can_edit_setting(key):
+    """Settings are authorised per key; one without a permission is for an administrator only"""
+    permission = SETTING_PERMISSIONS.get(key)
+    return has_permission(permission) if permission else is_administrator()
 
 
 def _parse_login_hero_texts(raw):
@@ -231,10 +243,8 @@ def get_admin_settings():
         description: Failed to retrieve settings
     """
     try:
-        # Check if user has settings access (admin, settings_admin, or settings_readonly)
-        from app.rbac import has_any_role
-        if not has_any_role(['administrator', 'settings_admin', 'settings_readonly']):
-            return jsonify({'error': 'Settings admin or readonly access required'}), 403
+        if not has_permission('settings.view'):
+            return permission_denied('settings.view')
 
         # Initialize defaults if needed
         SystemSettingsModel.initialize_defaults()
@@ -250,7 +260,9 @@ def get_admin_settings():
                     'id': s.id,
                     'key': s.key,
                     'value': s.value,
-                    'description': s.description
+                    'description': s.description,
+                    # Whether the current user may change it, so the page can disable what it may not
+                    'editable': _can_edit_setting(s.key)
                 }
                 for s in settings
             ]
@@ -318,10 +330,8 @@ def update_admin_setting(setting_id):
         description: Failed to update setting
     """
     try:
-        # Check if user has settings_admin or administrator role
-        from app.rbac import has_any_role
-        if not has_any_role(['administrator', 'settings_admin']):
-            return jsonify({'error': 'Settings admin access required'}), 403
+        if not _can_edit_some_setting():
+            return permission_denied('settings.general.edit')
 
         data = request.get_json()
         if not data or 'value' not in data:
@@ -331,6 +341,9 @@ def update_admin_setting(setting_id):
         setting = SystemSettingsModel.query.get(setting_id)
         if not setting:
             return jsonify({'error': 'Setting not found'}), 404
+
+        if not _can_edit_setting(setting.key):
+            return permission_denied('settings.general.edit')
 
         error = _validate_setting_value(setting.key, data['value'])
         if error:
@@ -414,10 +427,8 @@ def update_admin_setting_by_key(key):
         description: Failed to update setting
     """
     try:
-        # Check if user has settings_admin or administrator role
-        from app.rbac import has_any_role
-        if not has_any_role(['administrator', 'settings_admin']):
-            return jsonify({'error': 'Settings admin access required'}), 403
+        if not _can_edit_some_setting():
+            return permission_denied('settings.general.edit')
 
         data = request.get_json()
         if not data or 'value' not in data:
@@ -427,6 +438,9 @@ def update_admin_setting_by_key(key):
         setting = SystemSettingsModel.query.filter_by(key=key).first()
         if not setting:
             return jsonify({'error': 'Setting not found'}), 404
+
+        if not _can_edit_setting(setting.key):
+            return permission_denied('settings.general.edit')
 
         error = _validate_setting_value(setting.key, data['value'])
         if error:

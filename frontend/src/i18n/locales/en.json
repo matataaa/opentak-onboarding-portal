@@ -362,7 +362,8 @@
     "rejectConfirm": "Reject registration for {{username}}?\n\nThis action cannot be undone. The user will be notified.",
     "rejectRegistration": "Reject Registration",
     "failedApprove": "Failed to approve registration",
-    "failedReject": "Failed to reject registration"
+    "failedReject": "Failed to reject registration",
+    "cannotApprove": "You cannot approve this: the code hands out rights you do not hold."
   },
   "layout": {
     "myTeam": "My team",
@@ -789,7 +790,89 @@
       "deleteRole": "Delete Role",
       "failedCreate": "Failed to create role",
       "failedUpdate": "Failed to update role",
-      "failedDelete": "Failed to delete role"
+      "failedDelete": "Failed to delete role",
+      "customRoles": "Custom roles",
+      "customRolesHelp": "Roles you compose yourself.",
+      "noCustomRoles": "No custom roles yet.",
+      "systemRoles": "System roles",
+      "systemRolesHelp": "The built-in roles and roles from OTS. They keep working as they do now and are locked. Duplicate one to adapt it.",
+      "showAll": "Show all {{count}}",
+      "collapse": "Collapse",
+      "newRole": "New role",
+      "overviewLink": "Overview of roles and modules",
+      "rights": "Rights",
+      "duplicate": "Duplicate",
+      "modules": "Modules",
+      "users": "Users",
+      "codes": "Codes",
+      "role": "Role",
+      "locked": "Locked",
+      "noRights": "No rights",
+      "allModules": "All {{count}} modules",
+      "level": {
+        "none": "None",
+        "view": "View",
+        "partial": "Partial",
+        "full": "Full"
+      },
+      "levelHelp": {
+        "none": "no access",
+        "view": "view only",
+        "partial": "can change part",
+        "full": "everything in the module"
+      },
+      "moduleOff": "Module off",
+      "moduleOffTag": "module off",
+      "moduleOffNotice": "This module is switched off in Settings. The rights are kept, but only take effect when the module is on again.",
+      "duplicateTitle": "Duplicate role \"{{name}}\"",
+      "duplicateHelp": "The copy gets the same rights under a new name. Users, codes and audiences are not copied.",
+      "failedDuplicate": "Failed to duplicate role",
+      "beyondLevel": "This role holds rights you do not hold yourself",
+      "editTitle": "Edit role",
+      "viewTitle": "View role",
+      "createHelp": "Create the role first, then compose its rights.",
+      "audience": "This role is also the audience of {{profiles}} and {{channels}}. That is separate from the rights below.",
+      "audienceProfiles_one": "{{count}} TAK profile",
+      "audienceProfiles_other": "{{count}} TAK profiles",
+      "audienceChannels_one": "{{count}} Meshtastic channel",
+      "audienceChannels_other": "{{count}} Meshtastic channels",
+      "functionColumn": "Page or function",
+      "viewColumn": "View",
+      "editColumn": "Change",
+      "checkboxView": "{{label}}: view",
+      "checkboxEdit": "{{label}}: change",
+      "quickAllView": "View all",
+      "quickAll": "All",
+      "quickNone": "None",
+      "sensitive": "Sensitive",
+      "administratorOnly": "Administrator only",
+      "administratorOnlyHelp": "Cannot be given to another role.",
+      "notGrantable": "You do not hold this right yourself, so you cannot give it.",
+      "legend": "Change switches View on as well. Switching View off also switches Change off. Rights another right needs follow along. A sensitive right can give access to accounts or secrets.",
+      "lockedSystem": "This is a system role: its rights are fixed. Duplicate it to compose your own version.",
+      "lockedAboveLevel": "This role holds rights you do not hold, so you cannot change it.",
+      "readOnly": "You can view the rights of this role, but not change them.",
+      "noChanges": "No changes",
+      "unsaved_one": "1 change not saved yet",
+      "unsaved_other": "{{count}} changes not saved yet",
+      "impact": "After saving this applies immediately to {{users}} and {{codes}}.",
+      "impactUsers_one": "{{count}} user",
+      "impactUsers_other": "{{count}} users",
+      "impactCodes_one": "{{count}} onboarding code",
+      "impactCodes_other": "{{count}} onboarding codes",
+      "impactChecking": "Checking who this affects...",
+      "sensitiveCount_one": "This role holds 1 sensitive right.",
+      "sensitiveCount_other": "This role holds {{count}} sensitive rights.",
+      "missingRights": "You do not hold: {{rights}}",
+      "undo": "Undo changes",
+      "save": "Save role",
+      "saved": "Role saved",
+      "failedSave": "Failed to save role",
+      "failedLoad": "Failed to load role",
+      "overviewTitle": "Overview of roles and modules",
+      "module": "Module",
+      "userCountShort_one": "{{count}} user",
+      "userCountShort_other": "{{count}} users"
     },
     "groups": {
       "title": "OTS Groups Management",
@@ -1643,6 +1726,261 @@
     "packages": {
       "title": "Packages Management",
       "comingSoon": "ATAK package CRUD interface coming soon. Use API at /api/v1/packages"
+    },
+    "permissions": {
+      "ignoredFields": "Saved, but these fields were left unchanged because you lack the permission: {{fields}}",
+      "needsView": "You need view access to {{module}} to choose from this list.",
+      "notAllowed": "You do not have the permission to change this.",
+      "roleBeyondLevel": "This role holds rights you do not hold yourself",
+      "hiddenValue": "Hidden",
+      "codeAboveLevel": "Hands out rights you do not hold: read-only for you."
+    }
+  },
+  "permissions": {
+    "modules": {
+      "users": "Users",
+      "roles": "Roles",
+      "onboarding": "Onboarding codes",
+      "registrations": "Registrations",
+      "tak_profiles": "TAK profiles",
+      "meshtastic": "Meshtastic",
+      "radios": "Radios",
+      "announcements": "Announcements",
+      "settings": "Settings",
+      "api_keys": "API keys",
+      "api_docs": "API documentation",
+      "groups": "OTS groups",
+      "events": "Events"
+    },
+    "functions": {
+      "users__accounts": {
+        "label": "Accounts",
+        "description": "The list and details of other users. Change includes email and expiry date."
+      },
+      "users__create": {
+        "label": "Create users",
+        "description": "A new account in OTS and the portal."
+      },
+      "users__delete": {
+        "label": "Delete users",
+        "description": "Also removes the account from OTS."
+      },
+      "users__roles__assign": {
+        "label": "Assign roles",
+        "description": "Only roles with rights you hold yourself."
+      },
+      "users__groups__assign": {
+        "label": "Assign OTS groups",
+        "description": "Change a user's groups."
+      },
+      "users__password__reset": {
+        "label": "Reset passwords",
+        "description": "Set a new password for someone else."
+      },
+      "users__impersonate": {
+        "label": "Impersonate users",
+        "description": "Sign in as another user."
+      },
+      "roles": {
+        "label": "Roles",
+        "description": "Name and description of custom roles."
+      },
+      "roles__delete": {
+        "label": "Delete roles",
+        "description": "Custom roles only."
+      },
+      "roles__permissions": {
+        "label": "Change the rights of roles",
+        "description": "Use this screen."
+      },
+      "onboarding": {
+        "label": "Codes",
+        "description": "View also shows the code itself."
+      },
+      "onboarding__delete": {
+        "label": "Delete codes",
+        "description": ""
+      },
+      "onboarding__roles__assign": {
+        "label": "Put roles on a code",
+        "description": "Also the approving role. Only within your own rights."
+      },
+      "onboarding__groups__assign": {
+        "label": "Put groups on a code",
+        "description": ""
+      },
+      "registrations": {
+        "label": "Registrations",
+        "description": "View and edit pending registrations."
+      },
+      "registrations__approve": {
+        "label": "Approve",
+        "description": "Creates the account."
+      },
+      "registrations__delete": {
+        "label": "Delete and clean up",
+        "description": ""
+      },
+      "tak_profiles": {
+        "label": "Profiles",
+        "description": "Profiles and their files."
+      },
+      "tak_profiles__assign": {
+        "label": "Link to roles",
+        "description": "Decide who gets a profile."
+      },
+      "tak_profiles__delete": {
+        "label": "Delete profiles",
+        "description": ""
+      },
+      "meshtastic__channels": {
+        "label": "Channels",
+        "description": "The channel URL contains the key."
+      },
+      "meshtastic__channels__delete": {
+        "label": "Delete channels",
+        "description": ""
+      },
+      "meshtastic__channels__sync": {
+        "label": "Synchronise channels",
+        "description": ""
+      },
+      "meshtastic__groups": {
+        "label": "Channel groups",
+        "description": "Groups, channel order and URLs."
+      },
+      "meshtastic__groups__delete": {
+        "label": "Delete channel groups",
+        "description": ""
+      },
+      "radios": {
+        "label": "Inventory",
+        "description": "All radios. Everyone keeps seeing their own radios."
+      },
+      "radios__assign": {
+        "label": "Assign radios",
+        "description": "Set the owner or user."
+      },
+      "radios__delete": {
+        "label": "Delete radios",
+        "description": ""
+      },
+      "radios__claim_code": {
+        "label": "Get claim codes",
+        "description": ""
+      },
+      "radios__program": {
+        "label": "Program and validate",
+        "description": "Gives access to channel URLs."
+      },
+      "announcements": {
+        "label": "Announcements",
+        "description": "List, details and editing."
+      },
+      "announcements__email_details": {
+        "label": "Email details",
+        "description": "Recipients and error messages, otherwise masked."
+      },
+      "announcements__delete": {
+        "label": "Delete announcements",
+        "description": ""
+      },
+      "announcements__send": {
+        "label": "Send and schedule",
+        "description": "Send now or at a set time."
+      },
+      "settings": {
+        "label": "View settings",
+        "description": "All general settings."
+      },
+      "settings__general": {
+        "label": "General",
+        "description": "Name, help, icons and installer QR codes."
+      },
+      "settings__branding": {
+        "label": "Branding",
+        "description": "Logo, background and appearance."
+      },
+      "settings__registration": {
+        "label": "Registration and notifications",
+        "description": "Approval, clean-up and forgot password."
+      },
+      "settings__enrollment": {
+        "label": "QR and kiosk",
+        "description": ""
+      },
+      "settings__radios": {
+        "label": "Radio settings",
+        "description": "What users may do with their radio."
+      },
+      "settings__modules": {
+        "label": "Modules on and off",
+        "description": "Meshtastic, Radios and Events."
+      },
+      "settings__security": {
+        "label": "Sign-in security",
+        "description": "OIDC on/off and magic links."
+      },
+      "settings__oidc": {
+        "label": "OIDC providers",
+        "description": "A provider of your own can take over any account."
+      },
+      "api_keys": {
+        "label": "API keys",
+        "description": "Create, change and regenerate."
+      },
+      "api_keys__delete": {
+        "label": "Delete keys",
+        "description": ""
+      },
+      "api_docs": {
+        "label": "API documentation",
+        "description": "Page in the admin menu."
+      },
+      "groups": {
+        "label": "Groups",
+        "description": "View and edit groups."
+      },
+      "groups__members": {
+        "label": "Group members",
+        "description": "Members and their direction (IN/OUT)."
+      },
+      "groups__delete": {
+        "label": "Delete groups",
+        "description": "Also removes the group from OTS."
+      },
+      "groups__sync": {
+        "label": "Synchronise with OTS",
+        "description": "Fetch groups from OpenTAK Server."
+      },
+      "events": {
+        "label": "Events",
+        "description": "View and edit events."
+      },
+      "events__delete": {
+        "label": "Delete events and teams",
+        "description": ""
+      },
+      "events__teams": {
+        "label": "Manage teams",
+        "description": "Create teams and set their shared leader account."
+      },
+      "events__links": {
+        "label": "Access links",
+        "description": "Create, change and revoke links."
+      },
+      "events__links__reveal": {
+        "label": "Show link URLs",
+        "description": "Retrieve the full link again, also as a QR code."
+      },
+      "events__leaders": {
+        "label": "Team leaders",
+        "description": "Team leaders and their sessions."
+      },
+      "events__accounts": {
+        "label": "Participant accounts",
+        "description": "Move between teams and close."
+      }
     }
   }
 }

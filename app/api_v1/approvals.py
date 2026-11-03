@@ -8,7 +8,8 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.api_v1 import api_v1
 from app.api_v1.auth import get_frontend_url
 from app.models import PendingRegistrationModel, OnboardingCodeModel, UserModel, UserRoleModel, db
-from app.rbac import has_privileged_role, is_administrator, visible_code_value
+from app.rbac import (CODE_BEYOND_ACTOR_ERROR, deny_beyond_actor, has_privileged_role, holder_beyond_actor, is_administrator,
+                      visible_code_value)
 from datetime import datetime
 
 
@@ -25,6 +26,14 @@ def get_user_approver_roles(user):
             if code not in approver_codes:
                 approver_codes.append(code)
     return approver_codes
+
+
+def can_approve_code(code):
+    """Whether the current user may approve a registration for this code (see approve_pending): an account from it
+    gets the code's roles, so only someone holding at least as much may create it"""
+    if has_privileged_role(code) and not is_administrator():
+        return False
+    return not holder_beyond_actor(code)
 
 
 @api_v1.route('/approvals', methods=['GET'])
@@ -75,7 +84,8 @@ def get_my_approvals():
                 } if p.onboarding_code and p.onboarding_code.approverRole else None,
                 'created_at': p.created_at.isoformat() if p.created_at else None,
                 'expires_at': p.expires_at.isoformat() if p.expires_at else None,
-                'is_expired': p.expires_at < datetime.now() if p.expires_at else False
+                'is_expired': p.expires_at < datetime.now() if p.expires_at else False,
+                'canApprove': bool(p.onboarding_code) and can_approve_code(p.onboarding_code)
             } for p in pending],
             'is_approver': True,
             'approver_for_codes': [{
@@ -132,6 +142,10 @@ def approve_pending(pending_id):
         # This code hands out an admin account: an approver role alone is not enough
         if has_privileged_role(onboarding_code) and not is_administrator():
             return jsonify({'error': 'Only an administrator can approve a registration for this onboarding code'}), 403
+        # Nor for any other role above the approver's own: the approver could register that account themselves
+        denied = deny_beyond_actor(CODE_BEYOND_ACTOR_ERROR, list(onboarding_code.roles))
+        if denied:
+            return denied
 
         # Check if expired
         if pending.expires_at < datetime.now():

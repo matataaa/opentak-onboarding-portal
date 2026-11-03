@@ -5,7 +5,7 @@ import './AdminDashboard.css';
 
 function AdminDashboard() {
   const { t } = useTranslation();
-  const { hasModuleAccess } = useAuth();
+  const { hasModuleAccess, can } = useAuth();
 
   const adminSections = [
     {
@@ -89,6 +89,8 @@ function AdminDashboard() {
       title: t('admin.dashboard.meshtasticChannels'),
       path: '/admin/meshtastic',
       module: 'meshtastic',
+      // The module has two pages, each with its own view permission
+      requires: 'meshtastic.channels.view',
       description: t('admin.dashboard.meshtasticChannelsDesc'),
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -100,6 +102,8 @@ function AdminDashboard() {
       title: t('admin.dashboard.meshtasticChannelGroups'),
       path: '/admin/meshtastic/groups',
       module: 'meshtastic',
+      // The module has two pages, each with its own view permission
+      requires: 'meshtastic.groups.view',
       description: t('admin.dashboard.meshtasticChannelGroupsDesc'),
       icon: (
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -174,7 +178,7 @@ function AdminDashboard() {
 
       <div className="admin-grid">
         {adminSections
-          .filter((section) => hasModuleAccess(section.module))
+          .filter((section) => hasModuleAccess(section.module) && (!section.requires || can(section.requires)))
           .map((section) => (
             <Link key={section.path} to={section.path} className="admin-card">
               <div className="admin-card-icon">

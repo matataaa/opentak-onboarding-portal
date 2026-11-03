@@ -6,16 +6,15 @@ CRUD operations for managing groups of Meshtastic channels (up to 8 per group)
 from flask import request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from app.api_v1 import api_v1
+from app.rbac import drop_fields_without_permission, has_permission, ignored_fields_body, require_permission
 from app.models import MeshtasticChannelGroup, MeshtasticModel, UserRoleModel, UserModel, ChannelGroupMembership, db
 from app.utils.meshtastic_url import update_group_combined_url
 
 
-def require_admin_role():
-    """Check for meshtastic_admin or administrator role"""
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'meshtastic_admin']):
-        return jsonify({'error': 'Meshtastic admin access required'}), 403
-    return None
+def _visible_channel_data(value):
+    """A channel URL holds the channel's key and a device config (free text, applied to the radio) can hold it too:
+    the admin group routes only show them with access to the channels"""
+    return value if has_permission('meshtastic.channels.view') else None
 
 
 @api_v1.route('/meshtastic/groups', methods=['GET'])
@@ -75,12 +74,9 @@ def get_meshtastic_groups():
 
 @api_v1.route('/meshtastic/groups/admin', methods=['GET'])
 @jwt_required()
+@require_permission('meshtastic.groups.view')
 def get_all_meshtastic_groups_admin():
     """Get ALL Meshtastic channel groups (admin only, no filtering)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     groups = MeshtasticChannelGroup.get_all()
 
     return jsonify({
@@ -88,16 +84,16 @@ def get_all_meshtastic_groups_admin():
             'id': g.id,
             'name': g.name,
             'description': g.description,
-            'combined_url': g.combined_url,
+            'combined_url': _visible_channel_data(g.combined_url),
             'isPublic': g.isPublic,
             'showOnHomepage': g.showOnHomepage,
-            'yamlConfig': g.yamlConfig,
+            'yamlConfig': _visible_channel_data(g.yamlConfig),
             'channel_count': len(g.channel_memberships),
             'channels': [{
                 'id': m.channel.id,
                 'name': m.channel.name,
                 'slot_number': m.slot_number,
-                'url': m.channel.url
+                'url': _visible_channel_data(m.channel.url)
             } for m in sorted(g.channel_memberships, key=lambda x: x.slot_number or 0)],
             'roles': [{'id': r.id, 'name': r.name} for r in g.roles]
         } for g in groups]
@@ -108,16 +104,16 @@ def get_all_meshtastic_groups_admin():
 @jwt_required()
 def get_meshtastic_group(group_id):
     """Get Meshtastic channel group by ID"""
-    from app.rbac import has_any_role
 
     group = MeshtasticChannelGroup.get_by_id(group_id)
     if not group:
         return jsonify({'error': 'Channel group not found'}), 404
 
     # Admins can access any group
-    is_admin = has_any_role(['administrator', 'meshtastic_admin'])
+    is_admin = has_permission('meshtastic.groups.view')
+    show_urls = True
 
-    if not is_admin and not group.isPublic:
+    if not group.isPublic:
         current_user_id = int(get_jwt_identity())
         user = UserModel.get_user_by_id(current_user_id)
 
@@ -130,23 +126,25 @@ def get_meshtastic_group(group_id):
         has_role_access = any(rid in user_role_ids for rid in group_role_ids)
 
         if not has_direct_access and not has_role_access:
-            return jsonify({'error': 'Access denied'}), 403
+            if not is_admin:
+                return jsonify({'error': 'Access denied'}), 403
+            show_urls = has_permission('meshtastic.channels.view')
 
     return jsonify({
         'id': group.id,
         'name': group.name,
         'description': group.description,
-        'combined_url': group.combined_url,
+        'combined_url': group.combined_url if show_urls else None,
         'isPublic': group.isPublic,
         'showOnHomepage': group.showOnHomepage,
-        'yamlConfig': group.yamlConfig,
+        'yamlConfig': group.yamlConfig if show_urls else None,
         'roles': [{'id': r.id, 'name': r.name, 'displayName': r.display_name} for r in group.roles],
         'channels': [{
             'id': m.channel.id,
             'name': m.channel.name,
             'description': m.channel.description,
             'slot_number': m.slot_number,
-            'url': m.channel.url,
+            'url': m.channel.url if show_urls else None,
             'synced_at': m.channel.synced_at.isoformat() if m.channel.synced_at else None
         } for m in sorted(group.channel_memberships, key=lambda x: x.slot_number or 0)]
     }), 200
@@ -154,13 +152,12 @@ def get_meshtastic_group(group_id):
 
 @api_v1.route('/meshtastic/groups', methods=['POST'])
 @jwt_required()
+@require_permission('meshtastic.groups.edit')
 def create_meshtastic_group():
     """Create a new Meshtastic channel group (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     data = request.get_json()
+    # Channel URLs and the device config are channel secrets, as on PUT
+    ignored = drop_fields_without_permission(data, {'meshtastic.channels.view': ('combined_url', 'yamlConfig')})
 
     if not data.get('name'):
         return jsonify({'error': 'name is required'}), 400
@@ -196,7 +193,8 @@ def create_meshtastic_group():
             'group': {
                 'id': group.id,
                 'name': group.name
-            }
+            },
+            **ignored_fields_body(ignored)
         }), 201
 
     except Exception as e:
@@ -206,17 +204,16 @@ def create_meshtastic_group():
 
 @api_v1.route('/meshtastic/groups/<int:group_id>', methods=['PUT'])
 @jwt_required()
+@require_permission('meshtastic.groups.edit')
 def update_meshtastic_group(group_id):
     """Update Meshtastic channel group (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     group = MeshtasticChannelGroup.get_by_id(group_id)
     if not group:
         return jsonify({'error': 'Channel group not found'}), 404
 
     data = request.get_json()
+    # They come back empty without access to the channels: a form sending them back must not wipe them
+    ignored = drop_fields_without_permission(data, {'meshtastic.channels.view': ('combined_url', 'yamlConfig')})
 
     try:
         # Check for name conflict
@@ -249,7 +246,8 @@ def update_meshtastic_group(group_id):
         db.session.commit()
 
         return jsonify({
-            'message': 'Channel group updated successfully'
+            'message': 'Channel group updated successfully',
+            **ignored_fields_body(ignored)
         }), 200
 
     except Exception as e:
@@ -259,12 +257,9 @@ def update_meshtastic_group(group_id):
 
 @api_v1.route('/meshtastic/groups/<int:group_id>', methods=['DELETE'])
 @jwt_required()
+@require_permission('meshtastic.groups.delete')
 def delete_meshtastic_group(group_id):
     """Delete Meshtastic channel group (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     group = MeshtasticChannelGroup.get_by_id(group_id)
     if not group:
         return jsonify({'error': 'Channel group not found'}), 404
@@ -287,12 +282,9 @@ def delete_meshtastic_group(group_id):
 
 @api_v1.route('/meshtastic/groups/<int:group_id>/channels', methods=['POST'])
 @jwt_required()
+@require_permission('meshtastic.groups.edit')
 def add_channel_to_group(group_id):
     """Add a channel to a group at a specific slot (admin only). Channels can be in multiple groups."""
-    error = require_admin_role()
-    if error:
-        return error
-
     group = MeshtasticChannelGroup.get_by_id(group_id)
     if not group:
         return jsonify({'error': 'Channel group not found'}), 404
@@ -346,7 +338,7 @@ def add_channel_to_group(group_id):
                 'name': channel.name,
                 'slot_number': slot_number
             },
-            'combined_url': group.combined_url
+            'combined_url': _visible_channel_data(group.combined_url)
         }), 200
 
     except Exception as e:
@@ -356,12 +348,9 @@ def add_channel_to_group(group_id):
 
 @api_v1.route('/meshtastic/groups/<int:group_id>/channels/<int:channel_id>', methods=['DELETE'])
 @jwt_required()
+@require_permission('meshtastic.groups.edit')
 def remove_channel_from_group(group_id, channel_id):
     """Remove a channel from a group (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     group = MeshtasticChannelGroup.get_by_id(group_id)
     if not group:
         return jsonify({'error': 'Channel group not found'}), 404
@@ -381,7 +370,7 @@ def remove_channel_from_group(group_id, channel_id):
 
         return jsonify({
             'message': 'Channel removed from group',
-            'combined_url': group.combined_url
+            'combined_url': _visible_channel_data(group.combined_url)
         }), 200
 
     except Exception as e:
@@ -391,12 +380,9 @@ def remove_channel_from_group(group_id, channel_id):
 
 @api_v1.route('/meshtastic/groups/<int:group_id>/channels/<int:channel_id>/slot', methods=['PUT'])
 @jwt_required()
+@require_permission('meshtastic.groups.edit')
 def update_channel_slot(group_id, channel_id):
     """Update a channel's slot number within a group (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     group = MeshtasticChannelGroup.get_by_id(group_id)
     if not group:
         return jsonify({'error': 'Channel group not found'}), 404
@@ -430,7 +416,7 @@ def update_channel_slot(group_id, channel_id):
 
         return jsonify({
             'message': f'Channel moved to slot {new_slot}',
-            'combined_url': group.combined_url
+            'combined_url': _visible_channel_data(group.combined_url)
         }), 200
 
     except Exception as e:
@@ -440,12 +426,9 @@ def update_channel_slot(group_id, channel_id):
 
 @api_v1.route('/meshtastic/groups/<int:group_id>/regenerate-url', methods=['POST'])
 @jwt_required()
+@require_permission('meshtastic.groups.edit')
 def regenerate_group_url(group_id):
     """Regenerate the combined URL for a group (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     group = MeshtasticChannelGroup.get_by_id(group_id)
     if not group:
         return jsonify({'error': 'Channel group not found'}), 404
@@ -456,7 +439,7 @@ def regenerate_group_url(group_id):
 
         return jsonify({
             'message': 'Combined URL regenerated',
-            'combined_url': group.combined_url
+            'combined_url': _visible_channel_data(group.combined_url)
         }), 200
 
     except Exception as e:
@@ -466,12 +449,9 @@ def regenerate_group_url(group_id):
 
 @api_v1.route('/meshtastic/groups/regenerate-all-urls', methods=['POST'])
 @jwt_required()
+@require_permission('meshtastic.groups.edit')
 def regenerate_all_group_urls():
     """Regenerate combined URLs for all groups (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     try:
         groups = MeshtasticChannelGroup.get_all()
         updated = 0
@@ -493,12 +473,10 @@ def regenerate_all_group_urls():
 
 @api_v1.route('/meshtastic/ungrouped', methods=['GET'])
 @jwt_required()
+@require_permission('meshtastic.groups.view')
+@require_permission('meshtastic.channels.view')
 def get_ungrouped_channels():
     """Get all channels not assigned to any group (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     # Find channels with no group memberships
     all_channels = MeshtasticModel.query.all()
     ungrouped = [c for c in all_channels if len(c.group_memberships) == 0]
@@ -517,12 +495,9 @@ def get_ungrouped_channels():
 
 @api_v1.route('/meshtastic/channels/<int:channel_id>/groups', methods=['GET'])
 @jwt_required()
+@require_permission('meshtastic.groups.view')
 def get_channel_groups(channel_id):
     """Get all groups that a channel belongs to (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     channel = MeshtasticModel.get_by_id(channel_id)
     if not channel:
         return jsonify({'error': 'Channel not found'}), 404

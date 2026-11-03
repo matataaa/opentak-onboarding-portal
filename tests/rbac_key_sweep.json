@@ -1,0 +1,819 @@
+{
+ "PUT setting accent_color": [
+  "settings.branding.edit"
+ ],
+ "PUT setting allow_manual_approval": [
+  "settings.registration.edit"
+ ],
+ "PUT setting atak_homepage_icon_enabled": [
+  "settings.general.edit"
+ ],
+ "PUT setting atak_installer_qr_enabled": [
+  "settings.general.edit"
+ ],
+ "PUT setting atak_installer_qr_url": [
+  "settings.general.edit"
+ ],
+ "PUT setting brand_name_enabled": [
+  "settings.general.edit"
+ ],
+ "PUT setting brand_name_value": [
+  "settings.general.edit"
+ ],
+ "PUT setting callsign_qr_code_enabled": [
+  "settings.enrollment.edit"
+ ],
+ "PUT setting claim_radio_enabled": [
+  "settings.radios.edit"
+ ],
+ "PUT setting custom_logo_enabled": [
+  "settings.branding.edit"
+ ],
+ "PUT setting custom_logo_path": [
+  "settings.branding.edit"
+ ],
+ "PUT setting date_format": [
+  "settings.branding.edit"
+ ],
+ "PUT setting default_theme": [
+  "settings.branding.edit"
+ ],
+ "PUT setting events_enabled": [
+  "settings.modules.edit"
+ ],
+ "PUT setting forgot_password_enabled": [
+  "settings.registration.edit"
+ ],
+ "PUT setting generate_atak_qr_code": [
+  "settings.enrollment.edit"
+ ],
+ "PUT setting generate_itak_qr_code": [
+  "settings.enrollment.edit"
+ ],
+ "PUT setting help_email_enabled": [
+  "settings.general.edit"
+ ],
+ "PUT setting help_email_value": [
+  "settings.general.edit"
+ ],
+ "PUT setting help_link_enabled": [
+  "settings.general.edit"
+ ],
+ "PUT setting help_link_value": [
+  "settings.general.edit"
+ ],
+ "PUT setting itak_homepage_icon_enabled": [
+  "settings.general.edit"
+ ],
+ "PUT setting itak_installer_qr_enabled": [
+  "settings.general.edit"
+ ],
+ "PUT setting itak_installer_qr_url": [
+  "settings.general.edit"
+ ],
+ "PUT setting kiosk_default_theme": [
+  "settings.branding.edit"
+ ],
+ "PUT setting kiosk_enrollment_enabled": [
+  "settings.enrollment.edit"
+ ],
+ "PUT setting kiosk_language": [
+  "settings.enrollment.edit"
+ ],
+ "PUT setting kiosk_session_timeout_minutes": [
+  "settings.enrollment.edit"
+ ],
+ "PUT setting login_background_path": [
+  "settings.branding.edit"
+ ],
+ "PUT setting login_glass_enabled": [
+  "settings.branding.edit"
+ ],
+ "PUT setting login_header_bar_enabled": [
+  "settings.branding.edit"
+ ],
+ "PUT setting login_hero_texts": [
+  "settings.branding.edit"
+ ],
+ "PUT setting login_layout": [
+  "settings.branding.edit"
+ ],
+ "PUT setting login_overlay_strength": [
+  "settings.branding.edit"
+ ],
+ "PUT setting logo_display_mode": [
+  "settings.branding.edit"
+ ],
+ "PUT setting magic_link_expiry_minutes": [
+  "settings.security.edit"
+ ],
+ "PUT setting magic_link_login_enabled": [
+  "settings.security.edit"
+ ],
+ "PUT setting meshtastic_enabled": [
+  "settings.modules.edit"
+ ],
+ "PUT setting meshtastic_homepage_icon_enabled": [
+  "settings.general.edit"
+ ],
+ "PUT setting meshtastic_installer_qr_android_enabled": [
+  "settings.general.edit"
+ ],
+ "PUT setting meshtastic_installer_qr_android_url": [
+  "settings.general.edit"
+ ],
+ "PUT setting meshtastic_installer_qr_iphone_enabled": [
+  "settings.general.edit"
+ ],
+ "PUT setting meshtastic_installer_qr_iphone_url": [
+  "settings.general.edit"
+ ],
+ "PUT setting notify_admin_new_registration": [
+  "settings.registration.edit"
+ ],
+ "PUT setting notify_admin_pending_registration": [
+  "settings.registration.edit"
+ ],
+ "PUT setting oidc_auto_create_user": [
+  "settings.security.edit"
+ ],
+ "PUT setting oidc_enabled": [
+  "settings.security.edit"
+ ],
+ "PUT setting open_in_atak_enabled": [
+  "settings.general.edit"
+ ],
+ "PUT setting primary_color": [
+  "settings.branding.edit"
+ ],
+ "PUT setting qr_token_expiry_minutes": [
+  "settings.enrollment.edit"
+ ],
+ "PUT setting qr_token_max_uses": [
+  "settings.enrollment.edit"
+ ],
+ "PUT setting radios_enabled": [
+  "settings.modules.edit"
+ ],
+ "PUT setting remove_expired_accounts_enabled": [
+  "settings.registration.edit"
+ ],
+ "PUT setting truststore_homepage_icon_enabled": [
+  "settings.general.edit"
+ ],
+ "PUT setting user_program_radio_enabled": [
+  "settings.radios.edit"
+ ],
+ "PUT setting user_radio_enrollment_enabled": [
+  "settings.radios.edit"
+ ],
+ "PUT setting user_validate_radio_enabled": [
+  "settings.radios.edit"
+ ],
+ "add channel to group": [
+  "meshtastic.groups.edit"
+ ],
+ "add group member": [
+  "groups.members.edit"
+ ],
+ "api key permissions": [
+  "api_keys.view"
+ ],
+ "approve pending": [
+  "registrations.approve"
+ ],
+ "approve pending of privileged code": [],
+ "assign radio": [
+  "radios.assign",
+  "radios.assign next to radios.edit"
+ ],
+ "claim code": [
+  "radios.claim_code"
+ ],
+ "claim radio": [],
+ "claim radio by node": [],
+ "cleanup expired": [
+  "registrations.delete"
+ ],
+ "close event account": [
+  "events.accounts.edit"
+ ],
+ "close link sessions": [
+  "events.accounts.edit"
+ ],
+ "compare config": [
+  "radios.program"
+ ],
+ "compare config, users allowed, other radio": [
+  "radios.program"
+ ],
+ "compare config, users allowed, own radio": [
+  "radios.program"
+ ],
+ "create announcement draft": [
+  "announcements.edit"
+ ],
+ "create announcement scheduled": [
+  "announcements.send next to announcements.edit"
+ ],
+ "create announcement send now": [
+  "announcements.send next to announcements.edit"
+ ],
+ "create api key": [
+  "api_keys.edit"
+ ],
+ "create code": [
+  "onboarding.edit"
+ ],
+ "create code with administrator": [
+  "onboarding.edit",
+  "onboarding.roles.assign"
+ ],
+ "create code with approval flags": [
+  "onboarding.edit",
+  "onboarding.roles.assign"
+ ],
+ "create code with roles/groups": [
+  "onboarding.edit",
+  "onboarding.groups.assign",
+  "onboarding.roles.assign"
+ ],
+ "create event": [
+  "events.edit"
+ ],
+ "create event link": [
+  "events.links.edit"
+ ],
+ "create event team": [
+  "events.teams.edit"
+ ],
+ "create group": [
+  "groups.edit"
+ ],
+ "create meshtastic": [
+  "meshtastic.channels.edit"
+ ],
+ "create meshtastic group": [
+  "meshtastic.groups.edit"
+ ],
+ "create oidc provider": [],
+ "create pending": [
+  "registrations.edit"
+ ],
+ "create profile": [
+  "tak_profiles.edit"
+ ],
+ "create profile public": [
+  "tak_profiles.assign",
+  "tak_profiles.edit"
+ ],
+ "create profile with roles": [
+  "tak_profiles.edit"
+ ],
+ "create radio": [
+  "radios.edit"
+ ],
+ "create radio with assignment": [
+  "radios.assign next to radios.edit",
+  "radios.edit"
+ ],
+ "create role": [
+  "roles.edit",
+  "roles.edit next to roles.permissions.edit"
+ ],
+ "create role, reserved name": [
+  "roles.edit",
+  "roles.edit next to roles.permissions.edit"
+ ],
+ "create team leader account": [
+  "events.leaders.edit",
+  "events.leaders.edit next to events.teams.edit"
+ ],
+ "create user": [
+  "users.create"
+ ],
+ "create user with administrator": [
+  "users.create",
+  "users.roles.assign next to users.create"
+ ],
+ "create user with role": [
+  "users.create",
+  "users.groups.assign next to users.create",
+  "users.roles.assign next to users.create"
+ ],
+ "delete announcement": [
+  "announcements.delete"
+ ],
+ "delete api key": [
+  "api_keys.delete"
+ ],
+ "delete background": [
+  "settings.branding.edit"
+ ],
+ "delete code": [
+  "onboarding.delete"
+ ],
+ "delete event": [
+  "events.delete"
+ ],
+ "delete event link": [
+  "events.links.edit"
+ ],
+ "delete event team": [
+  "events.delete"
+ ],
+ "delete group": [
+  "groups.delete"
+ ],
+ "delete logo": [
+  "settings.branding.edit"
+ ],
+ "delete meshtastic": [
+  "meshtastic.channels.delete"
+ ],
+ "delete meshtastic group": [
+  "meshtastic.groups.delete"
+ ],
+ "delete oidc icon": [],
+ "delete oidc provider": [],
+ "delete pending": [
+  "registrations.delete"
+ ],
+ "delete privileged code": [
+  "onboarding.delete"
+ ],
+ "delete privileged user": [],
+ "delete profile": [
+  "tak_profiles.delete"
+ ],
+ "delete protected role": [],
+ "delete radio": [
+  "radios.delete"
+ ],
+ "delete role": [
+  "roles.delete"
+ ],
+ "delete self": [
+  "users.delete"
+ ],
+ "delete user": [
+  "users.delete"
+ ],
+ "designate team leader": [
+  "events.leaders.edit",
+  "events.leaders.edit next to events.teams.edit"
+ ],
+ "download by bad token": [],
+ "download profile private": [],
+ "download profile public": [],
+ "download token private": [],
+ "download token public": [],
+ "duplicate role": [
+  "roles.edit next to roles.permissions.edit",
+  "roles.permissions.edit next to roles.edit"
+ ],
+ "enroll radio": [],
+ "event accounts": [
+  "events.accounts.view"
+ ],
+ "event leader sessions": [
+  "events.leaders.view"
+ ],
+ "event link url": [
+  "events.links.reveal"
+ ],
+ "event links": [
+  "events.links.view"
+ ],
+ "event team leaders": [
+  "events.leaders.view"
+ ],
+ "get announcement (admin)": [
+  "announcements.email_details",
+  "announcements.view"
+ ],
+ "get api key": [
+  "api_keys.view"
+ ],
+ "get code": [
+  "onboarding.view"
+ ],
+ "get event": [
+  "events.view"
+ ],
+ "get event team": [
+  "events.view"
+ ],
+ "get group": [
+  "groups.members.view",
+  "groups.view"
+ ],
+ "get logo settings": [
+  "settings.branding.edit"
+ ],
+ "get meshtastic group private": [
+  "meshtastic.channels.view next to meshtastic.groups.view",
+  "meshtastic.groups.view"
+ ],
+ "get meshtastic group public": [],
+ "get meshtastic private": [
+  "meshtastic.channels.view",
+  "meshtastic.channels.view next to meshtastic.groups.view"
+ ],
+ "get meshtastic public": [],
+ "get meshtastic role-bound": [
+  "meshtastic.channels.view",
+  "meshtastic.channels.view next to meshtastic.groups.view"
+ ],
+ "get other user": [
+  "users.accounts.view"
+ ],
+ "get pending": [
+  "registrations.view"
+ ],
+ "get pending of privileged code": [
+  "registrations.view"
+ ],
+ "get privileged code": [
+  "onboarding.view"
+ ],
+ "get profile private": [],
+ "get profile public": [],
+ "get profile role-bound": [],
+ "get radio assigned to no_role": [
+  "radios.view"
+ ],
+ "get radio of someone else": [
+  "radios.view"
+ ],
+ "get radio owned by no_role": [
+  "radios.view"
+ ],
+ "get role": [
+  "roles.view"
+ ],
+ "get self": [],
+ "get settings (admin)": [
+  "settings.view"
+ ],
+ "group members": [
+  "groups.members.view"
+ ],
+ "join event": [],
+ "list announcements (admin)": [
+  "announcements.email_details",
+  "announcements.view"
+ ],
+ "list api keys": [
+  "api_keys.view"
+ ],
+ "list codes": [
+  "onboarding.view"
+ ],
+ "list event teams": [
+  "events.view"
+ ],
+ "list events": [
+  "events.view"
+ ],
+ "list groups": [
+  "groups.view"
+ ],
+ "list meshtastic": [],
+ "list meshtastic groups": [],
+ "list oidc providers (admin)": [],
+ "list pending": [
+  "registrations.view"
+ ],
+ "list profiles": [],
+ "list radios": [
+  "radios.view"
+ ],
+ "list roles": [
+  "roles.view"
+ ],
+ "list users": [
+  "users.accounts.view"
+ ],
+ "meshtastic admin list": [
+  "meshtastic.channels.view",
+  "meshtastic.channels.view next to meshtastic.groups.view"
+ ],
+ "meshtastic channel groups": [
+  "meshtastic.groups.view"
+ ],
+ "meshtastic groups admin": [
+  "meshtastic.channels.view next to meshtastic.groups.view",
+  "meshtastic.groups.view"
+ ],
+ "move event account": [
+  "events.accounts.edit"
+ ],
+ "my team": [],
+ "my team accounts": [],
+ "my team enrollment": [],
+ "my team move account": [],
+ "permission catalog": [
+  "roles.view"
+ ],
+ "preview role permissions": [
+  "roles.permissions.edit",
+  "roles.permissions.edit next to roles.edit"
+ ],
+ "profile files": [
+  "tak_profiles.view"
+ ],
+ "program config": [
+  "radios.program"
+ ],
+ "program config, users allowed, other radio": [
+  "radios.program"
+ ],
+ "program config, users allowed, own radio": [
+  "radios.program"
+ ],
+ "program config, users allowed, owned radio": [
+  "radios.program"
+ ],
+ "radio by node": [],
+ "regenerate all urls": [
+  "meshtastic.groups.edit"
+ ],
+ "regenerate api key": [
+  "api_keys.edit"
+ ],
+ "regenerate group url": [
+  "meshtastic.groups.edit"
+ ],
+ "remove channel from group": [
+  "meshtastic.groups.edit"
+ ],
+ "remove group member": [
+  "groups.members.edit"
+ ],
+ "remove team leader designation": [
+  "events.leaders.edit",
+  "events.leaders.edit next to events.teams.edit"
+ ],
+ "resend verification": [
+  "registrations.edit"
+ ],
+ "revoke event link": [
+  "events.links.edit"
+ ],
+ "revoke leader session": [
+  "events.leaders.edit",
+  "events.leaders.edit next to events.teams.edit"
+ ],
+ "send announcement": [
+  "announcements.send",
+  "announcements.send next to announcements.edit"
+ ],
+ "set protected role permissions": [],
+ "set role permissions": [
+  "roles.permissions.edit",
+  "roles.permissions.edit next to roles.edit"
+ ],
+ "sync groups": [
+  "groups.sync"
+ ],
+ "sync meshtastic": [
+  "meshtastic.channels.sync"
+ ],
+ "sync one meshtastic": [
+  "meshtastic.channels.sync"
+ ],
+ "team leader candidates": [
+  "events.leaders.edit",
+  "events.leaders.edit next to events.teams.edit"
+ ],
+ "ungrouped channels": [
+  "meshtastic.channels.view next to meshtastic.groups.view"
+ ],
+ "update announcement draft": [
+  "announcements.edit"
+ ],
+ "update announcement to scheduled": [
+  "announcements.send next to announcements.edit"
+ ],
+ "update api key": [
+  "api_keys.edit"
+ ],
+ "update channel slot": [
+  "meshtastic.groups.edit"
+ ],
+ "update code approval flags": [
+  "onboarding.edit",
+  "onboarding.roles.assign"
+ ],
+ "update code approver": [
+  "onboarding.edit",
+  "onboarding.roles.assign"
+ ],
+ "update code basics": [
+  "onboarding.edit"
+ ],
+ "update code groups": [
+  "onboarding.edit",
+  "onboarding.groups.assign"
+ ],
+ "update code groups with direction": [
+  "onboarding.edit",
+  "onboarding.groups.assign"
+ ],
+ "update code roles": [
+  "onboarding.edit",
+  "onboarding.roles.assign"
+ ],
+ "update event": [
+  "events.edit"
+ ],
+ "update event link": [
+  "events.links.edit"
+ ],
+ "update event team": [
+  "events.teams.edit"
+ ],
+ "update event team leader field": [
+  "events.leaders.edit next to events.teams.edit",
+  "events.teams.edit"
+ ],
+ "update group": [
+  "groups.edit"
+ ],
+ "update meshtastic": [
+  "meshtastic.channels.edit"
+ ],
+ "update meshtastic group": [
+  "meshtastic.groups.edit"
+ ],
+ "update oidc provider": [],
+ "update other administrator role": [
+  "users.accounts.edit",
+  "users.groups.assign",
+  "users.groups.assign next to users.create",
+  "users.password.reset",
+  "users.roles.assign next to users.accounts.edit"
+ ],
+ "update other basics": [
+  "users.accounts.edit",
+  "users.accounts.edit next to users.roles.assign",
+  "users.groups.assign",
+  "users.groups.assign next to users.create",
+  "users.password.reset",
+  "users.roles.assign",
+  "users.roles.assign next to users.create"
+ ],
+ "update other email": [
+  "users.accounts.edit",
+  "users.groups.assign",
+  "users.groups.assign next to users.create",
+  "users.password.reset",
+  "users.password.reset next to users.accounts.edit",
+  "users.roles.assign",
+  "users.roles.assign next to users.create"
+ ],
+ "update other expiry": [
+  "users.accounts.edit",
+  "users.accounts.edit next to users.roles.assign",
+  "users.groups.assign",
+  "users.groups.assign next to users.create",
+  "users.password.reset",
+  "users.roles.assign",
+  "users.roles.assign next to users.create"
+ ],
+ "update other groups": [
+  "users.accounts.edit",
+  "users.groups.assign",
+  "users.groups.assign next to users.accounts.edit",
+  "users.groups.assign next to users.create",
+  "users.password.reset",
+  "users.roles.assign",
+  "users.roles.assign next to users.create"
+ ],
+ "update other groups with direction": [
+  "users.accounts.edit",
+  "users.groups.assign",
+  "users.groups.assign next to users.accounts.edit",
+  "users.groups.assign next to users.create",
+  "users.password.reset",
+  "users.roles.assign",
+  "users.roles.assign next to users.create"
+ ],
+ "update other password": [
+  "users.accounts.edit",
+  "users.groups.assign",
+  "users.groups.assign next to users.create",
+  "users.password.reset",
+  "users.password.reset next to users.accounts.edit",
+  "users.roles.assign",
+  "users.roles.assign next to users.create"
+ ],
+ "update other roles": [
+  "users.accounts.edit",
+  "users.groups.assign",
+  "users.groups.assign next to users.create",
+  "users.password.reset",
+  "users.roles.assign",
+  "users.roles.assign next to users.accounts.edit",
+  "users.roles.assign next to users.create"
+ ],
+ "update pending": [
+  "registrations.edit"
+ ],
+ "update privileged code": [
+  "onboarding.edit"
+ ],
+ "update privileged user": [],
+ "update profile": [
+  "tak_profiles.edit"
+ ],
+ "update profile public": [
+  "tak_profiles.assign",
+  "tak_profiles.edit"
+ ],
+ "update profile roles": [
+  "tak_profiles.assign",
+  "tak_profiles.edit"
+ ],
+ "update protected role": [],
+ "update radio": [
+  "radios.edit"
+ ],
+ "update radio assignment": [
+  "radios.assign next to radios.edit",
+  "radios.edit"
+ ],
+ "update radio assignment by id": [
+  "radios.assign next to radios.edit",
+  "radios.edit"
+ ],
+ "update role": [
+  "roles.edit",
+  "roles.edit next to roles.permissions.edit"
+ ],
+ "update scheduled announcement": [
+  "announcements.send next to announcements.edit"
+ ],
+ "update self basics": [],
+ "update self email": [],
+ "update self expiry": [
+  "users.accounts.edit",
+  "users.accounts.edit next to users.roles.assign"
+ ],
+ "update self groups": [
+  "users.groups.assign",
+  "users.groups.assign next to users.accounts.edit",
+  "users.groups.assign next to users.create"
+ ],
+ "update self password": [
+  "users.password.reset",
+  "users.password.reset next to users.accounts.edit"
+ ],
+ "update self roles": [
+  "users.roles.assign",
+  "users.roles.assign next to users.accounts.edit",
+  "users.roles.assign next to users.create"
+ ],
+ "update setting by id": [
+  "settings.general.edit"
+ ],
+ "update setting by id, module flag": [
+  "settings.modules.edit"
+ ],
+ "update setting by unknown id": [
+  "settings.branding.edit",
+  "settings.enrollment.edit",
+  "settings.general.edit",
+  "settings.modules.edit",
+  "settings.radios.edit",
+  "settings.registration.edit",
+  "settings.security.edit"
+ ],
+ "update setting without value": [
+  "settings.branding.edit",
+  "settings.enrollment.edit",
+  "settings.general.edit",
+  "settings.modules.edit",
+  "settings.radios.edit",
+  "settings.registration.edit",
+  "settings.security.edit"
+ ],
+ "update unknown setting by key": [
+  "settings.branding.edit",
+  "settings.enrollment.edit",
+  "settings.general.edit",
+  "settings.modules.edit",
+  "settings.radios.edit",
+  "settings.registration.edit",
+  "settings.security.edit"
+ ],
+ "upload background": [
+  "settings.branding.edit"
+ ],
+ "upload logo": [
+  "settings.branding.edit"
+ ],
+ "upload oidc icon": [],
+ "validate code": []
+}

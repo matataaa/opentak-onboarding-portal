@@ -9,26 +9,11 @@ Local-only fields: yamlConfig, isPublic, defaultRadioConfig, showOnHomepage, rol
 from flask import request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from app.api_v1 import api_v1
+from app.rbac import has_permission, require_permission
 from app.models import MeshtasticModel, UserRoleModel, UserModel, db
 from app.services.meshtastic_sync import MeshtasticSyncService
 from app.pagination import search_and_paginate
 import yaml
-
-
-def require_admin_role():
-    """Check for meshtastic_admin or administrator role (write access)"""
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'meshtastic_admin']):
-        return jsonify({'error': 'Meshtastic admin access required'}), 403
-    return None
-
-
-def require_view_role():
-    """Check for meshtastic_admin, meshtastic_readonly, or administrator role (read access)"""
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'meshtastic_admin', 'meshtastic_readonly']):
-        return jsonify({'error': 'Meshtastic admin or readonly access required'}), 403
-    return None
 
 
 @api_v1.route('/meshtastic', methods=['GET'])
@@ -86,13 +71,10 @@ def get_meshtastic_configs():
 
 @api_v1.route('/meshtastic/admin', methods=['GET'])
 @jwt_required()
+@require_permission('meshtastic.channels.view')
 def get_all_meshtastic_configs_admin():
     """Get ALL Meshtastic configs (admin or readonly, no role filtering).
     Optionally filtered by search and paginated (all configs when per_page is omitted)."""
-    error = require_view_role()
-    if error:
-        return error
-
     configs, meta = search_and_paginate(
         MeshtasticModel.query, MeshtasticModel.name,
         [MeshtasticModel.name, MeshtasticModel.description])
@@ -120,14 +102,13 @@ def get_all_meshtastic_configs_admin():
 @jwt_required()
 def get_meshtastic_config(config_id):
     """Get Meshtastic config by ID"""
-    from app.rbac import has_any_role
 
     config = MeshtasticModel.get_by_id(config_id)
     if not config:
         return jsonify({'error': 'Meshtastic config not found'}), 404
 
     # Admins and readonly can access any config
-    is_admin = has_any_role(['administrator', 'meshtastic_admin', 'meshtastic_readonly'])
+    is_admin = has_permission('meshtastic.channels.view')
 
     if not is_admin and not config.isPublic:
         current_user_id = int(get_jwt_identity())
@@ -159,12 +140,9 @@ def get_meshtastic_config(config_id):
 
 @api_v1.route('/meshtastic', methods=['POST'])
 @jwt_required()
+@require_permission('meshtastic.channels.edit')
 def create_meshtastic_config():
     """Create a new Meshtastic config (admin only) and sync to OTS"""
-    error = require_admin_role()
-    if error:
-        return error
-
     data = request.get_json()
 
     # URL is required for new configs (name will be derived from channel)
@@ -241,12 +219,9 @@ def create_meshtastic_config():
 
 @api_v1.route('/meshtastic/<int:config_id>', methods=['PUT'])
 @jwt_required()
+@require_permission('meshtastic.channels.edit')
 def update_meshtastic_config(config_id):
     """Update Meshtastic config (admin only) and sync to OTS"""
-    error = require_admin_role()
-    if error:
-        return error
-
     config = MeshtasticModel.get_by_id(config_id)
     if not config:
         return jsonify({'error': 'Meshtastic config not found'}), 404
@@ -324,12 +299,9 @@ def update_meshtastic_config(config_id):
 
 @api_v1.route('/meshtastic/<int:config_id>', methods=['DELETE'])
 @jwt_required()
+@require_permission('meshtastic.channels.delete')
 def delete_meshtastic_config(config_id):
     """Delete Meshtastic config (admin only) and remove from OTS"""
-    error = require_admin_role()
-    if error:
-        return error
-
     config = MeshtasticModel.get_by_id(config_id)
     if not config:
         return jsonify({'error': 'Meshtastic config not found'}), 404
@@ -360,12 +332,9 @@ def delete_meshtastic_config(config_id):
 
 @api_v1.route('/meshtastic/sync', methods=['POST'])
 @jwt_required()
+@require_permission('meshtastic.channels.sync')
 def sync_meshtastic_from_ots():
     """Sync Meshtastic configs from OTS (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     try:
         created, updated, errors = MeshtasticSyncService.sync_from_ots()
 
@@ -386,12 +355,9 @@ def sync_meshtastic_from_ots():
 
 @api_v1.route('/meshtastic/<int:config_id>/sync', methods=['POST'])
 @jwt_required()
+@require_permission('meshtastic.channels.sync')
 def sync_single_meshtastic_to_ots(config_id):
     """Push a single Meshtastic config to OTS (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     config = MeshtasticModel.get_by_id(config_id)
     if not config:
         return jsonify({'error': 'Meshtastic config not found'}), 404

@@ -24,6 +24,8 @@ import ChangePassword from './pages/ChangePassword';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import UsersList from './pages/admin/UsersList';
 import RolesList from './pages/admin/RolesList';
+import RoleEditor from './pages/admin/RoleEditor';
+import RolesOverview from './pages/admin/RolesOverview';
 import OnboardingCodesList from './pages/admin/OnboardingCodesList';
 import EventsAdmin from './pages/admin/EventsAdmin';
 import EventsJoin from './pages/EventsJoin';
@@ -126,8 +128,9 @@ const safeInternalPath = (value) =>
   value && value.startsWith('/') && !value.startsWith('//') ? value : null;
 
 // Protected Route component
-const ProtectedRoute = ({ children, adminOnly = false, allowIncomplete = false }) => {
-  const { user, loading, isAdmin, isEventLeader, needsProfileCompletion, needsPasswordSet } = useAuth();
+// adminOnly: any admin access; requires: the permission a page needs (the API refuses the rest anyway)
+const ProtectedRoute = ({ children, adminOnly = false, requires = null, allowIncomplete = false }) => {
+  const { user, loading, hasAnyAdminRole, can, isEventLeader, needsProfileCompletion, needsPasswordSet } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -155,7 +158,7 @@ const ProtectedRoute = ({ children, adminOnly = false, allowIncomplete = false }
     return <Navigate to="/complete-profile" replace />;
   }
 
-  if (adminOnly && !isAdmin()) {
+  if ((adminOnly && !hasAnyAdminRole()) || (requires && !can(requires))) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -302,7 +305,7 @@ function AppContent() {
               <Route
                 path="admin/users"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute adminOnly requires="users.accounts.view">
                     <UsersList />
                   </ProtectedRoute>
                 }
@@ -310,15 +313,39 @@ function AppContent() {
               <Route
                 path="admin/roles"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute adminOnly requires="roles.view">
                     <RolesList />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/roles/overview"
+                element={
+                  <ProtectedRoute adminOnly requires="roles.view">
+                    <RolesOverview />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/roles/new"
+                element={
+                  <ProtectedRoute adminOnly requires="roles.edit">
+                    <RoleEditor />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin/roles/:roleId"
+                element={
+                  <ProtectedRoute adminOnly requires="roles.view">
+                    <RoleEditor />
                   </ProtectedRoute>
                 }
               />
               <Route
                 path="admin/groups"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute adminOnly requires="groups.view">
                     <GroupsList />
                   </ProtectedRoute>
                 }
@@ -326,7 +353,7 @@ function AppContent() {
               <Route
                 path="admin/onboarding-codes"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute adminOnly requires="onboarding.view">
                     <OnboardingCodesList />
                   </ProtectedRoute>
                 }
@@ -334,7 +361,7 @@ function AppContent() {
               <Route
                 path="admin/events"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute adminOnly requires="events.view">
                     <ModuleRoute module="events">
                       <EventsAdmin />
                     </ModuleRoute>
@@ -344,7 +371,7 @@ function AppContent() {
               <Route
                 path="admin/pending-registrations"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute adminOnly requires="registrations.view">
                     <PendingRegistrationsList />
                   </ProtectedRoute>
                 }
@@ -352,7 +379,7 @@ function AppContent() {
               <Route
                 path="admin/tak-profiles"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute adminOnly requires="tak_profiles.view">
                     <TakProfilesList />
                   </ProtectedRoute>
                 }
@@ -360,7 +387,7 @@ function AppContent() {
               <Route
                 path="admin/meshtastic"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute adminOnly requires="meshtastic.channels.view">
                     <ModuleRoute module="meshtastic">
                       <MeshtasticList />
                     </ModuleRoute>
@@ -370,7 +397,7 @@ function AppContent() {
               <Route
                 path="admin/meshtastic/groups"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute adminOnly requires="meshtastic.groups.view">
                     <ModuleRoute module="meshtastic">
                       <MeshtasticGroups />
                     </ModuleRoute>
@@ -380,7 +407,7 @@ function AppContent() {
               <Route
                 path="admin/radios"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute adminOnly requires="radios.view">
                     <ModuleRoute module="radios">
                       <RadiosList />
                     </ModuleRoute>
@@ -390,7 +417,7 @@ function AppContent() {
               <Route
                 path="admin/radios/:radioId"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute adminOnly requires="radios.view">
                     <ModuleRoute module="radios">
                       <RadiosList />
                     </ModuleRoute>
@@ -400,7 +427,7 @@ function AppContent() {
               <Route
                 path="admin/settings"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute adminOnly requires="settings.view">
                     <Settings />
                   </ProtectedRoute>
                 }
@@ -408,7 +435,7 @@ function AppContent() {
               <Route
                 path="admin/announcements"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute adminOnly requires="announcements.view">
                     <AnnouncementsList />
                   </ProtectedRoute>
                 }
@@ -416,7 +443,7 @@ function AppContent() {
               <Route
                 path="admin/api-keys"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute adminOnly requires="api_keys.view">
                     <ApiKeysList />
                   </ProtectedRoute>
                 }
@@ -424,7 +451,7 @@ function AppContent() {
               <Route
                 path="admin/api-docs"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute adminOnly requires="api_docs.view">
                     <ApiDocs />
                   </ProtectedRoute>
                 }

@@ -45,7 +45,9 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 # SEEDS below) must be revisited on purpose.
 UPSTREAM_REV = '4b754g491aa1'
 
-HEAD_REV = 'a1b2c3d4e5f7'
+HEAD_REV = 'b2c3d4e5f6a8'
+# The revision whose downgrade refuses while created_by is NULL.
+CREATOR_NULLABLE_REV = 'a1b2c3d4e5f7'
 
 # a5b6c7d8e9f1 adds the primary keys to the OTS group association tables and
 # merges duplicate (group, user) / (group, code) rows into one row first.
@@ -99,6 +101,7 @@ NEW_EMPTY_TABLES = {
                               'createdAt', 'revokedAt', 'revokedBy'},
     'event_team_leaders': {'id', 'eventId', 'eventTeamId', 'userId', 'source', 'eventLinkId', 'linkVersion',
                            'linkNonce', 'createdAt', 'createdBy'},
+    'role_permissions': {'id', 'role_id', 'permission'},
 }
 
 NOW = datetime(2026, 1, 15, 12, 0, 0)
@@ -662,6 +665,13 @@ def test_new_and_dropped_schema(up):
     assert fks == {('eventId',): 'events', ('eventTeamId',): 'event_teams', ('userId',): 'users'}
     uniques = {tuple(u['column_names']) for u in insp.get_unique_constraints('event_team_leaders')}
     assert ('eventId', 'eventTeamId', 'userId') in uniques
+    fk = insp.get_foreign_keys('role_permissions')
+    assert len(fk) == 1
+    assert fk[0]['name'] == 'fk_role_permissions_role_id_user_roles'
+    assert fk[0]['constrained_columns'] == ['role_id'] and fk[0]['referred_table'] == 'user_roles'
+    assert fk[0]['options'].get('ondelete') == 'CASCADE'
+    uniques = {u['name']: u['column_names'] for u in insp.get_unique_constraints('role_permissions')}
+    assert uniques == {'uq_role_permissions_role_id_permission': ['role_id', 'permission']}
     fks = {tuple(f['constrained_columns']): f for f in insp.get_foreign_keys('events')}
     assert fks[('organizerTeamId',)]['referred_table'] == 'event_teams'
     assert fks[('organizerTeamId',)]['name'] == 'fk_events_organizerTeamId_event_teams'
@@ -734,6 +744,7 @@ def test_primary_keys_and_check_constraints(backend, make_db):
 
 def test_downgrade_refused_while_creator_is_null(backend, make_db):
     up = build_upgrade(make_db, backend)  # own database: this test mutates it
+    flask_db(up.url, 'downgrade', CREATOR_NULLABLE_REV)
     engine = sa.create_engine(up.url)
     ann_id = up.ids['ann1']
     with engine.begin() as c:
@@ -749,7 +760,7 @@ def test_downgrade_refused_while_creator_is_null(backend, make_db):
     engine = sa.create_engine(up.url)
     assert snapshot(engine) == before  # no rows touched
     with engine.connect() as c:
-        assert c.execute(sa.text('SELECT version_num FROM alembic_version')).scalar() == HEAD_REV
+        assert c.execute(sa.text('SELECT version_num FROM alembic_version')).scalar() == CREATOR_NULLABLE_REV
     assert_creator_columns(sa.inspect(engine), nullable=True)
 
     # once the rows have a creator again the same downgrade goes through

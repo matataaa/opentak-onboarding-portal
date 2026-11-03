@@ -7,6 +7,7 @@ import { announcementsAPI, rolesAPI, usersAPI } from '../../services/api';
 import { formatDateTime, useDateFormat } from '../../utils/formatDate';
 import { useNotification } from '../../contexts/NotificationContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { moduleLabel } from '../../utils/permissions';
 import '../../components/AdminTable.css';
 
 // Quill editor modules configuration
@@ -36,8 +37,12 @@ function AnnouncementsList() {
   const dateFormat = useDateFormat();
   const queryClient = useQueryClient();
   const { showSuccess, showError, confirm } = useNotification();
-  const { hasRole } = useAuth();
-  const canEdit = hasRole('announcement_admin') || hasRole('administrator');
+  const { can } = useAuth();
+  const canEdit = can('announcements.edit');
+  const canDelete = can('announcements.delete');
+  // Sending now and scheduling both send the announcement
+  const canSend = can('announcements.send');
+  const canViewUsers = can('users.accounts.view');
   const [showModal, setShowModal] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -81,6 +86,7 @@ function AnnouncementsList() {
       const response = await usersAPI.getAll({ per_page: 1000 });
       return response.data;
     },
+    enabled: canViewUsers,
   });
 
   // Mutations
@@ -242,7 +248,8 @@ function AnnouncementsList() {
 
   const announcements = announcementsData?.announcements || [];
   const roles = rolesData?.roles || [];
-  const users = usersData?.users || [];
+  // Without the user list, the users an announcement already targets stay listed so editing keeps them
+  const users = usersData?.users || (formData.targetType === 'users' ? editing?.targetUsers || [] : []);
 
   return (
     <div className="admin-page">
@@ -308,11 +315,15 @@ function AnnouncementsList() {
                       <button className="btn btn-sm btn-secondary" onClick={() => handleViewStats(a)}>
                         {t('admin.announcements.stats')}
                       </button>
-                      {canEdit && a.status !== 'sent' && (
+                      {a.status !== 'sent' && (
                         <>
-                          <button className="btn btn-sm btn-secondary" onClick={() => handleEdit(a)}>
-                            {t('common.edit')}
-                          </button>
+                          {/* Changing a scheduled announcement counts as sending (the server refuses it otherwise) */}
+                          {canEdit && (a.status !== 'scheduled' || canSend) && (
+                            <button className="btn btn-sm btn-secondary" onClick={() => handleEdit(a)}>
+                              {t('common.edit')}
+                            </button>
+                          )}
+                          {canSend && (
                           <button
                             className="btn btn-sm btn-success"
                             onClick={async () => {
@@ -322,9 +333,10 @@ function AnnouncementsList() {
                           >
                             {t('admin.announcements.sendNow')}
                           </button>
+                          )}
                         </>
                       )}
-                      {canEdit && (
+                      {canDelete && (
                         <button
                           className="btn btn-sm btn-danger"
                           onClick={async () => {
@@ -389,7 +401,7 @@ function AnnouncementsList() {
                   >
                     <option value="all">{t('admin.announcements.allUsers')}</option>
                     <option value="roles">{t('admin.announcements.specificRoles')}</option>
-                    <option value="users">{t('admin.announcements.specificUsers')}</option>
+                    <option value="users" disabled={!canViewUsers && formData.targetType !== 'users'}>{t('admin.announcements.specificUsers')}</option>
                   </select>
                 </div>
 
@@ -419,10 +431,13 @@ function AnnouncementsList() {
                 {formData.targetType === 'users' && (
                   <div className="form-group">
                     <label>{t('admin.announcements.selectUsers')}</label>
+                    {!canViewUsers && (
+                      <span className="help-text">{t('admin.permissions.needsView', { module: moduleLabel(t, 'users') })}</span>
+                    )}
                     <div className="checkbox-list" style={{ maxHeight: '200px', overflowY: 'auto' }}>
                       {users.map(user => (
                         <label key={user.id} className="checkbox-label">
-                          <span>{user.username} ({user.email})</span>
+                          <span>{user.username}{user.email ? ` (${user.email})` : ''}</span>
                           <input
                             type="checkbox"
                             checked={formData.userIds.includes(user.id)}
@@ -455,6 +470,7 @@ function AnnouncementsList() {
                   <label>{t('admin.announcements.scheduleFor')}</label>
                   <input
                     type="datetime-local"
+                    disabled={!canSend}
                     value={formData.scheduledAt}
                     onChange={(e) => setFormData({...formData, scheduledAt: e.target.value, sendImmediately: false})}
                   />
@@ -467,6 +483,7 @@ function AnnouncementsList() {
                       <span>{t('admin.announcements.sendImmediately')}</span>
                       <input
                         type="checkbox"
+                        disabled={!canSend}
                         checked={formData.sendImmediately}
                         onChange={(e) => setFormData({...formData, sendImmediately: e.target.checked, scheduledAt: ''})}
                       />
@@ -581,7 +598,7 @@ function AnnouncementsList() {
               />
             </div>
             <div className="modal-footer">
-              {canEdit && selectedAnnouncement.status !== 'sent' && (
+              {canEdit && selectedAnnouncement.status !== 'sent' && (selectedAnnouncement.status !== 'scheduled' || canSend) && (
                 <button
                   className="btn btn-secondary"
                   onClick={() => {

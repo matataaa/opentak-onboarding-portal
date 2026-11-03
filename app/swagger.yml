@@ -43,6 +43,15 @@ info:
     also need the Meshtastic module. `/settings`, `/admin/settings*` and `/auth/*` are
     never affected, and disabled modules are left out of `/auth/permissions`.
 
+    ## Permissions
+    Admin endpoints check permissions per function (`/auth/permissions` lists yours). A write can
+    hold fields you have no permission for, because a form sends its whole record: those fields
+    have no effect, and the response names them in `ignoredFields` (left out when there are none).
+    This goes for `POST`/`PUT` on `/users`, `/onboarding-codes`, `/radios`, `/tak-profiles` and
+    `/events/teams`. `GET /groups/{id}` only has `users` with `groups.members.view`; the admin
+    Meshtastic group routes answer `url` and `combined_url` as null without
+    `meshtastic.channels.view`.
+
     ## Admin Endpoints
     Endpoints marked with 🔒 require the 'administrator' role.
   version: 1.0.0
@@ -154,9 +163,91 @@ components:
           type: string
         description:
           type: string
+        displayName:
+          type: string
+          nullable: true
+        isProtected:
+          type: boolean
+          description: The name and description cannot be changed or the role deleted (built-in, from OTS)
+        isCustom:
+          type: boolean
+          description: Can be given permissions (not a built-in, reserved or OTS role)
+        locked:
+          type: boolean
+          description: The current user cannot change this role's permissions (see lockedReason)
+        lockedReason:
+          type: string
+          nullable: true
+          enum: [system, aboveLevel, null]
+          description: system = not a custom role; aboveLevel = the role holds permissions the current user does not hold (read-only for them, including rename and delete)
+        assignable:
+          type: boolean
+          description: Everything this role holds is held by the current user, so they may hand it out
+        permissions:
+          type: array
+          items:
+            type: string
+          description: Only for holders of roles.view. Computed for a built-in, the stored rows for a custom role
         userCount:
           type: integer
-          description: Only in GET /roles, for administrator, role_admin and role_readonly
+          description: Only for holders of roles.view
+        codeCount:
+          type: integer
+          description: Onboarding codes carrying this role. Only for holders of roles.view
+
+    PermissionCatalogKey:
+      type: object
+      properties:
+        key:
+          type: string
+        level:
+          type: string
+          enum: [view, edit, action]
+        readonlyDefault:
+          type: boolean
+          description: Part of the module's read-only built-in role
+        sensitive:
+          type: boolean
+        administratorOnly:
+          type: boolean
+          description: Cannot be given to a custom role
+        requires:
+          type: array
+          items:
+            type: string
+          description: Keys this key needs to count at all, including the view key an edit key implies
+        grantable:
+          type: boolean
+          description: The current user may give this key to a role
+
+    RolePermissionsRequest:
+      type: object
+      required:
+        - permissions
+      properties:
+        permissions:
+          type: array
+          items:
+            type: string
+          description: The full list; an edit key is stored with the view key it implies
+
+    RolePermissionImpact:
+      type: object
+      properties:
+        added:
+          type: array
+          items:
+            type: string
+        removed:
+          type: array
+          items:
+            type: string
+        userCount:
+          type: integer
+          description: Users holding the role, if anything changes
+        codeCount:
+          type: integer
+          description: Onboarding codes carrying the role, if anything changes
 
     OnboardingCode:
       type: object
@@ -485,14 +576,14 @@ components:
           type: integer
         retrievable:
           type: boolean
-          description: Whether this viewer can get the join URL again; false for a non-administrator when the code carries a privileged role
+          description: Whether this viewer can get the join URL again; false when the code carries a role with permissions the viewer does not hold
         onboardingCodeId:
           type: integer
           nullable: true
         onboardingCode:
           type: object
           nullable: true
-          description: id, name and onboardingCode; the value of onboardingCode is null for a non-administrator when the code carries a privileged role
+          description: id, name and onboardingCode; the value of onboardingCode is null when the code carries a role with permissions the viewer does not hold
         createdAt:
           type: string
           format: date-time
@@ -767,7 +858,7 @@ paths:
     get:
       tags:
         - Authentication
-      summary: Get the current user's roles, accessible admin modules and leader teams
+      summary: Get the current user's roles, accessible admin modules, permissions and leader teams
       security:
         - bearerAuth: []
       responses:
@@ -784,6 +875,13 @@ paths:
                       type: string
                   modules:
                     type: array
+                    items:
+                      type: string
+                  permissions:
+                    type: array
+                    description: >
+                      The user's permission keys (see app/permissions.py), leaving out those of
+                      disabled modules. Empty for kiosk and event-leader sessions.
                     items:
                       type: string
                   isAdmin:
@@ -1282,7 +1380,7 @@ paths:
         '400':
           description: Missing teamId/role, unknown team or onboarding code, or invalid direction
         '403':
-          description: The onboarding code carries a privileged role and the caller is no administrator
+          description: The onboarding code carries a role with permissions the caller does not hold
         '404':
           description: Event not found
         '409':
@@ -1381,7 +1479,7 @@ paths:
         (field `retrievable` in the link list). Legacy links with a random token,
         or any link when SECRET_KEY is weak, return 409; regenerate the link first.
         Rotating SECRET_KEY makes derived links non-retrievable (printed QRs keep working).
-        Only an administrator gets the URL of a link bound to a code carrying a privileged role.
+        Only someone holding the permissions of the code's roles gets the URL of a link bound to that code.
       security:
         - bearerAuth: []
       parameters:
@@ -1401,7 +1499,7 @@ paths:
                   url:
                     type: string
         '403':
-          description: The link is bound to a code carrying a privileged role and the caller is no administrator
+          description: The link is bound to a code carrying a role with permissions the caller does not hold
         '404':
           description: Link not found
         '409':
@@ -2135,7 +2233,7 @@ paths:
         '400':
           description: Missing field or invalid username
         '403':
-          description: User admin role required, or roleIds has a privileged role and the caller is no administrator
+          description: User admin role required, or roleIds has a role with permissions the caller does not hold (a privileged role needs an administrator)
         '409':
           description: Username already exists
 
@@ -2175,6 +2273,8 @@ paths:
         user_admin can also change roleIds, expiryDate, groups, groupIds and password. A non-administrator
         cannot change another user holding a privileged role (administrator/admin, in any case), and cannot
         add or remove a privileged role; roleIds is the full list, unchanged roles are not a change.
+        Likewise anyone: another user only if the caller holds all that user's permissions, and adding or
+        removing a role only if the caller holds all its permissions.
         When the privileged state of the user changes, the OTS role is set first (`administrator` or
         `user`, replacing all OTS roles) on the account found case-insensitively, and read back; if OTS
         refuses or the role did not change, nothing is changed. If the outcome is unknown (a lost OTS
@@ -2226,7 +2326,7 @@ paths:
         '400':
           description: Invalid value, or OTS refused the role change (for example under LDAP, or no such OTS account); nothing was changed. Also a failure after an OTS change; the local update is rolled back, restoring the role is attempted, and `passwordChanged` tells whether the password was already changed.
         '403':
-          description: Permission denied, privileged role or target without the administrator role, or a change the service account does not allow
+          description: Permission denied, privileged role or target without the administrator role, a role or target with permissions the caller does not hold (missingPermissions lists them), or a change the service account does not allow
         '404':
           description: User not found
         '409':
@@ -2251,7 +2351,7 @@ paths:
         '200':
           description: User deleted successfully
         '403':
-          description: User admin role required, target holds a privileged role and caller is no administrator, or target is the service account
+          description: User admin role required, target holds a privileged role and caller is no administrator, target holds permissions the caller does not hold, or target is the service account
         '404':
           description: User not found
         '409':
@@ -2265,8 +2365,8 @@ paths:
     get:
       tags:
         - Roles
-      summary: List all roles (any admin role) 🔒
-      description: Any admin role can read this, because admin pages use it as a picker. `userCount` is only included for administrator, role_admin and role_readonly.
+      summary: List all roles (any permission) 🔒
+      description: Anyone holding any permission can read this, because admin pages use it as a picker. `permissions`, `userCount` and `codeCount` are only included for holders of roles.view.
       security:
         - bearerAuth: []
       parameters:
@@ -2330,7 +2430,7 @@ paths:
         '201':
           description: Role created successfully
         '400':
-          description: Missing name, or a reserved name (administrator, admin, event_leader, user or any built-in admin role, ignoring case and surrounding whitespace)
+          description: Missing name, a reserved name (administrator, admin, event_leader, user or any built-in admin role, ignoring case and surrounding whitespace), or the description `Auto-created from OTS`, which is reserved for roles created from OpenTAK Server
         '403':
           description: Administrator role required
         '409':
@@ -2346,12 +2446,12 @@ paths:
     get:
       tags:
         - Roles
-      summary: Get role by ID (administrator, role_admin or role_readonly) 🔒
+      summary: Get role by ID (roles.view) 🔒
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: The role with its users, TAK profiles and Meshtastic configs
+          description: The fields of the Role schema with its users, TAK profiles and Meshtastic configs
         '403':
           description: Role admin or readonly access required
         '404':
@@ -2366,9 +2466,9 @@ paths:
         '200':
           description: Role updated
         '400':
-          description: Rename to a reserved name (see POST /roles)
+          description: Rename to a reserved name, or a change to the reserved description `Auto-created from OTS` (see POST /roles)
         '403':
-          description: Role admin access required, or a protected role. Other privileged rows (such as admin) are protected for non-administrators.
+          description: Role admin access required, a protected role, or a role holding permissions the caller does not hold (missingPermissions lists them). Other privileged rows (such as admin) are protected for non-administrators.
         '404':
           description: Role not found
         '409':
@@ -2383,16 +2483,187 @@ paths:
         '200':
           description: Role deleted
         '403':
-          description: Role admin access required, or a protected role. Other privileged rows (such as admin) are protected for non-administrators.
+          description: Role admin access required, a protected role, or a role holding permissions the caller does not hold (missingPermissions lists them). Other privileged rows (such as admin) are protected for non-administrators.
         '404':
           description: Role not found
+
+  /roles/permission-catalog:
+    get:
+      tags:
+        - Roles
+      summary: What a role can hold, for the role editor (roles.view) 🔒
+      description: Keys only, the labels are in the frontend's translations. Each function is one row in the editor; `kind` says which of its keys it has (`viewEdit`, `view`, `edit` or one `action`).
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Modules with their functions and keys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  modules:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        module:
+                          type: string
+                        enabled:
+                          type: boolean
+                          description: False if the module is switched off in the settings
+                        functions:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              function:
+                                type: string
+                              kind:
+                                type: string
+                                enum: [viewEdit, view, edit, action]
+                              permissions:
+                                type: array
+                                items:
+                                  $ref: '#/components/schemas/PermissionCatalogKey'
+        '403':
+          description: Role admin or readonly access required
+
+  /roles/{id}/permissions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    put:
+      tags:
+        - Roles
+      summary: Replace the permissions of a custom role (roles.permissions.edit) 🔒
+      description: Full list. The caller must hold every key in it, and every key the role holds now, so a role above their level stays out of reach.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RolePermissionsRequest'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  permissions:
+                    type: array
+                    items:
+                      type: string
+                  impact:
+                    $ref: '#/components/schemas/RolePermissionImpact'
+        '400':
+          description: Not a list of keys, unknown keys or administrator-only keys (permissions lists them)
+        '403':
+          description: Role admin access required, not a custom role, permissions the caller does not hold, or permissions of other roles that would start to count for users or codes holding this role and that the caller does not hold (missingPermissions lists them)
+        '404':
+          description: Role not found
+        '409':
+          description: Changed by someone else at the same time
+
+  /roles/{id}/permissions/preview:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      tags:
+        - Roles
+      summary: What saving this list would change, without saving (roles.permissions.edit) 🔒
+      description: Refuses exactly what PUT /roles/{id}/permissions would refuse.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RolePermissionsRequest'
+      responses:
+        '200':
+          description: The list as it would be stored and its impact
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permissions:
+                    type: array
+                    items:
+                      type: string
+                  impact:
+                    $ref: '#/components/schemas/RolePermissionImpact'
+        '400':
+          description: Not a list of keys, unknown keys or administrator-only keys
+        '403':
+          description: Role admin access required, not a custom role, or permissions the caller does not hold
+        '404':
+          description: Role not found
+
+  /roles/{id}/duplicate:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      tags:
+        - Roles
+      summary: New custom role with the permissions of this one (roles.edit and roles.permissions.edit) 🔒
+      description: Also from a built-in role, without its administrator-only keys. Holders and audiences (TAK profiles, Meshtastic, announcements) are not copied. Refused if the caller does not hold every key to copy.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                displayName:
+                  type: string
+                description:
+                  type: string
+                  description: Defaults to the description of the source
+      responses:
+        '201':
+          description: The new role with its permissions
+        '400':
+          description: Missing name, a reserved name, or the reserved description `Auto-created from OTS`
+        '403':
+          description: Role admin access required, or keys the caller does not hold (missingPermissions lists them)
+        '404':
+          description: Role not found
+        '409':
+          description: Role already exists
 
   /onboarding-codes:
     get:
       tags:
         - Onboarding Codes
       summary: List onboarding codes (admin) 🔒
-      description: Codes carrying a privileged role (administrator/admin) are only listed for administrators.
+      description: Codes carrying a privileged role are listed for administrators only. A code carrying a role with permissions the caller does not hold is listed read-only with `onboardingCode` null and `aboveLevel` true, and a search does not match its value. The code value is a registration ticket.
       security:
         - bearerAuth: []
       parameters:
@@ -2443,7 +2714,7 @@ paths:
         '400':
           description: Missing or invalid values
         '403':
-          description: Onboarding admin access required, or roleIds has a privileged role and the caller is no administrator
+          description: Onboarding admin access required, or a new role in roleIds or a new or replaced approverRoleId holds permissions the caller does not hold (a privileged role in roleIds needs an administrator)
         '409':
           description: Onboarding code already exists
 
@@ -2462,11 +2733,11 @@ paths:
         - bearerAuth: []
       responses:
         '200':
-          description: The code
+          description: The code; `onboardingCode` is null and `aboveLevel` true when it carries a role with permissions the caller does not hold
         '403':
           description: Onboarding admin or readonly access required
         '404':
-          description: Not found, also when the code carries a privileged role and the caller is no administrator
+          description: Not found, also when the code carries a privileged role and the caller is not an administrator
     put:
       tags:
         - Onboarding Codes
@@ -2479,9 +2750,9 @@ paths:
         '400':
           description: Invalid values
         '403':
-          description: Onboarding admin access required, or roleIds has a privileged role and the caller is no administrator
+          description: Onboarding admin access required, the code carries a role with permissions the caller does not hold, a new role in roleIds holds permissions the caller does not hold, or a privileged role is set or replaced in roleIds or approverRoleId by someone who is not an administrator
         '404':
-          description: Not found, also when the code carries a privileged role and the caller is no administrator
+          description: Not found, also when the code carries a privileged role and the caller is not an administrator
     delete:
       tags:
         - Onboarding Codes
@@ -2492,16 +2763,16 @@ paths:
         '200':
           description: Code deleted
         '403':
-          description: Onboarding admin access required
+          description: Onboarding admin access required, or the code carries a role with permissions the caller does not hold
         '404':
-          description: Not found, also when the code carries a privileged role and the caller is no administrator
+          description: Not found, also when the code carries a privileged role and the caller is not an administrator
 
   /pending-registrations:
     post:
       tags:
         - Onboarding Codes
       summary: Create a pending registration (administrator or registration_admin) 🔒
-      description: In GET responses for pending registrations, the code value and verification token are null for a non-administrator when the code carries a privileged role.
+      description: In GET responses for pending registrations, the code value and verification token are null when the code carries a role with permissions the caller does not hold.
       security:
         - bearerAuth: []
       responses:
@@ -2510,7 +2781,7 @@ paths:
         '400':
           description: Missing or invalid values
         '403':
-          description: Registration admin access required, or the code carries a privileged role and the caller is no administrator
+          description: Registration admin access required, or the code carries a role with permissions the caller does not hold
         '409':
           description: Username or email already in use
 
@@ -2531,7 +2802,7 @@ paths:
         '200':
           description: Registration updated and a verification email sent
         '403':
-          description: Registration admin access required, or the current or new code carries a privileged role and the caller is no administrator
+          description: Registration admin access required, or the current or new code carries a role with permissions the caller does not hold
         '404':
           description: Pending registration not found
 
@@ -2552,9 +2823,21 @@ paths:
         '200':
           description: User created
         '403':
-          description: Registration admin access required, manual approval disabled, or the code carries a privileged role and the caller is no administrator
+          description: Registration admin access required, manual approval disabled, or the code carries a role with permissions the caller does not hold
         '404':
           description: Pending registration not found
+
+  /approvals:
+    get:
+      tags:
+        - Onboarding Codes
+      summary: Registrations waiting for the caller's approval 🔒
+      description: Each item has `canApprove`, false when the code carries a role with permissions the caller does not hold (approving would then be refused).
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The pending approvals of the codes whose approver role the caller holds
 
   /approvals/{id}/approve:
     post:
@@ -2573,7 +2856,7 @@ paths:
         '200':
           description: User created
         '403':
-          description: Not in the approver role, or the code carries a privileged role and the caller is no administrator
+          description: Not in the approver role, or the code carries a role with permissions the caller does not hold
         '404':
           description: Pending registration not found
 
@@ -3396,7 +3679,7 @@ paths:
       tags:
         - Settings
       summary: Get all system settings
-      description: Retrieve all system settings grouped by category (admin only)
+      description: Retrieve all system settings grouped by category (settings.view). Each setting has `editable`, whether the current user may change it.
       security:
         - bearerAuth: []
       responses:
@@ -3417,11 +3700,13 @@ paths:
                     value: "true"
                     category: "notifications"
                     description: "Send notification to admin when a new pending registration is created"
+                    editable: true
                   - id: 2
                     key: "notify_admin_new_registration"
                     value: "true"
                     category: "notifications"
                     description: "Send notification to admin when a new user registration is approved"
+                    editable: true
         '403':
           description: Admin access required
           content:

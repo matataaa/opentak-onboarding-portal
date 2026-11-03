@@ -27,7 +27,8 @@ from app.api_v1 import api_v1
 from app.models import db, EventTeamModel, EventModel, EventLinkModel, EventSessionModel, EventLeaderSessionModel, EventTeamLeaderModel, OTSGroupModel, UserModel, OnboardingCodeModel, SystemSettingsModel
 from app.ots import otsClient, new_password_error
 from app.exceptions import BadRequestError
-from app.rbac import has_privileged_role, is_administrator, require_role, visible_code_value
+from app.rbac import (CODE_BEYOND_ACTOR_ERROR, drop_fields_without_permission, has_privileged_role, holder_beyond_actor,
+                      ignored_fields_body, require_permission, visible_code_value)
 
 # Access tokens stay short even when the leader session lives (via refresh)
 # until the event ends.
@@ -105,7 +106,7 @@ def _link_to_dict(link, raw_token=None):
         'role': link.role,
         'direction': link.direction,
         'tokenVersion': link.tokenVersion,
-        'retrievable': _link_retrievable(link) and not _privileged_code_denied(link.onboardingCode),
+        'retrievable': _link_retrievable(link) and not _code_denied(link.onboardingCode),
         'onboardingCodeId': link.onboardingCodeId,
         'onboardingCode': {
             'id': link.onboardingCode.id,
@@ -132,9 +133,13 @@ TAK_TEAM_COLORS = (
 LINK_PRIVILEGED_CODE_ERROR = 'Only an administrator can get the token of a link bound to this onboarding code'
 
 
-def _privileged_code_denied(code):
-    """True if the current user may not hand out this code (it carries a privileged role)."""
-    return bool(code) and has_privileged_role(code) and not is_administrator()
+def _code_denied(code):
+    """True if the current user may not hand out this code (it carries roles above their level)."""
+    return bool(code) and holder_beyond_actor(code)
+
+
+def _code_denied_error(code, privileged_error):
+    return privileged_error if has_privileged_role(code) else CODE_BEYOND_ACTOR_ERROR
 
 
 def _parse_dt(value):
@@ -185,7 +190,7 @@ def _event_to_dict(event):
 # ----------------------------------------------------------------------------
 @api_v1.route('/events/teams', methods=['GET'])
 @jwt_required()
-@require_role('events_admin', 'events_readonly')
+@require_permission('events.view')
 def list_event_teams():
     teams = EventTeamModel.query.order_by(EventTeamModel.name).all()
     return jsonify({'teams': [_team_to_dict(t) for t in teams]}), 200
@@ -193,7 +198,7 @@ def list_event_teams():
 
 @api_v1.route('/events/teams/<int:team_id>', methods=['GET'])
 @jwt_required()
-@require_role('events_admin', 'events_readonly')
+@require_permission('events.view')
 def get_event_team(team_id):
     team = EventTeamModel.query.get(team_id)
     if not team:
@@ -203,9 +208,10 @@ def get_event_team(team_id):
 
 @api_v1.route('/events/teams', methods=['POST'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.teams.edit')
 def create_event_team():
     data = request.get_json() or {}
+    ignored = drop_fields_without_permission(data, {'events.leaders.edit': ('leaderUserId',)})
     if not data.get('name'):
         return jsonify({'error': 'name is required'}), 400
     if EventTeamModel.query.filter_by(name=data['name']).first():
@@ -230,17 +236,18 @@ def create_event_team():
     )
     db.session.add(team)
     db.session.commit()
-    return jsonify(_team_to_dict(team)), 201
+    return jsonify({**_team_to_dict(team), **ignored_fields_body(ignored)}), 201
 
 
 @api_v1.route('/events/teams/<int:team_id>', methods=['PUT'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.teams.edit')
 def update_event_team(team_id):
     team = EventTeamModel.query.get(team_id)
     if not team:
         return jsonify({'error': 'Team not found'}), 404
     data = request.get_json() or {}
+    ignored = drop_fields_without_permission(data, {'events.leaders.edit': ('leaderUserId',)})
 
     if 'name' in data:
         if not data['name']:
@@ -286,7 +293,7 @@ def update_event_team(team_id):
         unique = {s.id: s for s in sessions}
         body['reprovisioned'], body['reprovisionFailed'] = _reprovision_sessions(
             [unique[i] for i in sorted(unique)])
-    return jsonify(body), 200
+    return jsonify({**body, **ignored_fields_body(ignored)}), 200
 
 
 def _organized_events_of_team(team_id):
@@ -325,7 +332,7 @@ def _detach_sessions_from_links(link_criterion):
 
 @api_v1.route('/events/teams/<int:team_id>', methods=['DELETE'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.delete')
 def delete_event_team(team_id):
     team = EventTeamModel.query.get(team_id)
     if not team:
@@ -353,7 +360,7 @@ def delete_event_team(team_id):
 
 @api_v1.route('/events/teams/<int:team_id>/leader', methods=['POST'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.leaders.edit')
 def create_event_team_leader(team_id):
     """Create a shared leader account (OTS + local) and assign it to the team."""
     team = EventTeamModel.query.get(team_id)
@@ -403,7 +410,7 @@ def create_event_team_leader(team_id):
 # ----------------------------------------------------------------------------
 @api_v1.route('/events', methods=['GET'])
 @jwt_required()
-@require_role('events_admin', 'events_readonly')
+@require_permission('events.view')
 def list_events():
     events = EventModel.query.order_by(EventModel.id.desc()).all()
     return jsonify({'events': [_event_to_dict(e) for e in events]}), 200
@@ -411,7 +418,7 @@ def list_events():
 
 @api_v1.route('/events/<int:event_id>', methods=['GET'])
 @jwt_required()
-@require_role('events_admin', 'events_readonly')
+@require_permission('events.view')
 def get_event(event_id):
     event = EventModel.query.get(event_id)
     if not event:
@@ -421,7 +428,7 @@ def get_event(event_id):
 
 @api_v1.route('/events', methods=['POST'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.edit')
 def create_event():
     data = request.get_json() or {}
     if not data.get('name'):
@@ -463,7 +470,7 @@ def create_event():
 
 @api_v1.route('/events/<int:event_id>', methods=['PUT'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.edit')
 def update_event(event_id):
     event = EventModel.query.get(event_id)
     if not event:
@@ -534,7 +541,7 @@ def update_event(event_id):
 
 @api_v1.route('/events/<int:event_id>', methods=['DELETE'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.delete')
 def delete_event(event_id):
     event = EventModel.query.get(event_id)
     if not event:
@@ -558,7 +565,7 @@ def delete_event(event_id):
 # ----------------------------------------------------------------------------
 @api_v1.route('/events/<int:event_id>/links', methods=['GET'])
 @jwt_required()
-@require_role('events_admin', 'events_readonly')
+@require_permission('events.links.view')
 def list_event_links(event_id):
     if not EventModel.query.get(event_id):
         return jsonify({'error': 'Event not found'}), 404
@@ -568,7 +575,7 @@ def list_event_links(event_id):
 
 @api_v1.route('/events/<int:event_id>/links', methods=['POST'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.links.edit')
 def create_event_link(event_id):
     event = EventModel.query.get(event_id)
     if not event:
@@ -588,8 +595,8 @@ def create_event_link(event_id):
     onboarding_code = OnboardingCodeModel.get_onboarding_code_by_id(onboarding_code_id) if onboarding_code_id else None
     if onboarding_code_id and not onboarding_code:
         return jsonify({'error': 'Unknown onboardingCodeId'}), 400
-    if _privileged_code_denied(onboarding_code):
-        return jsonify({'error': 'Only an administrator can bind this onboarding code to a link'}), 403
+    if _code_denied(onboarding_code):
+        return jsonify({'error': _code_denied_error(onboarding_code, 'Only an administrator can bind this onboarding code to a link')}), 403
     # Applies to the device accounts of shared mode; stored for leader links too
     direction = data.get('direction', 'BOTH')
     if direction not in LINK_DIRECTIONS:
@@ -624,15 +631,15 @@ def create_event_link(event_id):
 
 @api_v1.route('/events/links/<int:link_id>/revoke', methods=['POST'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.links.edit')
 def revoke_event_link(link_id):
     """Regenerate the token: the old printed link/QR stops working."""
     link = EventLinkModel.query.get(link_id)
     if not link:
         return jsonify({'error': 'Link not found'}), 404
     # The token leads to the code through the join route
-    if _privileged_code_denied(link.onboardingCode):
-        return jsonify({'error': LINK_PRIVILEGED_CODE_ERROR}), 403
+    if _code_denied(link.onboardingCode):
+        return jsonify({'error': _code_denied_error(link.onboardingCode, LINK_PRIVILEGED_CODE_ERROR)}), 403
     link.tokenVersion = (link.tokenVersion or 0) + 1
     link.tokenNonce = secrets.token_urlsafe(16)
     if _key_is_strong():
@@ -662,15 +669,15 @@ def _actor_id():
 
 @api_v1.route('/events/links/<int:link_id>/url', methods=['GET'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.links.reveal')
 def get_event_link_url(link_id):
     """Re-derive the join URL of a link (only for links created with a strong SECRET_KEY)."""
     link = EventLinkModel.query.get(link_id)
     if not link:
         return jsonify({'error': 'Link not found'}), 404
     # The token leads to the code through the join route
-    if _privileged_code_denied(link.onboardingCode):
-        return jsonify({'error': LINK_PRIVILEGED_CODE_ERROR}), 403
+    if _code_denied(link.onboardingCode):
+        return jsonify({'error': _code_denied_error(link.onboardingCode, LINK_PRIVILEGED_CODE_ERROR)}), 403
     if not _link_retrievable(link):
         return jsonify({'error': 'This link cannot be shown again; regenerate it to get a retrievable link'}), 409
     return jsonify({'url': _link_url(_derive_link_token(link))}), 200
@@ -678,7 +685,7 @@ def get_event_link_url(link_id):
 
 @api_v1.route('/events/links/<int:link_id>', methods=['PUT'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.links.edit')
 def update_event_link(link_id):
     """Change the direction of a link; its open device accounts are re-provisioned in OTS.
 
@@ -708,7 +715,7 @@ def update_event_link(link_id):
 
 @api_v1.route('/events/links/<int:link_id>', methods=['DELETE'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.links.edit')
 def delete_event_link(link_id):
     link = EventLinkModel.query.get(link_id)
     if not link:
@@ -778,7 +785,7 @@ def _leader_session_to_dict(row, device_count=0, status=None):
 
 @api_v1.route('/events/<int:event_id>/leader-sessions', methods=['GET'])
 @jwt_required()
-@require_role('events_admin', 'events_readonly')
+@require_permission('events.leaders.view')
 def list_event_leader_sessions(event_id):
     event = EventModel.query.get(event_id)
     if not event:
@@ -796,7 +803,7 @@ def list_event_leader_sessions(event_id):
 
 @api_v1.route('/events/<int:event_id>/leader-sessions/<int:session_id>/revoke', methods=['POST'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.leaders.edit')
 def revoke_event_leader_session(event_id, session_id):
     """End one leader's session; the link and the devices they created stay as they are."""
     row = EventLeaderSessionModel.query.filter_by(id=session_id, eventId=event_id).first()
@@ -953,7 +960,7 @@ def _designation_to_dict(designation, event=None):
 
 @api_v1.route('/events/<int:event_id>/team-leaders', methods=['GET'])
 @jwt_required()
-@require_role('events_admin', 'events_readonly')
+@require_permission('events.leaders.view')
 def list_event_team_leaders(event_id):
     event = EventModel.query.get(event_id)
     if not event:
@@ -967,7 +974,7 @@ TEAM_LEADER_CANDIDATES_MAX = 20
 
 @api_v1.route('/events/<int:event_id>/team-leader-candidates', methods=['GET'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.leaders.edit')
 def list_event_team_leader_candidates(event_id):
     """Users that can be designated as team leader (search on username/callsign, at most 20).
 
@@ -996,7 +1003,7 @@ def list_event_team_leader_candidates(event_id):
 
 @api_v1.route('/events/<int:event_id>/team-leaders', methods=['POST'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.leaders.edit')
 def create_event_team_leader_designation(event_id):
     """Designate an existing portal user as leader of a team for this event."""
     event = EventModel.query.get(event_id)
@@ -1035,7 +1042,7 @@ def create_event_team_leader_designation(event_id):
 
 @api_v1.route('/events/<int:event_id>/team-leaders/<int:designation_id>', methods=['DELETE'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.leaders.edit')
 def delete_event_team_leader_designation(event_id, designation_id):
     """Remove a personal leader: their access to the team page ends at once."""
     designation = EventTeamLeaderModel.query.filter_by(id=designation_id, eventId=event_id).first()
@@ -1662,7 +1669,7 @@ def get_my_team():
     reason = None
     if not link:
         reason = 'missing'
-    elif _privileged_code_denied(link.onboardingCode) or not _link_retrievable(link):
+    elif _code_denied(link.onboardingCode) or not _link_retrievable(link):
         reason = 'notRetrievable'
     else:
         player_link = {'url': _link_url(_derive_link_token(link))}
@@ -2108,7 +2115,7 @@ def _account_to_dict(session, euds=None, leader_names=None):
 
 @api_v1.route('/events/<int:event_id>/accounts', methods=['GET'])
 @jwt_required()
-@require_role('events_admin', 'events_readonly')
+@require_permission('events.accounts.view')
 def list_event_accounts(event_id):
     if not EventModel.query.get(event_id):
         return jsonify({'error': 'Event not found'}), 404
@@ -2194,7 +2201,7 @@ def _perform_account_move(session, target_team, log_extra=''):
 
 @api_v1.route('/events/<int:event_id>/accounts/<int:session_id>/move', methods=['POST'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.accounts.edit')
 def move_event_account(event_id, session_id):
     """Move a device account to another team's OTS group, or park it (teamId null).
 
@@ -2278,7 +2285,7 @@ def _close_device_sessions(sessions, reason='closed by admin'):
 
 @api_v1.route('/events/<int:event_id>/accounts/<int:session_id>/close', methods=['POST'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.accounts.edit')
 def close_event_account(event_id, session_id):
     session, error = _open_device_session(event_id, session_id)
     if error:
@@ -2295,7 +2302,7 @@ def close_event_account(event_id, session_id):
 
 @api_v1.route('/events/links/<int:link_id>/close-sessions', methods=['POST'])
 @jwt_required()
-@require_role('events_admin')
+@require_permission('events.accounts.edit')
 def close_event_link_sessions(link_id):
     """Close the open device accounts created through this link, at most CLOSE_BATCH_SIZE per call.
 

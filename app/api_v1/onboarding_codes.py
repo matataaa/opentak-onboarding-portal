@@ -8,109 +8,49 @@ from flask_jwt_extended import jwt_required, get_jwt
 from app.api_v1 import api_v1
 from app.models import OnboardingCodeModel, UserModel, UserRoleModel, OTSGroupModel, GroupOnboardingCodeAssociation, db
 from app.pagination import search_and_paginate
-from app.rbac import has_privileged_role, is_administrator, privileged_role_ids, role_ids_include_privileged
+from app.rbac import (APPROVER_BEYOND_ACTOR_ERROR, CODE_BEYOND_ACTOR_ERROR, ROLE_BEYOND_ACTOR_ERROR, deny_beyond_actor,
+                      drop_fields_without_permission, has_privileged_role, holder_beyond_actor, ignored_fields_body,
+                      is_administrator, is_privileged_role, require_permission, role_ids_beyond_actor,
+                      role_ids_include_privileged, roles_from_ids)
+from sqlalchemy import case
 from datetime import datetime
 
 
-def require_admin_role():
-    """Check for onboarding_admin or administrator role (write access)"""
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'onboarding_admin']):
-        return jsonify({'error': 'Onboarding admin access required'}), 403
-    return None
-
-
-def require_view_role():
-    """Check for onboarding_admin, onboarding_readonly, or administrator role (read access)"""
-    from app.rbac import has_any_role
-    if not has_any_role(['administrator', 'onboarding_admin', 'onboarding_readonly']):
-        return jsonify({'error': 'Onboarding admin or readonly access required'}), 403
-    return None
-
-
 PRIVILEGED_ROLE_ERROR = 'Only an administrator can attach the administrator role to an onboarding code'
+FIELD_PERMISSIONS = {
+    # What an account gets, and whether anyone looks at it first
+    'onboarding.roles.assign': ('roleIds', 'approverRoleId', 'requireApproval', 'autoApprove'),
+    'onboarding.groups.assign': ('groups', 'groupIds'),
+}
+
+
+def _approver_denied(roles):
+    """Setting or replacing an administrator role as approver is for administrators only (the phase 0 rule). Any other
+    approver role is fine: approving still needs every permission the code hands out (see /approvals)."""
+    if not is_administrator() and any(is_privileged_role(role) for role in roles):
+        return jsonify({'error': APPROVER_BEYOND_ACTOR_ERROR}), 403
+    return None
 
 
 def _is_hidden(code):
-    """A code carrying a privileged role hands out admin accounts: administrators only."""
+    """A code carrying a privileged role hands out admin accounts: only administrators see it (phase 0)."""
     return has_privileged_role(code) and not is_administrator()
 
 
-def _flagged_new_groups(data, existing_ids=()):
-    """Groups in the request that are flagged missing in OTS and not already associated."""
-    ids = [g.get('id') for g in data.get('groups') or [] if isinstance(g, dict)]
-    ids += list(data.get('groupIds') or [])
-    def as_int(value):
-        try:
-            return None if isinstance(value, bool) else int(value)
-        except (TypeError, ValueError):
-            return None
-    return OTSGroupModel.flagged_among([i for i in ids if as_int(i) not in existing_ids])
+def _above_level(code):
+    """Whoever has the code value gets the code's roles: a code handing out more than the user holds is listed
+    read-only, without its value."""
+    return holder_beyond_actor(code)
 
 
-@api_v1.route('/onboarding-codes', methods=['GET'])
-@jwt_required()
-def get_onboarding_codes():
-    """Get onboarding codes (admin only), optionally filtered by search and paginated
-    (all codes when per_page is omitted)"""
-    error = require_view_role()
-    if error:
-        return error
-
-    query = OnboardingCodeModel.query
-    if not is_administrator():
-        query = query.filter(~OnboardingCodeModel.roles.any(UserRoleModel.id.in_(privileged_role_ids())))
-
-    codes, meta = search_and_paginate(
-        query, OnboardingCodeModel.name,
-        [OnboardingCodeModel.name, OnboardingCodeModel.description, OnboardingCodeModel.onboardingCode])
-
-    return jsonify({
-        'codes': [{
-            'id': code.id,
-            'name': code.name,
-            'description': code.description,
-            'onboardingCode': code.onboardingCode,
-            'uses': code.uses,
-            'maxUses': code.maxUses,
-            'autoApprove': code.autoApprove,
-            'requireApproval': code.requireApproval,
-            'approverRole': {
-                'id': code.approverRole.id,
-                'name': code.approverRole.name,
-                'displayName': code.approverRole.display_name
-            } if code.approverRole else None,
-            'onboardContact': {
-                'id': code.onboardContact.id,
-                'username': code.onboardContact.username
-            } if code.onboardContact else None,
-            'validFrom': code.validFrom.isoformat() if code.validFrom else None,
-            'expiryDate': code.expiryDate.isoformat() if code.expiryDate else None,
-            'userExpiryDate': code.userExpiryDate.isoformat() if code.userExpiryDate else None,
-            'roles': [{'id': r.id, 'name': r.name, 'displayName': r.display_name} for r in code.roles],
-            'groups': [{'id': a.group.id, 'name': a.group.name, 'displayName': a.group.display_name, 'direction': a.direction} for a in code.group_associations]
-        } for code in codes],
-        **meta
-    }), 200
-
-
-@api_v1.route('/onboarding-codes/<int:code_id>', methods=['GET'])
-@jwt_required()
-def get_onboarding_code(code_id):
-    """Get onboarding code by ID"""
-    error = require_view_role()
-    if error:
-        return error
-
-    code = OnboardingCodeModel.get_onboarding_code_by_id(code_id)
-    if not code or _is_hidden(code):
-        return jsonify({'error': 'Onboarding code not found'}), 404
-
-    return jsonify({
+def _code_to_dict(code, details=False):
+    above_level = _above_level(code)
+    return {
         'id': code.id,
         'name': code.name,
         'description': code.description,
-        'onboardingCode': code.onboardingCode,
+        'onboardingCode': None if above_level else code.onboardingCode,
+        'aboveLevel': above_level,
         'uses': code.uses,
         'maxUses': code.maxUses,
         'autoApprove': code.autoApprove,
@@ -128,9 +68,65 @@ def get_onboarding_code(code_id):
         'expiryDate': code.expiryDate.isoformat() if code.expiryDate else None,
         'userExpiryDate': code.userExpiryDate.isoformat() if code.userExpiryDate else None,
         'roles': [{'id': r.id, 'name': r.name, 'displayName': r.display_name} for r in code.roles],
-        'groups': [{'id': a.group.id, 'name': a.group.name, 'displayName': a.group.display_name, 'direction': a.direction} for a in code.group_associations],
-        'users': [{'id': u.id, 'username': u.username} for u in code.users]
+        'groups': [{'id': a.group.id, 'name': a.group.name, 'displayName': a.group.display_name, 'direction': a.direction}
+                   for a in code.group_associations],
+        **({'users': [{'id': u.id, 'username': u.username} for u in code.users]} if details else {}),
+    }
+
+
+def _above_level_denied(code):
+    if _above_level(code):
+        return jsonify({'error': CODE_BEYOND_ACTOR_ERROR}), 403
+    return None
+
+
+def _flagged_new_groups(data, existing_ids=()):
+    """Groups in the request that are flagged missing in OTS and not already associated."""
+    ids = [g.get('id') for g in data.get('groups') or [] if isinstance(g, dict)]
+    ids += list(data.get('groupIds') or [])
+    def as_int(value):
+        try:
+            return None if isinstance(value, bool) else int(value)
+        except (TypeError, ValueError):
+            return None
+    return OTSGroupModel.flagged_among([i for i in ids if as_int(i) not in existing_ids])
+
+
+@api_v1.route('/onboarding-codes', methods=['GET'])
+@jwt_required()
+@require_permission('onboarding.view')
+def get_onboarding_codes():
+    """Get onboarding codes (admin only), optionally filtered by search and paginated
+    (all codes when per_page is omitted)"""
+    query = OnboardingCodeModel.query
+    if not is_administrator():
+        # Before the search: searching on the value of a hidden code must not confirm it either
+        privileged_ids = [role.id for role in UserRoleModel.get_all_roles() if is_privileged_role(role)]
+        query = query.filter(~OnboardingCodeModel.roles.any(UserRoleModel.id.in_(privileged_ids)))
+    # Nor on the value of a code above the user's level, which is listed without it
+    above_level = OnboardingCodeModel.roles.any(UserRoleModel.id.in_(role_ids_beyond_actor()))
+    searchable_value = case((above_level, ''), else_=OnboardingCodeModel.onboardingCode)
+
+    codes, meta = search_and_paginate(
+        query, OnboardingCodeModel.name,
+        [OnboardingCodeModel.name, OnboardingCodeModel.description, searchable_value])
+
+    return jsonify({
+        'codes': [_code_to_dict(code) for code in codes],
+        **meta
     }), 200
+
+
+@api_v1.route('/onboarding-codes/<int:code_id>', methods=['GET'])
+@jwt_required()
+@require_permission('onboarding.view')
+def get_onboarding_code(code_id):
+    """Get onboarding code by ID"""
+    code = OnboardingCodeModel.get_onboarding_code_by_id(code_id)
+    if not code or _is_hidden(code):
+        return jsonify({'error': 'Onboarding code not found'}), 404
+
+    return jsonify(_code_to_dict(code, details=True)), 200
 
 
 @api_v1.route('/onboarding-codes/validate/<code>', methods=['GET'])
@@ -162,16 +158,18 @@ def validate_onboarding_code(code):
 
 @api_v1.route('/onboarding-codes', methods=['POST'])
 @jwt_required()
+@require_permission('onboarding.edit')
 def create_onboarding_code():
     """Create a new onboarding code (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     data = request.get_json()
+    ignored = drop_fields_without_permission(data, FIELD_PERMISSIONS)
 
     if not is_administrator() and role_ids_include_privileged(data.get('roleIds')):
         return jsonify({'error': PRIVILEGED_ROLE_ERROR}), 403
+    denied = deny_beyond_actor(ROLE_BEYOND_ACTOR_ERROR, roles_from_ids(data.get('roleIds'))) \
+        or _approver_denied(roles_from_ids([data.get('approverRoleId')]))
+    if denied:
+        return denied
 
     required_fields = ['name', 'onboardingCode']
     for field in required_fields:
@@ -255,7 +253,8 @@ def create_onboarding_code():
                 'id': code.id,
                 'name': code.name,
                 'onboardingCode': code.onboardingCode
-            }
+            },
+            **ignored_fields_body(ignored)
         }), 201
 
     except Exception as e:
@@ -264,20 +263,27 @@ def create_onboarding_code():
 
 @api_v1.route('/onboarding-codes/<int:code_id>', methods=['PUT'])
 @jwt_required()
+@require_permission('onboarding.edit')
 def update_onboarding_code(code_id):
     """Update onboarding code (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     code = OnboardingCodeModel.get_onboarding_code_by_id(code_id)
     if not code or _is_hidden(code):
         return jsonify({'error': 'Onboarding code not found'}), 404
+    denied = _above_level_denied(code)
+    if denied:
+        return denied
 
     data = request.get_json()
+    ignored = drop_fields_without_permission(data, FIELD_PERMISSIONS)
 
     if not is_administrator() and role_ids_include_privileged(data.get('roleIds')):
         return jsonify({'error': PRIVILEGED_ROLE_ERROR}), 403
+    # A full list with the roles it has now passes: those are within reach, or this code would be hidden
+    denied = deny_beyond_actor(ROLE_BEYOND_ACTOR_ERROR, roles_from_ids(data.get('roleIds')))
+    if not denied and 'approverRoleId' in data and data['approverRoleId'] != code.approverRoleId:
+        denied = _approver_denied(roles_from_ids([data['approverRoleId']]) + ([code.approverRole] if code.approverRole else []))
+    if denied:
+        return denied
 
     if 'groups' in data or 'groupIds' in data:
         flagged = _flagged_new_groups(
@@ -358,7 +364,8 @@ def update_onboarding_code(code_id):
         db.session.commit()
 
         return jsonify({
-            'message': 'Onboarding code updated successfully'
+            'message': 'Onboarding code updated successfully',
+            **ignored_fields_body(ignored)
         }), 200
 
     except Exception as e:
@@ -368,15 +375,15 @@ def update_onboarding_code(code_id):
 
 @api_v1.route('/onboarding-codes/<int:code_id>', methods=['DELETE'])
 @jwt_required()
+@require_permission('onboarding.delete')
 def delete_onboarding_code(code_id):
     """Delete onboarding code (admin only)"""
-    error = require_admin_role()
-    if error:
-        return error
-
     code = OnboardingCodeModel.get_onboarding_code_by_id(code_id)
     if not code or _is_hidden(code):
         return jsonify({'error': 'Onboarding code not found'}), 404
+    denied = _above_level_denied(code)
+    if denied:
+        return denied
 
     try:
         OnboardingCodeModel.delete_onboarding_code_by_id(code_id)
