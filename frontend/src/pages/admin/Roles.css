@@ -340,6 +340,13 @@
 }
 
 /* Overview matrix */
+.roles-show-system {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
 .roles-legend {
   display: flex;
   flex-wrap: wrap;

@@ -870,6 +870,7 @@
       "failedSave": "Failed to save role",
       "failedLoad": "Failed to load role",
       "overviewTitle": "Overview of roles and modules",
+      "showSystemRoles": "Show system roles",
       "module": "Module",
       "userCountShort_one": "{{count}} user",
       "userCountShort_other": "{{count}} users"

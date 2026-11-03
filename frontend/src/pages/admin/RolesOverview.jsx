@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -17,8 +17,29 @@ function LevelPill({ level }) {
   );
 }
 
+const SHOW_SYSTEM_KEY = 'rolesOverview.showSystem';
+
+function readShowSystem() {
+  try {
+    return localStorage.getItem(SHOW_SYSTEM_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 function RolesOverview() {
   const { t } = useTranslation();
+  const [showSystem, setShowSystem] = useState(readShowSystem);
+
+  const toggleShowSystem = (event) => {
+    const show = event.target.checked;
+    setShowSystem(show);
+    try {
+      localStorage.setItem(SHOW_SYSTEM_KEY, show ? '1' : '0');
+    } catch {
+      // Not remembered in this browser, the toggle still works
+    }
+  };
 
   const { data: rolesData, isLoading: rolesLoading, error } = useQuery({
     queryKey: ['roles', 'list', ''],
@@ -29,12 +50,14 @@ function RolesOverview() {
     queryFn: async () => (await rolesAPI.getPermissionCatalog()).data,
   });
 
-  // Administrator first, then the custom roles, then the other system roles
+  // Administrator first, then the custom roles, then the other system roles.
+  // System roles are hidden unless switched on; administrator stays as the reference column.
   const roles = useMemo(() => {
     const all = rolesData?.roles || [];
     const rank = (r) => (r.name === 'administrator' ? 0 : r.isCustom ? 1 : 2);
-    return [...all].sort((a, b) => rank(a) - rank(b));
-  }, [rolesData]);
+    const shown = showSystem ? all : all.filter((r) => rank(r) < 2);
+    return [...shown].sort((a, b) => rank(a) - rank(b));
+  }, [rolesData, showSystem]);
   const modules = catalogData?.modules || [];
 
   if (rolesLoading || catalogLoading) {
@@ -54,6 +77,10 @@ function RolesOverview() {
       <div className="admin-header">
         <h1>{t('admin.roles.overviewTitle')}</h1>
       </div>
+      <label className="roles-show-system">
+        <input type="checkbox" role="switch" checked={showSystem} onChange={toggleShowSystem} />
+        {t('admin.roles.showSystemRoles')}
+      </label>
       <div className="roles-legend">
         {LEVELS.map((level) => (
           <span key={level}><LevelPill level={level} /> {t(`admin.roles.levelHelp.${level}`)}</span>

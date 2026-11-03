@@ -870,6 +870,7 @@
       "failedSave": "Opslaan van rol mislukt",
       "failedLoad": "Laden van rol mislukt",
       "overviewTitle": "Overzicht rollen en modules",
+      "showSystemRoles": "Systeemrollen tonen",
       "module": "Module",
       "userCountShort_one": "{{count}} gebruiker",
       "userCountShort_other": "{{count}} gebruikers"

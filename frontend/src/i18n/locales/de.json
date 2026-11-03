@@ -870,6 +870,7 @@
       "failedSave": "Rolle konnte nicht gespeichert werden",
       "failedLoad": "Rolle konnte nicht geladen werden",
       "overviewTitle": "Übersicht Rollen und Module",
+      "showSystemRoles": "Systemrollen anzeigen",
       "module": "Modul",
       "userCountShort_one": "{{count}} Benutzer",
       "userCountShort_other": "{{count}} Benutzer"
