@@ -45,7 +45,7 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 # SEEDS below) must be revisited on purpose.
 UPSTREAM_REV = '4b754g491aa1'
 
-HEAD_REV = 'b2c3d4e5f6a8'
+HEAD_REV = 'f1a2b3c4d5e7'
 # The revision whose downgrade refuses while created_by is NULL.
 CREATOR_NULLABLE_REV = 'a1b2c3d4e5f7'
 
@@ -876,3 +876,38 @@ def test_round_trip(backend, make_db):
     proc = flask_db(up.url, 'check', check=False)
     assert proc.returncode == 0, f'flask db check after round trip:\n{proc.stdout}\n{proc.stderr}'
     assert_constraints(up.url, up.ids)
+
+
+def test_onboardedby_usernames_mapped_to_ids(backend, make_db):
+    """f1a2b3c4d5e7: a username in users.onboardedBy becomes that user's id (NULL when
+    unknown); integer values stay. PostgreSQL never accepted usernames there."""
+    url = make_db(backend)
+    flask_db(url, 'upgrade', 'b2c3d4e5f6a8')
+    engine = sa.create_engine(url)
+    with engine.begin() as c:
+        meta = sa.MetaData()
+        meta.reflect(c)
+        s = Seeder(c, meta)
+        contact = s.ins('users', username='alice', email='alice@example.org')
+        by_id = s.ins('users', username='dave', email='dave@example.org', onboardedBy=contact)
+        legacy = s.ins('users', username='bob', email='bob@example.org')
+        unknown = s.ins('users', username='carla', email='carla@example.org')
+    if backend == 'sqlite':
+        # production SQLite does not enforce FKs (tests/conftest.py turns them on)
+        with engine.connect() as c:
+            c.exec_driver_sql('PRAGMA foreign_keys=OFF')
+            set_ob = sa.text('UPDATE users SET "onboardedBy" = :v WHERE id = :id')
+            c.execute(set_ob, {'v': 'alice', 'id': legacy})
+            c.execute(set_ob, {'v': 'ghost', 'id': unknown})
+            c.commit()
+    engine.dispose()
+    flask_db(url, 'upgrade', 'head')
+    engine = sa.create_engine(url)
+    with engine.connect() as c:
+        got = dict(c.execute(sa.text('SELECT id, "onboardedBy" FROM users')).fetchall())
+    engine.dispose()
+    assert got[by_id] == contact and isinstance(got[by_id], int)
+    assert got[legacy] == (contact if backend == 'sqlite' else None)
+    assert isinstance(got[legacy], (int, type(None)))
+    assert got[unknown] is None
+    assert got[contact] is None

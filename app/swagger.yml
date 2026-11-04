@@ -35,7 +35,7 @@ info:
     `meshtastic_enabled`, `radios_enabled` (both default on) and `events_enabled`
     (default off). While a module is off, every endpoint under its path prefix
     (`/meshtastic*`, `/radios*`, `/events*`) returns 403 for every caller, including
-    administrators, API keys and anonymous requests:
+    administrators and anonymous requests:
     ```
     {"error": "The meshtastic module is disabled", "code": "MODULE_DISABLED"}
     ```
@@ -151,7 +151,7 @@ components:
           format: date-time
           nullable: true
         onboardedBy:
-          type: string
+          type: integer
           nullable: true
 
     Role:
@@ -994,6 +994,7 @@ paths:
                 password:
                   type: string
                   format: password
+                  minLength: 8
                   description: 'Printable ASCII only. Not allowed: `& ^ $ < > : @` or a space at the start or end.'
                 email:
                   type: string
@@ -1040,6 +1041,7 @@ paths:
                 newPassword:
                   type: string
                   format: password
+                  minLength: 8
                   description: 'Printable ASCII only. Not allowed: `& ^ $ < > : @` or a space at the start or end.'
       responses:
         '200':
@@ -2211,6 +2213,7 @@ paths:
                   description: Lowercase letters and numbers only. Input is lowercased and trimmed before validation.
                 password:
                   type: string
+                  minLength: 8
                   description: 'Printable ASCII only. Not allowed: `& ^ $ < > : @` or a space at the start or end.'
                 email:
                   type: string
@@ -2231,11 +2234,33 @@ paths:
         '201':
           description: User created successfully
         '400':
-          description: Missing field or invalid username
+          description: Missing field, invalid username, groups, groupIds or expiryDate (nothing reached OTS), OTS refused the new user (for example because the username already exists there), or the database refused it. If storing it locally fails the new OTS account is deleted again; `otsMayDiffer` is true if that failed.
         '403':
           description: User admin role required, or roleIds has a role with permissions the caller does not hold (a privileged role needs an administrator)
         '409':
           description: Username already exists
+        '502':
+          description: >
+            OTS did not accept a group membership of the new user: the memberships already added and the new
+            OTS account are removed again, and the user is not created (`failedGroups` is set). Or OTS could not
+            be reached or gave an unexpected answer while creating the account: the user is not created locally,
+            but the OTS account may exist and is not deleted automatically, as it may belong to someone else
+            (`otsMayDiffer` is true, no `failedGroups`).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  failedGroups:
+                    type: array
+                    items:
+                      type: string
+                    description: The groups OTS did not accept
+                  otsMayDiffer:
+                    type: boolean
+                    description: True if the OTS account may exist without a portal user; check it in OTS
 
   /users/{id}:
     get:
@@ -2319,12 +2344,13 @@ paths:
                 password:
                   type: string
                   format: password
+                  minLength: 8
                   description: Administrator or user_admin only
       responses:
         '200':
           description: User updated successfully
         '400':
-          description: Invalid value, or OTS refused the role change (for example under LDAP, or no such OTS account); nothing was changed. Also a failure after an OTS change; the local update is rolled back, restoring the role is attempted, and `passwordChanged` tells whether the password was already changed.
+          description: Invalid value, or OTS refused the role change (for example under LDAP, or no such OTS account); nothing was changed. Also a failure after an OTS change (the password reset or storing the update); the local update is rolled back, the groups and role are put back in OTS, `passwordChanged` tells whether the password was already changed, and `otsMayDiffer` is true if putting OTS back failed.
         '403':
           description: Permission denied, privileged role or target without the administrator role, a role or target with permissions the caller does not hold (missingPermissions lists them), or a change the service account does not allow
         '404':
@@ -2332,7 +2358,30 @@ paths:
         '409':
           description: The last administrator cannot lose the administrator role
         '502':
-          description: The role could not be changed in OTS, or the change did not show when read back. The portal was not changed. The error says nothing was changed if that is certain; otherwise OTS and the portal may differ and it says to check the account in OTS.
+          description: >
+            The role could not be changed in OTS, or the change did not show when read back; or OTS did not
+            accept a group membership (then `failedGroups` is set). The portal was not changed, group memberships
+            already changed and the role are put back in OTS, and the password is not changed (it is reset last).
+            The error says nothing was changed if that is certain; otherwise OTS and the portal may differ
+            (`otsMayDiffer`) and it says to check the account in OTS.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  failedGroups:
+                    type: array
+                    items:
+                      type: string
+                    description: The groups OTS did not accept (only for a failed group change)
+                  otsMayDiffer:
+                    type: boolean
+                    description: True if the role change could not be confirmed, or putting the groups or role back in OTS failed; check the account in OTS
+                  passwordChanged:
+                    type: boolean
+                    description: Always false; the password is only reset after the groups were changed
 
     delete:
       tags:

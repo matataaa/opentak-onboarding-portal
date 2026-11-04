@@ -377,8 +377,6 @@ def create_event_team_leader(team_id):
     password_error = new_password_error(password)
     if password_error:
         return jsonify({'error': password_error}), 400
-    if len(password) < 8:
-        return jsonify({'error': 'Password must be at least 8 characters'}), 400
     if not OTS_USERNAME_RE.match(username):
         return jsonify({'error': 'Username must be 3-32 characters, letters and numbers only'}), 400
     if UserModel.get_user_by_username(username):

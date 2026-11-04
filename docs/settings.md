@@ -26,4 +26,4 @@ BRAND_NAME: Sets the name of the portal used on headers and emails.
 LOGO_PATH: Sets a logo path, if you want to add your own upload it to /app/static/img/custom/logo.ext and set the path to "/static/img/custom/logo.ext" we advise PNG formated.
 
 ENABLE_API: Enables API Endpoints (BETA)
-API_KEY: 32 CHAR SECRET for Authentication
+API_KEY: Not used. Nothing reads this setting; API keys are managed in the admin panel (and no endpoint accepts them yet).

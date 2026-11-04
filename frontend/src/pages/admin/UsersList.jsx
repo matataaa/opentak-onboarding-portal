@@ -86,6 +86,23 @@ function UsersList() {
     enabled: canViewGroups,
   });
 
+  // Name the groups OTS did not accept, and say so when OTS and the portal may now differ
+  const mutationError = (err, fallback, notDoneKey) => {
+    const data = err.response?.data;
+    if (data?.otsMayDiffer) {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    }
+    if (data?.failedGroups?.length) {
+      return t('admin.users.groupSyncFailed', { groups: data.failedGroups.join(', ') }) + ' ' +
+        t(data.otsMayDiffer ? 'admin.users.otsMayDiffer' : notDoneKey);
+    }
+    const message = data?.error || fallback;
+    if (!data?.otsMayDiffer) {
+      return message;
+    }
+    return (/[.!?]$/.test(message) ? message : message + '.') + ' ' + t('admin.users.otsMayDiffer');
+  };
+
   // Create mutation
   const createMutation = useMutation({
     mutationFn: (data) => usersAPI.create(data),
@@ -99,7 +116,7 @@ function UsersList() {
       warnIgnoredFields(response, showWarning, t);
     },
     onError: (err) => {
-      setError(err.response?.data?.error || t('admin.users.failedCreate'));
+      setError(mutationError(err, t('admin.users.failedCreate'), 'admin.users.userNotCreated'));
     },
   });
 
@@ -120,7 +137,7 @@ function UsersList() {
       warnIgnoredFields(response, showWarning, t);
     },
     onError: (err) => {
-      setError(err.response?.data?.error || t('admin.users.failedUpdate'));
+      setError(mutationError(err, t('admin.users.failedUpdate'), 'admin.users.nothingChanged'));
     },
   });
 
@@ -222,6 +239,10 @@ function UsersList() {
 
     // Validate password if provided
     if (formData.password) {
+      if (formData.password.length < 8) {
+        setError(t('auth.passwordTooShort'));
+        return;
+      }
       if (!isValidNewPassword(formData.password)) {
         setError(t('auth.passwordNoSpecial'));
         return;

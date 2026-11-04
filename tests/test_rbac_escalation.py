@@ -41,6 +41,8 @@ class FakeOTS:
         self.read_back_error = None  # raised when reading one account back
         self.role_order = None  # roles reload in this order instead of as they were added
         self.ignore_role_changes = False
+        self.group_errors = {}  # (method, group, direction) -> exceptions raised by consecutive such calls
+        self.memberships = set()  # (username, group, direction) held in OTS
 
     def __call__(self, *args):
         return self
@@ -81,11 +83,19 @@ class FakeOTS:
     def delete_user(self, username):
         self.calls.append(('delete_user', username))
 
+    def _group_call(self, method, username, group, direction):
+        self.calls.append((method, username, group, direction))
+        errors = self.group_errors.get((method, group, direction))
+        if errors:
+            raise errors.pop(0)
+
     def add_user_to_group(self, username, group, direction=None):
-        self.calls.append(('add_user_to_group', username, group, direction))
+        self._group_call('add_user_to_group', username, group, direction)
+        self.memberships.add((username, group, direction))
 
     def remove_user_from_group(self, username, group, direction=None):
-        self.calls.append(('remove_user_from_group', username, group, direction))
+        self._group_call('remove_user_from_group', username, group, direction)
+        self.memberships.discard((username, group, direction))
 
     def login(self):
         self.calls.append(('login',))
@@ -745,7 +755,7 @@ def test_role_is_changed_in_ots_before_group_sync_and_password(client, ots):
     r = client.put(f'{API}/users/{target.id}', headers=headers(actor), json={
         'roleIds': [role('administrator').id], 'password': GOOD_PASSWORD, 'groups': [{'id': group.id, 'direction': 'IN'}]})
     assert r.status_code == 200, r.get_json()
-    assert [c[0] for c in ots.calls] == ['set_user_roles', 'reset_user_password', 'add_user_to_group']
+    assert [c[0] for c in ots.calls] == ['set_user_roles', 'add_user_to_group', 'reset_user_password']
 
 
 @pytest.mark.parametrize('old, new', [(['admin'], ['administrator']), (['administrator', 'admin'], ['admin']), (['zznormal'], ['zzother'])])
@@ -804,7 +814,7 @@ def test_lost_ots_response_after_applying_the_role_is_put_back(client, ots, monk
     monkeypatch.setattr(ots, 'set_user_roles', lost_first_response)
     r = client.put(f'{API}/users/{target.id}', headers=headers(actor), json={'roleIds': [role('administrator').id]})
     assert r.status_code == 502
-    assert 'nothing was changed' in r.get_json()['error']
+    assert r.get_json() == {'error': 'Could not change the role in OpenTAK Server; nothing was changed', 'otsMayDiffer': False}
     assert ots.accounts['zztarget'] == ['user']
     assert role_names(target) == []
 
@@ -815,9 +825,8 @@ def test_restore_that_fails_tells_the_admin_to_check_ots(client, ots):
     ots.role_errors = [ConnectionError('connection reset'), ConnectionError('connection reset')]
     r = client.put(f'{API}/users/{target.id}', headers=headers(actor), json={'roleIds': [role('administrator').id]})
     assert r.status_code == 502
-    error = r.get_json()['error']
-    assert 'nothing was changed' not in error
-    assert 'may differ' in error and 'check this account' in error
+    assert r.get_json() == {'error': 'Could not confirm the role change in OpenTAK Server, so the portal was not changed.',
+                            'otsMayDiffer': True}
     assert role_names(target) == []
 
 
@@ -837,7 +846,7 @@ def test_read_back_without_the_account_is_unconfirmed(client, ots, monkeypatch, 
 
     r = client.put(f'{API}/users/{target.id}', headers=headers(actor), json={'roleIds': []})
     assert r.status_code == 502
-    assert 'may differ' in r.get_json()['error']
+    assert r.get_json()['otsMayDiffer'] is True
     assert role_names(target) == ['administrator']
 
 
@@ -1339,7 +1348,7 @@ def test_role_that_cannot_be_read_back_fails_and_is_put_back(client, ots):
     ots.read_back_error = ConnectionError('unreachable')
     r = client.put(f'{API}/users/{target.id}', headers=headers(actor), json={'roleIds': [role('administrator').id]})
     assert r.status_code == 502
-    assert 'may differ' in r.get_json()['error']
+    assert r.get_json()['otsMayDiffer'] is True
     assert role_names(target) == []
     assert ots.role_calls() == [('set_user_roles', 'zztarget', ['administrator']), ('set_user_roles', 'zztarget', ['user'])]
     assert ots.accounts['zztarget'] == ['user']
@@ -1391,7 +1400,7 @@ def test_forced_failure_in_local_group_rewrite_never_reaches_ots(client, ots, mo
     assert role_names(target) == []
 
 
-def test_failing_group_push_is_logged_and_keeps_the_role(client, ots, monkeypatch):
+def test_failing_group_push_fails_the_update_and_restores_the_role(client, ots, monkeypatch):
     actor = add_user('zzadmin', 'administrator')
     target = add_user('zztarget')
     group = add_group()
@@ -1401,9 +1410,12 @@ def test_failing_group_push_is_logged_and_keeps_the_role(client, ots, monkeypatc
     monkeypatch.setattr(ots, 'add_user_to_group', refuse)
     r = client.put(f'{API}/users/{target.id}', headers=headers(actor), json={
         'roleIds': [role('administrator').id], 'groups': [{'id': group.id, 'direction': 'IN'}]})
-    assert r.status_code == 200
-    assert role_names(target) == ['administrator']
-    assert len(ots.role_calls()) == 1
+    assert r.status_code == 502
+    assert r.get_json()['failedGroups'] == ['zz-group']
+    assert r.get_json()['otsMayDiffer'] is False
+    assert role_names(target) == []
+    assert ots.role_calls()[-1] == ('set_user_roles', 'zztarget', ['user'])
+    assert ots.accounts['zztarget'] == ['user']
 
 
 @pytest.mark.parametrize('field', ['groups', 'groupIds'])
@@ -1462,7 +1474,7 @@ def test_commit_failure_after_password_reset_says_the_password_changed(client, o
     assert role_names(target) == []
 
 
-def test_password_reset_failure_does_not_return_ots_text_or_push_groups(client, ots):
+def test_password_reset_failure_does_not_return_ots_text_and_reverts_groups(client, ots):
     actor = add_user('zzadmin', 'administrator')
     target = add_user('zztarget')
     group = add_group()
@@ -1471,7 +1483,8 @@ def test_password_reset_failure_does_not_return_ots_text_or_push_groups(client, 
         'password': GOOD_PASSWORD, 'groups': [{'id': group.id, 'direction': 'IN'}]})
     assert r.status_code == 400
     assert r.get_json() == {'error': 'Failed to reset password', 'passwordChanged': False}
-    assert 'add_user_to_group' not in [c[0] for c in ots.calls]
+    assert ots.calls == [('add_user_to_group', 'zztarget', 'zz-group', 'IN'), ('reset_user_password', 'zztarget'),
+                         ('remove_user_from_group', 'zztarget', 'zz-group', 'IN')]
     assert GroupUserAssociation.query.filter_by(user_id=target.id).count() == 0
 
 

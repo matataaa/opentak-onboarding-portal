@@ -19,7 +19,9 @@ PREFIX = '/api/v1'
 BAD = 'abcd&efgh'
 GOOD = 'abcd!efgh'
 STALE = 'old&stored^password'
+SHORT = 'abc!efg'  # 7 characters, OTS's minimum is 8
 RULE_ERROR = new_password_error(BAD)
+LENGTH_ERROR = 'Password must be at least 8 characters'
 _ids = count(1)
 
 
@@ -108,9 +110,9 @@ def _new_user_body(password=BAD):
             'firstName': 'P', 'lastName': 'W', 'callsign': username}
 
 
-def _assert_rejected(response, ots_calls):
+def _assert_rejected(response, ots_calls, error=RULE_ERROR):
     assert response.status_code == 400
-    assert response.get_json() == {'error': RULE_ERROR}
+    assert response.get_json() == {'error': error}
     assert ots_calls == []
 
 
@@ -145,7 +147,6 @@ def test_helper_rejects(password):
     'abcd efgh',
     'abcd\x7Eefgh',
     'abcd!#%\'"\\=;efgh',
-    'a',
 ])
 def test_helper_accepts(password):
     assert new_password_error(password) is None
@@ -154,7 +155,19 @@ def test_helper_accepts(password):
 def test_helper_accepts_all_other_printable_ascii():
     for code in range(0x21, 0x7F):
         char = chr(code)
-        assert (new_password_error(f'a{char}b') is None) == (char not in '&^$<>:@')
+        assert (new_password_error(f'abc{char}defg') is None) == (char not in '&^$<>:@')
+
+
+def test_helper_rejects_seven_characters():
+    assert new_password_error(SHORT) == LENGTH_ERROR
+
+
+def test_helper_accepts_exactly_eight_characters():
+    assert new_password_error('abc!efgh') is None
+
+
+def test_helper_reports_character_rule_before_length():
+    assert new_password_error('a&b') == RULE_ERROR
 
 
 # --- The nine endpoints -----------------------------------------------------
@@ -352,6 +365,53 @@ def test_create_event_team_leader_non_string(client, db, ots_calls, admin, event
     assert db.session.get(EventTeamModel, team.id).leaderUserId is None
 
 
+# --- Minimum length --------------------------------------------------------
+
+def test_register_short_password(client, db, ots_calls):
+    code = _code(autoApprove=True)
+    body = _new_user_body(SHORT)
+    r = client.post(f'{PREFIX}/auth/register', json={**body, 'onboardingCode': code.onboardingCode})
+    _assert_rejected(r, ots_calls, LENGTH_ERROR)
+    db.session.rollback()
+    assert UserModel.get_user_by_username(body['username']) is None
+
+
+def test_create_user_short_password(client, db, ots_calls, admin):
+    body = _new_user_body(SHORT)
+    r = client.post(f'{PREFIX}/users', headers=_headers(admin, ['administrator']), json=body)
+    _assert_rejected(r, ots_calls, LENGTH_ERROR)
+    db.session.rollback()
+    assert UserModel.get_user_by_username(body['username']) is None
+
+
+def test_update_user_admin_short_password(client, db, ots_calls, admin):
+    user = _user()
+    r = client.put(f'{PREFIX}/users/{user.id}', headers=_headers(admin, ['administrator']),
+                   json=_group_update_body(SHORT))
+    _assert_rejected(r, ots_calls, LENGTH_ERROR)
+    db.session.rollback()
+    assert db.session.get(UserModel, user.id).callsign != 'CHANGED'
+
+
+def test_create_pending_registration_short_password(client, db, ots_calls, admin):
+    code = _code(autoApprove=True)
+    body = _new_user_body(SHORT)
+    r = client.post(f'{PREFIX}/pending-registrations', headers=_headers(admin, ['administrator']),
+                    json={**body, 'onboarding_code_id': code.id})
+    _assert_rejected(r, ots_calls, LENGTH_ERROR)
+    db.session.rollback()
+    assert PendingRegistrationModel.query.filter_by(username=body['username']).first() is None
+
+
+def test_update_pending_registration_short_password(client, db, ots_calls, admin):
+    pending = _pending(_code(), password=GOOD)
+    r = client.put(f'{PREFIX}/pending-registrations/{pending.id}', headers=_headers(admin, ['administrator']),
+                   json={'password': SHORT})
+    _assert_rejected(r, ots_calls, LENGTH_ERROR)
+    db.session.rollback()
+    assert db.session.get(PendingRegistrationModel, pending.id).password == GOOD
+
+
 # --- Deliberately not validated ---------------------------------------------
 
 def _verify_email(client, pending, admin):
@@ -364,20 +424,31 @@ def _admin_approve(client, pending, admin):
 
 
 @pytest.mark.parametrize('flow', [_verify_email, _admin_approve], ids=['verify-email', 'admin-approve'])
-def test_stored_pending_password_still_creates_account(client, db, ots_calls, admin, flow):
-    pending = _pending(_code())
+@pytest.mark.parametrize('stored', [STALE, SHORT], ids=['bad-characters', 'too-short'])
+def test_stored_pending_password_still_creates_account(client, db, ots_calls, admin, flow, stored):
+    pending = _pending(_code(), password=stored)
     username = pending.username
     r = flow(client, pending, admin)
     assert r.status_code == 200
     created = [call for call in ots_calls if call[0] == 'create_user']
     assert len(created) == 1
     assert created[0][4]['username'] == username
-    assert created[0][4]['password'] == STALE
+    assert created[0][4]['password'] == stored
     assert UserModel.get_user_by_username(username) is not None
 
 
-def test_login_password_is_not_validated(client, db, ots_calls):
+@pytest.mark.parametrize('password', [STALE, SHORT], ids=['bad-characters', 'too-short'])
+def test_login_password_is_not_validated(client, db, ots_calls, password):
     user = _user()
-    r = client.post(f'{PREFIX}/auth/login', json={'username': user.username, 'password': STALE})
+    r = client.post(f'{PREFIX}/auth/login', json={'username': user.username, 'password': password})
     assert r.status_code == 200
-    assert ots_calls[0][:3] == ('get_me', user.username, STALE)
+    assert ots_calls[0][:3] == ('get_me', user.username, password)
+
+
+def test_change_password_does_not_length_check_current_password(client, db, ots_calls):
+    user = _user()
+    r = client.post(f'{PREFIX}/auth/change-password', headers=_headers(user),
+                    json={'currentPassword': SHORT, 'newPassword': GOOD})
+    assert r.status_code == 200
+    assert ots_calls[0][:3] == ('login', user.username, SHORT)
+    assert ots_calls[1][0] == 'reset_user_password'

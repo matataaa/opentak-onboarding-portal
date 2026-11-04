@@ -8,7 +8,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.api_v1 import api_v1
 from app.models import UserModel, UserRoleModel, OTSGroupModel, GroupUserAssociation, db
 from app.exceptions import BadRequestError, OTSRoleUnconfirmed
-from app.ots import OTSClient, delete_user_if_present, new_password_error, set_ots_admin
+from app.ots import OTSClient, apply_group_memberships, delete_user_if_present, new_password_error, set_ots_admin
 from app.rbac import (ROLE_BEYOND_ACTOR_ERROR, SERVICE_ACCOUNT_PASSWORD_ERROR, TARGET_BEYOND_ACTOR_ERROR, deny_beyond_actor,
                       drop_fields_without_permission, has_permission, has_privileged_role, ignored_fields_body, is_administrator,
                       is_last_administrator, is_privileged_role, is_service_account, require_permission,
@@ -39,6 +39,26 @@ def _restore_ots_admin(username, privileged):
     except Exception as e:
         current_app.logger.error(f"Could not restore the OTS role of '{username}'; OTS and the portal now differ: {e}")
         return False
+
+
+OTS_MAY_DIFFER_ERROR = 'OpenTAK Server and the portal may differ: check this account in OpenTAK Server.'
+
+
+def _ots_group_pairs(assocs):
+    """The (group name, direction) memberships in OTS for {group_id: direction}; groups missing in OTS are skipped."""
+    pairs = set()
+    for group_id, direction in assocs.items():
+        group = OTSGroupModel.get_by_id(group_id)
+        if group and not group.missing_in_ots:
+            pairs |= {(group.name, d) for d in (('IN', 'OUT') if direction == 'BOTH' else (direction,))}
+    return pairs
+
+
+def _group_failure(failed, ots_may_differ, outcome, **extra):
+    """502 for a group change OTS did not accept; outcome says what happened when everything was put back."""
+    error = 'Could not change these groups in OpenTAK Server: ' + ', '.join(failed)
+    error += '. ' + OTS_MAY_DIFFER_ERROR if ots_may_differ else '; ' + outcome
+    return jsonify({'error': error, 'failedGroups': failed, 'otsMayDiffer': ots_may_differ, **extra}), 502
 
 
 @api_v1.route('/users', methods=['GET'])
@@ -246,85 +266,102 @@ def create_user():
     if existing_user:
         return jsonify({'error': 'Username already exists'}), 409
 
+    if data.get('groups') or data.get('groupIds'):
+        group_error = _group_request_error(data)
+        if group_error:
+            return jsonify({'error': group_error}), 400
+
     flagged = _flagged_new_groups(data)
     if flagged:
         return jsonify({'error': 'Groups not found in OpenTAK Server: ' + ', '.join(g.name for g in flagged)}), 400
 
-    try:
-        # Create user in OTS first
-        ots = OTSClient(OTS_URL, OTS_USERNAME, OTS_PASSWORD)
-
-        # Determine OTS roles - OTS only supports 'user' and 'administrator'
-        ots_roles = ['user']  # Default role
-        if data.get('roleIds'):
-            roles = UserRoleModel.query.filter(UserRoleModel.id.in_(data['roleIds'])).all()
-            if any(is_privileged_role(role) for role in roles):
-                ots_roles = ['administrator']
-
-        # Create user in OTS with username, password, and roles
-        ots.create_user(username, data['password'], ots_roles)
-
-        # Create user in local database
-        expiry_date = None
-        if data.get('expiryDate'):
+    expiry_date = None
+    if data.get('expiryDate'):
+        try:
             expiry_date = datetime.fromisoformat(data['expiryDate'].replace('Z', '+00:00'))
+        except (AttributeError, ValueError):
+            return jsonify({'error': 'Invalid expiryDate'}), 400
 
+    # Resolve everything locally before the first OTS call
+    roles = list(dict.fromkeys(roles_from_ids(data.get('roleIds'))))
+    # OTS only supports 'user' and 'administrator'
+    ots_roles = ['administrator'] if any(is_privileged_role(role) for role in roles) else ['user']
+    if data.get('groups'):
+        requested = {g['id']: g.get('direction', 'BOTH') for g in data['groups']}
+    else:
+        requested = {gid: 'BOTH' for gid in data.get('groupIds') or []}
+    assocs = {group.id: requested[group.id] for group in (OTSGroupModel.get_by_id(gid) for gid in requested) if group}
+    target_groups = _ots_group_pairs(assocs)
+
+    ots = OTSClient(OTS_URL, OTS_USERNAME, OTS_PASSWORD)
+    try:
+        ots.create_user(username, data['password'], ots_roles)
+    except BadRequestError as e:
+        current_app.logger.error(f"OTS refused to create the user '{username}': {e}")
+        return jsonify({'error': 'OpenTAK Server refused the new user (for example because the username already exists there)'}), 400
+    except Exception as e:
+        # Not deleted automatically: the account may already have belonged to someone else
+        current_app.logger.error(f"Could not create the user '{username}' in OTS; it may exist there now: {e}")
+        return jsonify({'error': 'Could not create the user in OpenTAK Server', 'otsMayDiffer': True}), 502
+
+    def delete_ots_account():
+        """Remove the account just created in OTS; False if it may still be there."""
+        try:
+            ots.delete_user(username)
+            return True
+        except Exception as e:
+            current_app.logger.error(f"Could not delete the OTS account '{username}' after a failed create; "
+                                     f"OTS and the portal now differ: {e}")
+            return False
+
+    failed, _ = apply_group_memberships(ots, username, set(), target_groups)
+    if failed:
+        return _group_failure(failed, not delete_ots_account(), 'the user was not created')
+
+    user_id = None
+    try:
         user = UserModel.create_user(
             username=username,
             email=data['email'],
             firstname=data['firstName'],
             lastname=data['lastName'],
             callsign=data['callsign'],
+            roles=roles,
             expirydate=expiry_date
         )
-
-        # Add roles
-        if data.get('roleIds'):
-            for role_id in data['roleIds']:
-                role = UserRoleModel.get_by_id(role_id)
-                if role:
-                    user.roles.append(role)
-
-        # Add OTS groups with direction
-        if data.get('groups'):
-            for g in data['groups']:
-                group = OTSGroupModel.get_by_id(g['id'])
-                if group:
-                    assoc = GroupUserAssociation(group_id=group.id, user_id=user.id, direction=g.get('direction', 'BOTH'))
-                    db.session.add(assoc)
-                    directions = ['IN', 'OUT'] if assoc.direction == 'BOTH' else [assoc.direction]
-                    for d in directions:
-                        try:
-                            ots.add_user_to_group(username, group.name, direction=d)
-                        except Exception as e:
-                            current_app.logger.error(f"Failed to add {username} to OTS group {group.name} {d}: {e}")
-        elif data.get('groupIds'):
-            for gid in data['groupIds']:
-                group = OTSGroupModel.get_by_id(gid)
-                if group:
-                    assoc = GroupUserAssociation(group_id=group.id, user_id=user.id, direction='BOTH')
-                    db.session.add(assoc)
-                    for d in ('IN', 'OUT'):
-                        try:
-                            ots.add_user_to_group(username, group.name, direction=d)
-                        except Exception as e:
-                            current_app.logger.error(f"Failed to add {username} to OTS group {group.name} {d}: {e}")
-
+        if isinstance(user, dict):
+            raise Exception(user.get('error'))
+        user_id = user.id
+        for group_id, direction in assocs.items():
+            db.session.add(GroupUserAssociation(group_id=group_id, user_id=user_id, direction=direction))
         db.session.commit()
-
-        return jsonify({
-            'message': 'User created successfully',
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'callsign': user.callsign
-            },
-            **ignored_fields_body(ignored)
-        }), 201
-
     except Exception as e:
-        return jsonify({'error': f'Failed to create user: {str(e)}'}), 400
+        db.session.rollback()
+        current_app.logger.error(f"Failed to store the new user '{username}', removing it again: {e}")
+        ots_may_differ = not delete_ots_account()
+        if user_id is not None:
+            try:
+                db.session.delete(db.session.get(UserModel, user_id))
+                db.session.commit()
+            except Exception as delete_error:
+                db.session.rollback()
+                ots_may_differ = True
+                current_app.logger.error(f"Could not remove the local user '{username}' after a failed create: {delete_error}")
+        body = {'error': 'Failed to create user'}
+        if ots_may_differ:
+            body['otsMayDiffer'] = True
+        return jsonify(body), 400
+
+    return jsonify({
+        'message': 'User created successfully',
+        'user': {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'callsign': user.callsign
+        },
+        **ignored_fields_body(ignored)
+    }), 201
 
 
 @api_v1.route('/users/<int:user_id>', methods=['PUT'])
@@ -347,10 +384,11 @@ def update_user(user_id):
     Fields the user has no permission for have no effect and are named in ignoredFields.
 
     Everything is validated before the first OTS side effect. Local changes are flushed,
-    then OTS is changed (administrator role first), then they are committed. If a step
-    fails after the OTS role may have changed, the local changes are rolled back and the role
-    is restored. The error only says nothing was changed if OTS definitely refused or did
-    not change, or the restore was confirmed; otherwise it says to check the account in OTS.
+    then OTS is changed (administrator role, groups, password last as it cannot be undone),
+    then they are committed. If a step fails after OTS may have changed, the local changes
+    are rolled back and the groups and role are put back in OTS. The error only says nothing
+    was changed if OTS definitely refused or did not change, or the restore was confirmed;
+    otherwise it says to check the account in OTS (otsMayDiffer).
     """
     actor_is_administrator = is_administrator()
     can_edit_account = has_permission('users.accounts.edit')
@@ -424,7 +462,9 @@ def update_user(user_id):
         if any(role.name == 'administrator' for role in removed) and is_last_administrator(user):
             return jsonify({'error': 'The last administrator cannot lose the administrator role'}), 409
         now_privileged = any(is_privileged_role(role) for role in new_roles)
-    # Without a password the user has no OTS account yet; set-password creates it with the right role
+    # Without a password the user has no OTS account yet; set-password creates it with the right role.
+    # Neither the role nor the groups are pushed to OTS for such a user, and set-password does not push
+    # the groups either (known gap, follow-up).
     ots_role_changes = now_privileged != was_privileged and user.has_password is not False
 
     # Before anything is changed: the group sync below already pushes to OTS
@@ -462,11 +502,15 @@ def update_user(user_id):
 
     # A local change that cannot be stored never reaches OTS
     username = user.username
+    # Without a password the user has no OTS account yet; its groups are only stored locally
+    push_groups = group_change and user.has_password is not False
     try:
         if group_change:
             new_groups_list = data.get('groups', [{'id': gid, 'direction': 'BOTH'} for gid in data.get('groupIds', [])])
             old_assocs = {a.group_id: a.direction for a in user.group_associations}
             new_assocs = {g['id']: g.get('direction', 'BOTH') for g in new_groups_list}
+            if push_groups:
+                source_groups, target_groups = _ots_group_pairs(old_assocs), _ots_group_pairs(new_assocs)
 
             GroupUserAssociation.query.filter_by(user_id=user.id).delete()
             for g in new_groups_list:
@@ -494,79 +538,58 @@ def update_user(user_id):
             db.session.rollback()
             current_app.logger.error(f"Could not confirm the OTS role of '{username}': {e}")
             if _restore_ots_admin(username, was_privileged):
-                return jsonify({'error': 'Could not change the role in OpenTAK Server; nothing was changed'}), 502
-            return jsonify({'error': 'Could not confirm the role change in OpenTAK Server, so the portal was not changed. '
-                                     'OpenTAK Server and the portal may differ: check this account in OpenTAK Server.'}), 502
+                return jsonify({'error': 'Could not change the role in OpenTAK Server; nothing was changed', 'otsMayDiffer': False}), 502
+            return jsonify({'error': 'Could not confirm the role change in OpenTAK Server, so the portal was not changed.',
+                            'otsMayDiffer': True}), 502
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Failed to change the OTS role of '{username}': {e}")
-            return jsonify({'error': 'Could not change the role in OpenTAK Server; nothing was changed'}), 502
+            return jsonify({'error': 'Could not change the role in OpenTAK Server; nothing was changed', 'otsMayDiffer': False}), 502
 
-    # From here on OTS may have changed: any failure rolls back and restores the role
+    # From here on OTS may have changed: any failure rolls back and puts OTS back
+    ots = OTSClient(OTS_URL, OTS_USERNAME, OTS_PASSWORD)
+
+    def revert_ots():
+        """Undo the group push and the role change in OTS; False if OTS and the portal may differ."""
+        groups_ok = not push_groups or not apply_group_memberships(ots, username, target_groups, source_groups)[0]
+        role_ok = _restore_ots_admin(username, was_privileged) if ots_role_changes else True
+        return groups_ok and role_ok
+
+    if push_groups:
+        failed, unreverted = apply_group_memberships(ots, username, source_groups, target_groups)
+        if failed:
+            db.session.rollback()
+            role_ok = _restore_ots_admin(username, was_privileged) if ots_role_changes else True
+            return _group_failure(failed, bool(unreverted) or not role_ok, 'nothing was changed', passwordChanged=False)
+
+    # Last, as it cannot be undone
     new_password = data.get('password') if can_reset_password else None
-    password_changed = False
-    try:
-        # Handle password reset (admin only)
-        if new_password:
-            ots = OTSClient(OTS_URL, OTS_USERNAME, OTS_PASSWORD)
+    if new_password:
+        try:
             ots.reset_user_password(username, new_password)
-            password_changed = True
-            current_app.logger.info(f"Password reset for user '{username}' by admin")
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Failed to reset the password of '{username}': {e}")
+            body = {'error': 'Failed to reset password', 'passwordChanged': False}
+            if not revert_ots():
+                body['otsMayDiffer'] = True
+            return jsonify(body), 400
+        current_app.logger.info(f"Password reset for user '{username}' by admin")
+    password_changed = bool(new_password)
 
-        if group_change:
-            added = set(new_assocs.keys()) - set(old_assocs.keys())
-            removed = set(old_assocs.keys()) - set(new_assocs.keys())
-            changed = {gid for gid in set(new_assocs.keys()) & set(old_assocs.keys()) if new_assocs[gid] != old_assocs[gid]}
-
-            try:
-                ots = OTSClient(OTS_URL, OTS_USERNAME, OTS_PASSWORD)
-                for gid in added | changed:
-                    group = OTSGroupModel.get_by_id(gid)
-                    if group and not group.missing_in_ots:
-                        new_dir = new_assocs[gid]
-                        directions = ['IN', 'OUT'] if new_dir == 'BOTH' else [new_dir]
-                        old_dir = old_assocs.get(gid)
-                        if old_dir:
-                            old_dirs = ['IN', 'OUT'] if old_dir == 'BOTH' else [old_dir]
-                            for d in old_dirs:
-                                if d not in directions:
-                                    try:
-                                        ots.remove_user_from_group(user.username, group.name, direction=d)
-                                    except Exception as e:
-                                        current_app.logger.error(f"Failed to remove {user.username} from OTS group {group.name} {d}: {e}")
-                        for d in directions:
-                            try:
-                                ots.add_user_to_group(user.username, group.name, direction=d)
-                            except Exception as e:
-                                current_app.logger.error(f"Failed to add {user.username} to OTS group {group.name} {d}: {e}")
-                for gid in removed:
-                    group = OTSGroupModel.get_by_id(gid)
-                    if group and not group.missing_in_ots:
-                        old_dir = old_assocs[gid]
-                        directions = ['IN', 'OUT'] if old_dir == 'BOTH' else [old_dir]
-                        for d in directions:
-                            try:
-                                ots.remove_user_from_group(user.username, group.name, direction=d)
-                            except Exception as e:
-                                current_app.logger.error(f"Failed to remove {user.username} from OTS group {group.name} {d}: {e}")
-            except Exception as e:
-                current_app.logger.error(f"Failed to sync OTS groups for {user.username}: {e}")
-
-        # Commit directly to ensure relationship changes are saved
+    try:
         db.session.commit()
-
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Failed to update user '{username}': {e}")
-        if ots_role_changes:
-            _restore_ots_admin(username, was_privileged)
         if password_changed:
             error = 'Failed to update user, but the password was already changed in OpenTAK Server'
-        elif new_password:
-            error = 'Failed to reset password'
         else:
             error = 'Failed to update user'
-        return jsonify({'error': error, 'passwordChanged': password_changed}), 400
+        body = {'error': error, 'passwordChanged': password_changed}
+        if not revert_ots():
+            body['otsMayDiffer'] = True
+        return jsonify(body), 400
 
     message = 'User updated successfully'
     if password_changed:

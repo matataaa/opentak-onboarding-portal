@@ -91,6 +91,11 @@ function Register() {
       return;
     }
 
+    if (formData.password.length < 8) {
+      setError(t('auth.passwordTooShort'));
+      return;
+    }
+
     // Check for disallowed characters in password
     if (!isValidNewPassword(formData.password)) {
       setError(t('auth.passwordNoSpecial'));
