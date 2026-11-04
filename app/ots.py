@@ -74,11 +74,19 @@ class OTSClient:
    #     if not self.csrf_token:
    #         self.get_csrf_token()
 
-        if not self.auth_token:
+        had_token = bool(self.auth_token)
+        if not had_token:
             self.login()
 
         # execute_request attaches the auth token as a header.
         response = self.execute_request(method, endpoint, body, params, response_type)
+
+        # OTS rejects a token that is no longer valid (its SECRET_KEY changed, or the
+        # service account's password was reset): log in again once and retry.
+        if had_token and isinstance(response, dict) and response.get('status_code') in (401, 403):
+            self.auth_token = None
+            self.login()
+            response = self.execute_request(method, endpoint, body, params, response_type)
 
         if response.get('status_code') == 400: 
             raise BadRequestError(response)
