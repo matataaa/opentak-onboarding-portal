@@ -194,7 +194,7 @@ def approve_pending(pending_id):
             lastname=pending.lastName,
             callsign=pending.callsign,
             expirydate=expiry_date,
-            onboardedby=onboarding_code.onboardContact.username if onboarding_code.onboardContact else None
+            onboardedby=onboarding_code.onboardContactId
         )
 
         if isinstance(new_user, dict) and 'error' in new_user:

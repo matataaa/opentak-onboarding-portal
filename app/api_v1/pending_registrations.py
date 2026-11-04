@@ -214,7 +214,7 @@ def create_pending_registration():
                 lastname=data['lastName'],
                 callsign=data['callsign'],
                 expirydate=expiry_date,
-                onboardedby=onboarding_code.onboardContact.username if onboarding_code.onboardContact else None
+                onboardedby=onboarding_code.onboardContactId
             )
 
             if isinstance(user, dict) and 'error' in user:
@@ -682,7 +682,7 @@ def approve_pending_registration(pending_id):
             lastname=pending.lastName,
             callsign=pending.callsign,
             expirydate=expiry_date,
-            onboardedby=onboarding_code.onboardContact.username if onboarding_code.onboardContact else None
+            onboardedby=onboarding_code.onboardContactId
         )
 
         if isinstance(user, dict) and 'error' in user:

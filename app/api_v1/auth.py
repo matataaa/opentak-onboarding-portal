@@ -682,7 +682,7 @@ def register():
                 lastname=data['lastName'],
                 callsign=data['callsign'],
                 expirydate=expiry_date,
-                onboardedby=onboarding_code.onboardContact.username if onboarding_code.onboardContact else None
+                onboardedby=onboarding_code.onboardContactId
             )
 
             if isinstance(user, dict) and 'error' in user:
@@ -1098,7 +1098,7 @@ def verify_email():
             lastname=pending.lastName,
             callsign=pending.callsign,
             expirydate=expiry_date,
-            onboardedby=onboarding_code.onboardContact.username if onboarding_code.onboardContact else None
+            onboardedby=onboarding_code.onboardContactId
         )
 
         # Check if user creation failed
@@ -1699,7 +1699,7 @@ def approve_registration(token):
             lastname=pending.lastName,
             callsign=pending.callsign,
             expirydate=expiry_date,
-            onboardedby=onboarding_code.onboardContact.username if onboarding_code.onboardContact else None
+            onboardedby=onboarding_code.onboardContactId
         )
 
         if isinstance(new_user, dict) and 'error' in new_user:

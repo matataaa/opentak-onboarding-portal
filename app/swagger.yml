@@ -151,7 +151,7 @@ components:
           format: date-time
           nullable: true
         onboardedBy:
-          type: string
+          type: integer
           nullable: true
 
     Role:
