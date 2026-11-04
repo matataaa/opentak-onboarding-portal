@@ -210,8 +210,7 @@ function ApiKeysList() {
       </div>
 
       <div className="api-keys-info">
-        <p>{t('admin.apiKeys.introText')}</p>
-        <p>{t('admin.apiKeys.headerUsage')}</p>
+        <p>{t('admin.apiKeys.notInUseNotice')}</p>
       </div>
 
       <div className="api-keys-list">

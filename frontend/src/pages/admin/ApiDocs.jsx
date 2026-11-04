@@ -43,7 +43,7 @@ function ApiDocs() {
           method: 'GET',
           path: '/api/v1/auth/me',
           description: 'Get current authenticated user information',
-          auth: 'Bearer or API Key',
+          auth: 'Bearer',
           response: {
             id: 'number',
             username: 'string',
@@ -61,7 +61,7 @@ function ApiDocs() {
           method: 'GET',
           path: '/api/v1/users',
           description: 'List all users with pagination',
-          auth: 'Bearer or API Key (users:read)',
+          auth: 'Bearer',
           params: {
             page: 'number (default: 1)',
             per_page: 'number (default: 50)',
@@ -78,7 +78,7 @@ function ApiDocs() {
           method: 'GET',
           path: '/api/v1/users/:id',
           description: 'Get a specific user by ID',
-          auth: 'Bearer or API Key (users:read)',
+          auth: 'Bearer',
           response: {
             id: 'number',
             username: 'string',
@@ -94,7 +94,7 @@ function ApiDocs() {
           method: 'POST',
           path: '/api/v1/users',
           description: 'Create a new user',
-          auth: 'Bearer or API Key (users:write)',
+          auth: 'Bearer',
           body: {
             username: 'string (required)',
             email: 'string',
@@ -108,7 +108,7 @@ function ApiDocs() {
           method: 'PUT',
           path: '/api/v1/users/:id',
           description: 'Update an existing user',
-          auth: 'Bearer or API Key (users:write)',
+          auth: 'Bearer',
           body: {
             email: 'string',
             firstName: 'string',
@@ -122,7 +122,7 @@ function ApiDocs() {
           method: 'DELETE',
           path: '/api/v1/users/:id',
           description: 'Delete a user',
-          auth: 'Bearer or API Key (users:write)',
+          auth: 'Bearer',
         },
       ],
     },
@@ -134,7 +134,7 @@ function ApiDocs() {
           method: 'GET',
           path: '/api/v1/roles',
           description: 'List all roles',
-          auth: 'Bearer or API Key (roles:read)',
+          auth: 'Bearer',
           response: {
             roles: 'array',
           },
@@ -143,13 +143,13 @@ function ApiDocs() {
           method: 'GET',
           path: '/api/v1/roles/:id',
           description: 'Get a specific role with members',
-          auth: 'Bearer or API Key (roles:read)',
+          auth: 'Bearer',
         },
         {
           method: 'POST',
           path: '/api/v1/roles',
           description: 'Create a new role',
-          auth: 'Bearer or API Key (roles:write)',
+          auth: 'Bearer',
           body: {
             name: 'string (required)',
             display_name: 'string',
@@ -160,13 +160,13 @@ function ApiDocs() {
           method: 'PUT',
           path: '/api/v1/roles/:id',
           description: 'Update an existing role',
-          auth: 'Bearer or API Key (roles:write)',
+          auth: 'Bearer',
         },
         {
           method: 'DELETE',
           path: '/api/v1/roles/:id',
           description: 'Delete a role (protected roles cannot be deleted)',
-          auth: 'Bearer or API Key (roles:write)',
+          auth: 'Bearer',
         },
       ],
     },
@@ -178,19 +178,19 @@ function ApiDocs() {
           method: 'GET',
           path: '/api/v1/tak-profiles',
           description: 'List TAK profiles accessible to the user',
-          auth: 'Bearer or API Key (tak_profiles:read)',
+          auth: 'Bearer',
         },
         {
           method: 'GET',
           path: '/api/v1/tak-profiles/:id',
           description: 'Get a specific TAK profile',
-          auth: 'Bearer or API Key (tak_profiles:read)',
+          auth: 'Bearer',
         },
         {
           method: 'GET',
           path: '/api/v1/tak-profiles/:id/download',
           description: 'Download a TAK profile ZIP file',
-          auth: 'Bearer (via query param) or API Key (tak_profiles:download)',
+          auth: 'Bearer (via query param)',
           params: {
             token: 'string (JWT token for browser downloads)',
           },
@@ -199,7 +199,7 @@ function ApiDocs() {
           method: 'POST',
           path: '/api/v1/tak-profiles',
           description: 'Upload a new TAK profile (multipart/form-data)',
-          auth: 'Bearer or API Key (tak_profiles:write)',
+          auth: 'Bearer',
           body: {
             name: 'string (required)',
             description: 'string',
@@ -212,13 +212,13 @@ function ApiDocs() {
           method: 'PUT',
           path: '/api/v1/tak-profiles/:id',
           description: 'Update a TAK profile',
-          auth: 'Bearer or API Key (tak_profiles:write)',
+          auth: 'Bearer',
         },
         {
           method: 'DELETE',
           path: '/api/v1/tak-profiles/:id',
           description: 'Delete a TAK profile',
-          auth: 'Bearer or API Key (tak_profiles:write)',
+          auth: 'Bearer',
         },
       ],
     },
@@ -230,13 +230,13 @@ function ApiDocs() {
           method: 'GET',
           path: '/api/v1/onboarding-codes',
           description: 'List all onboarding codes',
-          auth: 'Bearer or API Key (onboarding_codes:read)',
+          auth: 'Bearer',
         },
         {
           method: 'GET',
           path: '/api/v1/onboarding-codes/:id',
           description: 'Get a specific onboarding code',
-          auth: 'Bearer or API Key (onboarding_codes:read)',
+          auth: 'Bearer',
         },
         {
           method: 'GET',
@@ -248,7 +248,7 @@ function ApiDocs() {
           method: 'POST',
           path: '/api/v1/onboarding-codes',
           description: 'Create a new onboarding code',
-          auth: 'Bearer or API Key (onboarding_codes:write)',
+          auth: 'Bearer',
           body: {
             name: 'string',
             description: 'string',
@@ -262,7 +262,7 @@ function ApiDocs() {
           method: 'DELETE',
           path: '/api/v1/onboarding-codes/:id',
           description: 'Delete an onboarding code',
-          auth: 'Bearer or API Key (onboarding_codes:write)',
+          auth: 'Bearer',
         },
       ],
     },
@@ -274,19 +274,19 @@ function ApiDocs() {
           method: 'GET',
           path: '/api/v1/meshtastic',
           description: 'List Meshtastic configurations',
-          auth: 'Bearer or API Key (meshtastic:read)',
+          auth: 'Bearer',
         },
         {
           method: 'GET',
           path: '/api/v1/meshtastic/:id',
           description: 'Get a specific Meshtastic configuration',
-          auth: 'Bearer or API Key (meshtastic:read)',
+          auth: 'Bearer',
         },
         {
           method: 'POST',
           path: '/api/v1/meshtastic',
           description: 'Create a new Meshtastic configuration',
-          auth: 'Bearer or API Key (meshtastic:write)',
+          auth: 'Bearer',
           body: {
             name: 'string (required)',
             description: 'string',
@@ -300,13 +300,13 @@ function ApiDocs() {
           method: 'PUT',
           path: '/api/v1/meshtastic/:id',
           description: 'Update a Meshtastic configuration',
-          auth: 'Bearer or API Key (meshtastic:write)',
+          auth: 'Bearer',
         },
         {
           method: 'DELETE',
           path: '/api/v1/meshtastic/:id',
           description: 'Delete a Meshtastic configuration',
-          auth: 'Bearer or API Key (meshtastic:write)',
+          auth: 'Bearer',
         },
       ],
     },
@@ -318,19 +318,19 @@ function ApiDocs() {
           method: 'GET',
           path: '/api/v1/radios',
           description: 'List all radios',
-          auth: 'Bearer or API Key (radios:read)',
+          auth: 'Bearer',
         },
         {
           method: 'GET',
           path: '/api/v1/radios/:id',
           description: 'Get a specific radio',
-          auth: 'Bearer or API Key (radios:read)',
+          auth: 'Bearer',
         },
         {
           method: 'POST',
           path: '/api/v1/radios',
           description: 'Create a new radio entry',
-          auth: 'Bearer or API Key (radios:write)',
+          auth: 'Bearer',
           body: {
             name: 'string (required)',
             mac: 'string (required, unique)',
@@ -345,13 +345,13 @@ function ApiDocs() {
           method: 'PUT',
           path: '/api/v1/radios/:id',
           description: 'Update a radio entry',
-          auth: 'Bearer or API Key (radios:write)',
+          auth: 'Bearer',
         },
         {
           method: 'DELETE',
           path: '/api/v1/radios/:id',
           description: 'Delete a radio entry',
-          auth: 'Bearer or API Key (radios:write)',
+          auth: 'Bearer',
         },
       ],
     },
@@ -363,7 +363,7 @@ function ApiDocs() {
           method: 'GET',
           path: '/api/v1/admin/announcements',
           description: 'List all announcements (admin)',
-          auth: 'Bearer or API Key (announcements:read)',
+          auth: 'Bearer',
         },
         {
           method: 'GET',
@@ -375,7 +375,7 @@ function ApiDocs() {
           method: 'POST',
           path: '/api/v1/admin/announcements',
           description: 'Create a new announcement',
-          auth: 'Bearer or API Key (announcements:write)',
+          auth: 'Bearer',
           body: {
             title: 'string (required)',
             content: 'string (required, HTML/Markdown)',
@@ -390,13 +390,13 @@ function ApiDocs() {
           method: 'POST',
           path: '/api/v1/admin/announcements/:id/send',
           description: 'Send a scheduled announcement immediately',
-          auth: 'Bearer or API Key (announcements:write)',
+          auth: 'Bearer',
         },
         {
           method: 'DELETE',
           path: '/api/v1/admin/announcements/:id',
           description: 'Delete an announcement',
-          auth: 'Bearer or API Key (announcements:write)',
+          auth: 'Bearer',
         },
       ],
     },
@@ -414,13 +414,13 @@ function ApiDocs() {
           method: 'GET',
           path: '/api/v1/admin/settings',
           description: 'Get all settings (admin)',
-          auth: 'Bearer or API Key (settings:read)',
+          auth: 'Bearer',
         },
         {
           method: 'PUT',
           path: '/api/v1/admin/settings/:id',
           description: 'Update a setting',
-          auth: 'Bearer or API Key (settings:write)',
+          auth: 'Bearer',
           body: {
             value: 'string (required)',
           },
@@ -489,9 +489,6 @@ function ApiDocs() {
           <div className="auth-method">
             <h4>{t('admin.apiDocs.apiKey')}</h4>
             <p>{t('admin.apiDocs.apiKeyDesc')}</p>
-            <pre>
-{`X-API-Key: otak_your_api_key_here`}
-            </pre>
           </div>
         </div>
 
@@ -511,11 +508,6 @@ function ApiDocs() {
   "code": "ERROR_CODE"
 }`}
         </pre>
-
-        <h3>{t('admin.apiDocs.rateLimiting')}</h3>
-        <p>
-          {t('admin.apiDocs.rateLimitDesc')}
-        </p>
       </div>
 
       <div className="api-docs-sections">

@@ -35,7 +35,7 @@ info:
     `meshtastic_enabled`, `radios_enabled` (both default on) and `events_enabled`
     (default off). While a module is off, every endpoint under its path prefix
     (`/meshtastic*`, `/radios*`, `/events*`) returns 403 for every caller, including
-    administrators, API keys and anonymous requests:
+    administrators and anonymous requests:
     ```
     {"error": "The meshtastic module is disabled", "code": "MODULE_DISABLED"}
     ```
