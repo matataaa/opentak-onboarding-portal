@@ -222,6 +222,10 @@ function UsersList() {
 
     // Validate password if provided
     if (formData.password) {
+      if (formData.password.length < 8) {
+        setError(t('auth.passwordTooShort'));
+        return;
+      }
       if (!isValidNewPassword(formData.password)) {
         setError(t('auth.passwordNoSpecial'));
         return;

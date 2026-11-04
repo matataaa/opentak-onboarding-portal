@@ -994,6 +994,7 @@ paths:
                 password:
                   type: string
                   format: password
+                  minLength: 8
                   description: 'Printable ASCII only. Not allowed: `& ^ $ < > : @` or a space at the start or end.'
                 email:
                   type: string
@@ -1040,6 +1041,7 @@ paths:
                 newPassword:
                   type: string
                   format: password
+                  minLength: 8
                   description: 'Printable ASCII only. Not allowed: `& ^ $ < > : @` or a space at the start or end.'
       responses:
         '200':
@@ -2211,6 +2213,7 @@ paths:
                   description: Lowercase letters and numbers only. Input is lowercased and trimmed before validation.
                 password:
                   type: string
+                  minLength: 8
                   description: 'Printable ASCII only. Not allowed: `& ^ $ < > : @` or a space at the start or end.'
                 email:
                   type: string

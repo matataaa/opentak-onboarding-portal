@@ -542,6 +542,9 @@ def new_password_error(password):
             or password.startswith(' ') or password.endswith(' ')):
         return ('Password can only contain letters without accents, digits and symbols such as ! # % + - _. '
                 'Not allowed: & ^ $ < > : @ or a space at the start or end.')
+    # OTS's SECURITY_PASSWORD_LENGTH_MIN, which its own /api/user/add does not enforce
+    if len(password) < 8:
+        return 'Password must be at least 8 characters'
     return None
 
 

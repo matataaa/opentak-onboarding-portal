@@ -267,6 +267,10 @@ function PendingRegistrationsList() {
 
     // Validate password if provided
     if (formData.password) {
+      if (formData.password.length < 8) {
+        setFormError(t('auth.passwordTooShort'));
+        return;
+      }
       if (!isValidNewPassword(formData.password)) {
         setFormError(t('auth.passwordNoSpecial'));
         return;

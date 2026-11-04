@@ -1252,9 +1252,6 @@ def change_password():
         if password_error:
             return jsonify({'error': password_error}), 400
 
-        if len(new_password) < 8:
-            return jsonify({'error': 'Password must be at least 8 characters'}), 400
-
         current_user_id = get_jwt_identity()
         # Convert to int since JWT identity is stored as string
         user = UserModel.get_user_by_id(int(current_user_id))
@@ -1320,9 +1317,6 @@ def set_password():
         password_error = new_password_error(new_password)
         if password_error:
             return jsonify({'error': password_error}), 400
-
-        if len(new_password) < 8:
-            return jsonify({'error': 'Password must be at least 8 characters'}), 400
 
         current_user_id = get_jwt_identity()
         user = UserModel.get_user_by_id(int(current_user_id))
@@ -1483,9 +1477,6 @@ def reset_password():
         password_error = new_password_error(new_password)
         if password_error:
             return jsonify({'error': password_error}), 400
-
-        if len(new_password) < 8:
-            return jsonify({'error': 'Password must be at least 8 characters long'}), 400
 
         # Find and validate token
         reset_token = OneTimeTokenModel.query.filter_by(

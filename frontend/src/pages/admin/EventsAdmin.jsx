@@ -144,6 +144,10 @@ export default function EventsAdmin() {
 
   const setLeader = (teamId) => {
     const f = leaderForm[teamId] || {};
+    if (f.password && f.password.length < 8) {
+      setError(t('auth.passwordTooShort'));
+      return;
+    }
     if (f.password && !isValidNewPassword(f.password)) {
       setError(t('auth.passwordNoSpecial'));
       return;
