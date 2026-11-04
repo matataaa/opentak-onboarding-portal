@@ -765,6 +765,10 @@
       "userUpdated": "Benutzer erfolgreich aktualisiert",
       "failedCreate": "Benutzer konnte nicht erstellt werden",
       "failedUpdate": "Benutzer konnte nicht aktualisiert werden",
+      "groupSyncFailed": "Diese Gruppen konnten in OpenTAK Server nicht geändert werden: {{groups}}.",
+      "nothingChanged": "Es wurde nichts geändert.",
+      "userNotCreated": "Der Benutzer wurde nicht erstellt.",
+      "otsMayDiffer": "OpenTAK Server und das Portal können abweichen: Prüfen Sie dieses Konto in OpenTAK Server.",
       "failedDelete": "Benutzer konnte nicht gelöscht werden",
       "pageInfo": "Seite {{page}} von {{totalPages}} ({{total}} gesamt)"
     },

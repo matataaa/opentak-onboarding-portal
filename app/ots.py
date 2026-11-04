@@ -1,7 +1,10 @@
 from app.settings import OTS_USERNAME, OTS_PASSWORD, OTS_URL, OTS_VERIFY_SSL
+import logging
 import re
 import requests
 from .exceptions import AuthenticationError, AuthorizationError, BadRequestError, CSRFError, OTSRoleUnconfirmed
+
+logger = logging.getLogger('app.ots')
 
 class OTSClient:
 
@@ -636,6 +639,67 @@ def set_ots_admin(client, username, privileged):
         if confirmed:
             return
     raise Exception(f"OTS did not change the administrator role of '{real_username}'")
+
+
+def _is_not_found(e):
+    return bool(e.args and isinstance(e.args[0], dict) and e.args[0].get('status_code') == 404)
+
+
+def apply_group_memberships(client, username, source, target):
+    """Move an OTS account from the source to the target memberships, all or nothing.
+
+    source and target are sets of (group_name, direction) pairs. Adds first, then removes.
+    If a call fails, every step that may have taken effect (including the one that raised:
+    OTS can change state and still return an error) is reverted: removed memberships are
+    re-added first, added ones are only removed once all re-adds worked, so a failed revert
+    leaves the account in too many groups rather than in none. A remove that answers 404
+    (the group no longer exists in OTS) counts as done, also when reverting an add.
+    Returns (failed, unreverted): the group names of the call that failed and of the
+    memberships that could not be put back; ([], []) on success.
+    """
+    pending = []
+    try:
+        for pair in sorted(target - source):
+            pending.append(('add', pair))
+            client.add_user_to_group(username, pair[0], pair[1])
+        for pair in sorted(source - target):
+            pending.append(('remove', pair))
+            try:
+                client.remove_user_from_group(username, pair[0], pair[1])
+            except Exception as e:
+                if not _is_not_found(e):
+                    raise
+                pending.pop()  # group is gone, so is the membership: nothing to revert
+        return [], []
+    except Exception:
+        logger.exception('Group change of %s in OTS failed, reverting', username)
+    failed = [pending[-1][1][0]]
+    unreverted = []
+    for action, pair in pending:
+        if action == 'remove':
+            try:
+                client.add_user_to_group(username, pair[0], pair[1])
+            except Exception:
+                unreverted.append(pair[0])
+                logger.exception('Could not restore %s of %s in group %s', pair[1], username, pair[0])
+    added = [pair for action, pair in pending if action == 'add']
+    if unreverted:
+        unreverted += [pair[0] for pair in added]
+        logger.error('Not removing the added groups of %s: restoring the old ones failed', username)
+    else:
+        for pair in added:
+            try:
+                client.remove_user_from_group(username, pair[0], pair[1])
+            except Exception as e:
+                if _is_not_found(e):
+                    continue  # the group is gone in OTS, so the membership is too
+                unreverted.append(pair[0])
+                logger.exception('Could not revert add of %s in group %s (%s)', username, pair[0], pair[1])
+    unreverted = list(dict.fromkeys(unreverted))
+    if unreverted:
+        logger.error('OTS groups of %s could not be reverted, OTS and the portal may differ: %s',
+                     username, ', '.join(unreverted))
+    return failed, unreverted
 
 
 otsClient = OTSClient(OTS_URL, OTS_USERNAME, OTS_PASSWORD)

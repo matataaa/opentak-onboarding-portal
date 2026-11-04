@@ -765,6 +765,10 @@
       "userUpdated": "Gebruiker succesvol bijgewerkt",
       "failedCreate": "Aanmaken van gebruiker mislukt",
       "failedUpdate": "Bijwerken van gebruiker mislukt",
+      "groupSyncFailed": "Deze groepen konden niet worden gewijzigd in OpenTAK Server: {{groups}}.",
+      "nothingChanged": "Er is niets gewijzigd.",
+      "userNotCreated": "De gebruiker is niet aangemaakt.",
+      "otsMayDiffer": "OpenTAK Server en de portal kunnen verschillen: controleer dit account in OpenTAK Server.",
       "failedDelete": "Verwijderen van gebruiker mislukt",
       "pageInfo": "Pagina {{page}} van {{totalPages}} ({{total}} totaal)"
     },

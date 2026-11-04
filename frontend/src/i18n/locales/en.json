@@ -765,6 +765,10 @@
       "userUpdated": "User updated successfully",
       "failedCreate": "Failed to create user",
       "failedUpdate": "Failed to update user",
+      "groupSyncFailed": "Could not change these groups in OpenTAK Server: {{groups}}.",
+      "nothingChanged": "Nothing was changed.",
+      "userNotCreated": "The user was not created.",
+      "otsMayDiffer": "OpenTAK Server and the portal may differ: check this account in OpenTAK Server.",
       "failedDelete": "Failed to delete user",
       "pageInfo": "Page {{page}} of {{totalPages}} ({{total}} total)"
     },
