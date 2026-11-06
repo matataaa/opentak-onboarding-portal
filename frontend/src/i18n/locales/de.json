@@ -188,6 +188,7 @@
     "setPassword": "Passwort festlegen",
     "failedSetPassword": "Passwort konnte nicht festgelegt werden",
     "usernameTakenOnServer": "Dieser Benutzername ist auf dem TAK-Server bereits vergeben. Wenden Sie sich an einen Administrator.",
+    "groupsRefusedOnServer": "Ihr Passwort konnte nicht festgelegt werden, weil der TAK-Server eine Ihrer Gruppen nicht akzeptiert hat. Wenden Sie sich an einen Administrator.",
     "passwordAlreadySet": "Ihr Passwort ist bereits festgelegt. Verwenden Sie „Passwort ändern“, um es zu ändern.",
     "takServerUnreachable": "Keine Verbindung zum TAK-Server möglich. Bitte versuchen Sie es später erneut."
   },

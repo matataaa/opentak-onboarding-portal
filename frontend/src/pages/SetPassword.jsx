@@ -74,6 +74,8 @@ function SetPassword() {
       const code = err.response?.data?.code;
       if (code === 'username_taken_on_server') {
         setError(t('auth.usernameTakenOnServer'));
+      } else if (code === 'ots_groups_refused') {
+        setError(t('auth.groupsRefusedOnServer'));
       } else if (code === 'password_already_set') {
         setError(t('auth.passwordAlreadySet'));
       } else if (err.response?.status === 503) {

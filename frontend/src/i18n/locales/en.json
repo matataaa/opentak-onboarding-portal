@@ -188,6 +188,7 @@
     "setPassword": "Set Password",
     "failedSetPassword": "Failed to set password",
     "usernameTakenOnServer": "This username is already taken on the TAK server. Contact an administrator.",
+    "groupsRefusedOnServer": "Your password could not be set because the TAK server did not accept one of your groups. Contact an administrator.",
     "passwordAlreadySet": "Your password is already set. Use Change Password to change it.",
     "takServerUnreachable": "Cannot connect to the TAK server. Please try again later."
   },

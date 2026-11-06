@@ -14,7 +14,7 @@ from flask_jwt_extended import (
 from datetime import timedelta, datetime
 from app.api_v1 import api_v1
 from app.models import db, UserModel, UserRoleModel, PendingRegistrationModel, OnboardingCodeModel, OneTimeTokenModel
-from app.ots import OTSClient, new_password_error
+from app.ots import OTSClient, apply_group_memberships, delete_user_if_present, new_password_error
 from app.rbac import SERVICE_ACCOUNT_PASSWORD_ERROR, code_hands_out_permissions, has_privileged_role, is_service_account
 
 # Marks an approve link only mailed to administrators (token_urlsafe never contains a dot).
@@ -1373,6 +1373,20 @@ def set_password():
         except Exception as e:
             current_app.logger.error(f"Failed to set password in OTS: {e}")
             return jsonify({'error': 'Failed to set password'}), 502
+
+        # Memberships assigned while the account did not exist yet were only stored locally
+        from app.api_v1.users import _group_failure, _ots_group_pairs
+        target_groups = _ots_group_pairs({a.group_id: a.direction for a in user.group_associations})
+        failed, _ = apply_group_memberships(ots, user.username, set(), target_groups)
+        if failed:
+            try:
+                delete_user_if_present(ots, user.username)
+                deleted = True
+            except Exception as e:
+                current_app.logger.error(f"Set password: could not delete the OTS account '{user.username}' after a "
+                                         f"refused group; OTS and the portal now differ: {e}")
+                deleted = False
+            return _group_failure(failed, not deleted, 'the password was not set', code='ots_groups_refused')
 
         user.has_password = True
         db.session.commit()

@@ -911,7 +911,8 @@ paths:
       summary: Set initial password
       description: >
         Set the first password for an OIDC-created user that has none yet, and create
-        their OTS account with it (as administrator if the user holds a privileged role).
+        their OTS account with it (as administrator if the user holds a privileged role)
+        in the groups already assigned to the user in the portal.
         Never resets an existing OTS account's password.
       security:
         - bearerAuth: []
@@ -941,7 +942,26 @@ paths:
             Password already set (`code`: `password_already_set`; use change-password),
             or the username already exists on the TAK server (`code`: `username_taken_on_server`)
         '502':
-          description: OTS returned an unexpected error
+          description: >
+            OTS returned an unexpected error. Or OTS did not accept one of the user's group memberships
+            (`code`: `ots_groups_refused`, `failedGroups` is set): the memberships already added and the
+            new OTS account are removed again and the password is not set; `otsMayDiffer` is true if
+            deleting the OTS account failed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  code:
+                    type: string
+                  failedGroups:
+                    type: array
+                    items:
+                      type: string
+                  otsMayDiffer:
+                    type: boolean
         '503':
           description: TAK server unreachable
 
