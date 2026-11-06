@@ -911,7 +911,8 @@ paths:
       summary: Set initial password
       description: >
         Set the first password for an OIDC-created user that has none yet, and create
-        their OTS account with it (as administrator if the user holds a privileged role).
+        their OTS account with it (as administrator if the user holds a privileged role)
+        in the groups already assigned to the user in the portal.
         Never resets an existing OTS account's password.
       security:
         - bearerAuth: []
@@ -941,7 +942,26 @@ paths:
             Password already set (`code`: `password_already_set`; use change-password),
             or the username already exists on the TAK server (`code`: `username_taken_on_server`)
         '502':
-          description: OTS returned an unexpected error
+          description: >
+            OTS returned an unexpected error. Or OTS did not accept one of the user's group memberships
+            (`code`: `ots_groups_refused`, `failedGroups` is set): the memberships already added and the
+            new OTS account are removed again and the password is not set; `otsMayDiffer` is true if
+            deleting the OTS account failed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  code:
+                    type: string
+                  failedGroups:
+                    type: array
+                    items:
+                      type: string
+                  otsMayDiffer:
+                    type: boolean
         '503':
           description: TAK server unreachable
 
@@ -2870,7 +2890,23 @@ paths:
             type: integer
       responses:
         '200':
-          description: User created
+          description: >
+            User created. If OTS refused some of the code's groups the registration still goes through,
+            the user is not in those groups (no local membership either) and `failedGroups` lists them.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    type: object
+                  failedGroups:
+                    type: array
+                    items:
+                      type: string
+                    description: Only present when OTS refused one or more groups of the onboarding code
         '403':
           description: Registration admin access required, manual approval disabled, or the code carries a role with permissions the caller does not hold
         '404':
@@ -2903,7 +2939,23 @@ paths:
             type: integer
       responses:
         '200':
-          description: User created
+          description: >
+            User created. If OTS refused some of the code's groups the registration still goes through,
+            the user is not in those groups (no local membership either) and `failedGroups` lists them.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    type: object
+                  failedGroups:
+                    type: array
+                    items:
+                      type: string
+                    description: Only present when OTS refused one or more groups of the onboarding code
         '403':
           description: Not in the approver role, or the code carries a role with permissions the caller does not hold
         '404':
@@ -3292,6 +3344,9 @@ paths:
       tags:
         - OTS Groups
       summary: Add or change a group member (group admin) 🔒
+      description: >
+        Reads the user's current directions in the group from OTS, sets them to the requested
+        direction there, then sets the local membership to that direction.
       security:
         - bearerAuth: []
       parameters:
@@ -3317,13 +3372,86 @@ paths:
         '200':
           description: Member set
         '400':
-          description: Invalid request or OTS failure
+          description: Invalid direction, no username or userId, or the local update failed
         '403':
           description: Group admin role required
         '404':
           description: Group or user not found
         '409':
           description: The group is flagged as missing in OTS
+        '502':
+          description: >
+            OTS did not accept the change, or the group's member list could not be read from OTS
+            (`failedGroups` is set). The portal was not changed and the memberships already changed
+            in OTS are put back; `otsMayDiffer` is true if that failed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  failedGroups:
+                    type: array
+                    items:
+                      type: string
+                  otsMayDiffer:
+                    type: boolean
+
+  /groups/{id}/members/{username}:
+    delete:
+      tags:
+        - OTS Groups
+      summary: Remove a group member for a direction (group admin) 🔒
+      description: >
+        Reads the user's current directions in the group from OTS, removes the requested ones there
+        (an OTS 404 counts as already gone), then sets the local membership to the directions OTS has left.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: direction
+          in: query
+          schema:
+            type: string
+            enum: [IN, OUT, BOTH]
+            default: BOTH
+      responses:
+        '200':
+          description: Member removed
+        '400':
+          description: Invalid direction, or the local update failed
+        '403':
+          description: Group admin role required
+        '404':
+          description: Group not found
+        '502':
+          description: >
+            OTS did not accept the change, or the group's member list could not be read from OTS
+            (`failedGroups` is set). The portal was not changed and the memberships already changed
+            in OTS are put back; `otsMayDiffer` is true if that failed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  failedGroups:
+                    type: array
+                    items:
+                      type: string
+                  otsMayDiffer:
+                    type: boolean
 
   /groups/{id}:
     get:

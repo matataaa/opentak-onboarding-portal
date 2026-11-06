@@ -25,7 +25,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api_v1 import api_v1
 from app.models import db, EventTeamModel, EventModel, EventLinkModel, EventSessionModel, EventLeaderSessionModel, EventTeamLeaderModel, OTSGroupModel, UserModel, OnboardingCodeModel, SystemSettingsModel
-from app.ots import otsClient, new_password_error
+from app.ots import apply_group_memberships, otsClient, new_password_error
 from app.exceptions import BadRequestError
 from app.rbac import (CODE_BEYOND_ACTOR_ERROR, drop_fields_without_permission, has_privileged_role, holder_beyond_actor,
                       ignored_fields_body, require_permission, visible_code_value)
@@ -1935,55 +1935,13 @@ def cleanup_parked_group(event_id):
 
 
 def _apply_group_change(username, source, target):
-    """Move an account from the source to the target memberships in OTS.
+    """Move an account from the source to the target memberships in OTS; False if that failed.
 
     Adds first, then removes, so the device always keeps an IN and an OUT
-    membership (without IN, OTS would publish its CoT to __ANON__). If any call
-    fails, every step that may have taken effect (including the one that raised:
-    OTS can change state and still return an error) is reverted best-effort and
-    False is returned. Calls are idempotent. Reverts re-add removed memberships
-    first; added ones are only removed once all re-adds worked, so a failed
-    revert leaves the device in both groups rather than in none. A remove that
-    answers 404 (the group no longer exists in OTS) counts as done.
+    membership (without IN, OTS would publish its CoT to __ANON__). A failed
+    change is reverted, see apply_group_memberships.
     """
-    pending = []
-    try:
-        for pair in sorted(target - source):
-            pending.append(('add', pair))
-            otsClient.add_user_to_group(username, pair[0], pair[1])
-        for pair in sorted(source - target):
-            pending.append(('remove', pair))
-            try:
-                otsClient.remove_user_from_group(username, pair[0], pair[1])
-            except Exception as e:
-                from app.api_v1.groups import _ots_status_code
-                if _ots_status_code(e) != 404:
-                    raise
-                pending.pop()  # group is gone, so is the membership: nothing to revert
-        return True
-    except Exception:
-        current_app.logger.exception('Group change for %s failed, reverting', username)
-    readded = True
-    for action, pair in pending:
-        if action == 'remove':
-            try:
-                otsClient.add_user_to_group(username, pair[0], pair[1])
-            except Exception:
-                readded = False
-                current_app.logger.exception(
-                    'Could not restore %s of %s in group %s', pair[1], username, pair[0])
-    if not readded:
-        current_app.logger.error(
-            'Not removing the added groups of %s: restoring the old ones failed', username)
-        return False
-    for action, pair in pending:
-        if action == 'add':
-            try:
-                otsClient.remove_user_from_group(username, pair[0], pair[1])
-            except Exception:
-                current_app.logger.exception(
-                    'Could not revert add of %s in group %s (%s)', username, pair[0], pair[1])
-    return False
+    return not apply_group_memberships(otsClient, username, source, target)[0]
 
 
 def _reprovision_query(**filters):

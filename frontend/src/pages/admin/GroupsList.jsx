@@ -124,7 +124,11 @@ function GroupsList() {
       queryClient.invalidateQueries(['groups']);
       queryClient.invalidateQueries(['users']);
     },
-    onError: (err) => showError(err.response?.data?.error || t('admin.groups.failedAddMember')),
+    onError: (err) => {
+      // OTS may have changed despite the error, so show its current member list
+      queryClient.invalidateQueries(['group-members', editing?.id]);
+      showError(err.response?.data?.error || t('admin.groups.failedAddMember'));
+    },
   });
 
   const removeMemberMutation = useMutation({
@@ -134,7 +138,11 @@ function GroupsList() {
       queryClient.invalidateQueries(['groups']);
       queryClient.invalidateQueries(['users']);
     },
-    onError: (err) => showError(err.response?.data?.error || t('admin.groups.failedRemoveMember')),
+    onError: (err) => {
+      // OTS may have changed despite the error, so show its current member list
+      queryClient.invalidateQueries(['group-members', editing?.id]);
+      showError(err.response?.data?.error || t('admin.groups.failedRemoveMember'));
+    },
   });
 
   const closeModal = () => {

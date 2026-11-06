@@ -14,7 +14,7 @@ from flask_jwt_extended import (
 from datetime import timedelta, datetime
 from app.api_v1 import api_v1
 from app.models import db, UserModel, UserRoleModel, PendingRegistrationModel, OnboardingCodeModel, OneTimeTokenModel
-from app.ots import OTSClient, new_password_error
+from app.ots import OTSClient, apply_group_memberships, delete_user_if_present, new_password_error
 from app.rbac import SERVICE_ACCOUNT_PASSWORD_ERROR, code_hands_out_permissions, has_privileged_role, is_service_account
 
 # Marks an approve link only mailed to administrators (token_urlsafe never contains a dot).
@@ -22,6 +22,7 @@ from app.rbac import SERVICE_ACCOUNT_PASSWORD_ERROR, code_hands_out_permissions,
 ADMIN_ONLY_APPROVAL_TOKEN_PREFIX = 'adm.'
 from app.exceptions import AuthenticationError, AuthorizationError, BadRequestError
 from app.email import send_html_email
+from markupsafe import escape
 import secrets
 
 
@@ -29,6 +30,8 @@ def assign_ots_groups(username, onboarding_code, user=None):
     """
     Assign OTS groups from onboarding code to user.
     Uses direction from the group-onboarding code association (IN, OUT, or BOTH).
+    The local association only gets the directions OTS accepted.
+    Returns the names of the groups OTS refused (in at least one direction).
     """
     from app.ots import otsClient
     from app.models import GroupUserAssociation, GroupOnboardingCodeAssociation
@@ -40,8 +43,9 @@ def assign_ots_groups(username, onboarding_code, user=None):
 
     if not assocs:
         current_app.logger.warning(f"assign_ots_groups: no group associations found for onboarding code '{onboarding_code.name}' (id={onboarding_code.id})")
-        return
+        return []
 
+    failed_groups = []
     for assoc in assocs:
         group = assoc.group
         current_app.logger.info(f"assign_ots_groups: processing group '{group.name}' (id={group.id}, active={group.active}, direction={assoc.direction})")
@@ -56,23 +60,31 @@ def assign_ots_groups(username, onboarding_code, user=None):
 
         directions = ['IN', 'OUT'] if assoc.direction == 'BOTH' else [assoc.direction]
 
+        succeeded = set()
         for direction in directions:
             try:
                 otsClient.add_user_to_group(username, group.name, direction=direction)
+                succeeded.add(direction)
                 current_app.logger.info(f"assign_ots_groups: added {username} to OTS group '{group.name}' direction={direction}")
             except Exception as e:
                 current_app.logger.error(f"assign_ots_groups: FAILED to add {username} to OTS group '{group.name}' direction={direction}: {str(e)}")
+
+        if len(succeeded) < len(directions):
+            failed_groups.append(group.name)
+        if not succeeded:
+            continue
+        accepted = 'BOTH' if len(succeeded) == 2 else succeeded.pop()
 
         if user:
             try:
                 existing = GroupUserAssociation.query.filter_by(group_id=group.id, user_id=user.id).first()
                 if not existing:
-                    user_assoc = GroupUserAssociation(group_id=group.id, user_id=user.id, direction=assoc.direction)
+                    user_assoc = GroupUserAssociation(group_id=group.id, user_id=user.id, direction=accepted)
                     db.session.add(user_assoc)
                     current_app.logger.info(f"assign_ots_groups: created local GroupUserAssociation for user {user.id} -> group {group.id}")
                 else:
                     # OTS adds memberships additively, so keep the union of both directions
-                    merged = existing.direction if existing.direction == assoc.direction else 'BOTH'
+                    merged = existing.direction if existing.direction == accepted else 'BOTH'
                     if merged != existing.direction:
                         current_app.logger.info(f"assign_ots_groups: direction for user {user.id} -> group {group.id} {existing.direction} -> {merged}")
                         existing.direction = merged
@@ -80,6 +92,10 @@ def assign_ots_groups(username, onboarding_code, user=None):
                         current_app.logger.info(f"assign_ots_groups: local association already exists for user {user.id} -> group {group.id}")
             except Exception as e:
                 current_app.logger.error(f"assign_ots_groups: FAILED to create local association: {str(e)}")
+
+    if failed_groups:
+        current_app.logger.warning(f"assign_ots_groups: OTS refused groups for {username}: {', '.join(failed_groups)}")
+    return failed_groups
 
 
 def get_frontend_url():
@@ -1358,6 +1374,20 @@ def set_password():
             current_app.logger.error(f"Failed to set password in OTS: {e}")
             return jsonify({'error': 'Failed to set password'}), 502
 
+        # Memberships assigned while the account did not exist yet were only stored locally
+        from app.api_v1.users import _group_failure, _ots_group_pairs
+        target_groups = _ots_group_pairs({a.group_id: a.direction for a in user.group_associations})
+        failed, _ = apply_group_memberships(ots, user.username, set(), target_groups)
+        if failed:
+            try:
+                delete_user_if_present(ots, user.username)
+                deleted = True
+            except Exception as e:
+                current_app.logger.error(f"Set password: could not delete the OTS account '{user.username}' after a "
+                                         f"refused group; OTS and the portal now differ: {e}")
+                deleted = False
+            return _group_failure(failed, not deleted, 'the password was not set', code='ots_groups_refused')
+
         user.has_password = True
         db.session.commit()
 
@@ -1713,7 +1743,7 @@ def approve_registration(token):
         for role in onboarding_code.roles:
             new_user.roles.append(role)
 
-        assign_ots_groups(pending.username, onboarding_code, new_user)
+        failed_groups = assign_ots_groups(pending.username, onboarding_code, new_user)
         from app.api_v1.events import record_event_registration
         record_event_registration(pending.username, onboarding_code)
 
@@ -1762,6 +1792,14 @@ The OpenTAK Team"""
 
         current_app.logger.info(f"Email-link approval: user {pending.username} created and approved")
 
+        groups_warning = ''
+        if failed_groups:
+            groups_warning = (
+                '<p style="color: #856404; background: #fff3cd; padding: 10px; border-radius: 4px;">'
+                'OpenTAK Server refused these groups, so the user is not in them: '
+                f'<strong>{escape(", ".join(failed_groups))}</strong>. Add them in the portal.</p>'
+            )
+
         return f"""
         <html>
         <head><title>Registration Approved</title></head>
@@ -1770,6 +1808,7 @@ The OpenTAK Team"""
             <p>The registration for <strong>{new_user.username}</strong> has been approved.</p>
             <p>Their account is now active and they can log in immediately.</p>
             <p>A welcome email has been sent to <strong>{new_user.email}</strong>.</p>
+            {groups_warning}
             <div style="margin-top: 30px;">
                 <p style="color: #666;">Registration Details:</p>
                 <ul style="list-style: none; padding: 0;">

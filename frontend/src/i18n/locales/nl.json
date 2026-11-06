@@ -188,6 +188,7 @@
     "setPassword": "Wachtwoord instellen",
     "failedSetPassword": "Wachtwoord instellen mislukt",
     "usernameTakenOnServer": "Deze gebruikersnaam is al in gebruik op de TAK-server. Neem contact op met een beheerder.",
+    "groupsRefusedOnServer": "Je wachtwoord kon niet worden ingesteld, omdat de TAK-server een van je groepen niet accepteerde. Neem contact op met een beheerder.",
     "passwordAlreadySet": "Je wachtwoord is al ingesteld. Gebruik Wachtwoord wijzigen om het te wijzigen.",
     "takServerUnreachable": "Kan geen verbinding maken met de TAK-server. Probeer het later opnieuw."
   },
@@ -362,6 +363,7 @@
     "rejectConfirm": "Registratie afwijzen voor {{username}}?\n\nDeze actie kan niet ongedaan worden gemaakt. De gebruiker wordt op de hoogte gesteld.",
     "rejectRegistration": "Registratie afwijzen",
     "failedApprove": "Goedkeuren van registratie mislukt",
+    "groupsNotAssigned": "OpenTAK Server heeft de gebruiker niet aan deze groepen toegevoegd: {{groups}}. Een beheerder moet ze toevoegen onder Gebruiker bewerken.",
     "failedReject": "Afwijzen van registratie mislukt",
     "cannotApprove": "Je kunt dit niet goedkeuren: de code geeft rechten die je zelf niet hebt."
   },
@@ -1035,6 +1037,7 @@
       "failedResend": "Opnieuw verzenden van e-mail mislukt",
       "failedCleanup": "Opschonen van verlopen registraties mislukt",
       "failedApprove": "Goedkeuren van registratie mislukt",
+      "groupsNotAssigned": "OpenTAK Server heeft de gebruiker niet aan deze groepen toegevoegd: {{groups}}. Voeg ze toe onder Gebruiker bewerken.",
       "totalPending": "Totaal openstaand: {{total}} | Verlopen: {{expired}} | Actief: {{active}}"
     },
     "takProfiles": {

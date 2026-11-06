@@ -33,7 +33,7 @@ function PendingRegistrationsList() {
   const [formError, setFormError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
   const navigate = useNavigate();
-  const { showSuccess, showError, confirm } = useNotification();
+  const { showSuccess, showError, showWarning, confirm } = useNotification();
   const { can } = useAuth();
   const canEdit = can('registrations.edit');
   const canApprove = can('registrations.approve');
@@ -173,6 +173,9 @@ function PendingRegistrationsList() {
         headers: { Authorization: `Bearer ${token}` }
       });
       showSuccess(response.data.message);
+      if (response.data.failedGroups?.length) {
+        showWarning(t('admin.pendingRegistrations.groupsNotAssigned', { groups: response.data.failedGroups.join(', ') }), 15000);
+      }
       fetchPendingRegistrations(); // Refresh list
     } catch (err) {
       showError(err.response?.data?.error || t('admin.pendingRegistrations.failedApprove'));

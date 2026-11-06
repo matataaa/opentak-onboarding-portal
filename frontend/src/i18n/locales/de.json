@@ -188,6 +188,7 @@
     "setPassword": "Passwort festlegen",
     "failedSetPassword": "Passwort konnte nicht festgelegt werden",
     "usernameTakenOnServer": "Dieser Benutzername ist auf dem TAK-Server bereits vergeben. Wenden Sie sich an einen Administrator.",
+    "groupsRefusedOnServer": "Ihr Passwort konnte nicht festgelegt werden, weil der TAK-Server eine Ihrer Gruppen nicht akzeptiert hat. Wenden Sie sich an einen Administrator.",
     "passwordAlreadySet": "Ihr Passwort ist bereits festgelegt. Verwenden Sie „Passwort ändern“, um es zu ändern.",
     "takServerUnreachable": "Keine Verbindung zum TAK-Server möglich. Bitte versuchen Sie es später erneut."
   },
@@ -362,6 +363,7 @@
     "rejectConfirm": "Registrierung für {{username}} ablehnen?\n\nDiese Aktion kann nicht rückgängig gemacht werden. Der Benutzer wird benachrichtigt.",
     "rejectRegistration": "Registrierung ablehnen",
     "failedApprove": "Genehmigung der Registrierung fehlgeschlagen",
+    "groupsNotAssigned": "OpenTAK Server hat den Benutzer nicht zu diesen Gruppen hinzugefügt: {{groups}}. Ein Administrator muss sie unter „Benutzer bearbeiten“ hinzufügen.",
     "failedReject": "Ablehnung der Registrierung fehlgeschlagen",
     "cannotApprove": "Sie können dies nicht genehmigen: Der Code vergibt Rechte, die Sie selbst nicht haben."
   },
@@ -1035,6 +1037,7 @@
       "failedResend": "E-Mail konnte nicht erneut gesendet werden",
       "failedCleanup": "Abgelaufene Registrierungen konnten nicht bereinigt werden",
       "failedApprove": "Registrierung konnte nicht genehmigt werden",
+      "groupsNotAssigned": "OpenTAK Server hat den Benutzer nicht zu diesen Gruppen hinzugefügt: {{groups}}. Fügen Sie sie unter „Benutzer bearbeiten“ hinzu.",
       "totalPending": "Gesamt ausstehend: {{total}} | Abgelaufen: {{expired}} | Aktiv: {{active}}"
     },
     "takProfiles": {

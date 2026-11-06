@@ -197,6 +197,8 @@ def authenticate_kiosk_session(session_id):
     session.authenticated_at = datetime.utcnow()
     session.access_token = access_token
     session.refresh_token = refresh_token
+    # cleanup_expired deletes by expires_at: keep the row as long as the tokens it holds
+    session.expires_at = max(session.expires_at, session.authenticated_at + timedelta(minutes=timeout_minutes))
     db.session.commit()
 
     return jsonify({'message': 'Session authenticated successfully'}), 200

@@ -225,7 +225,7 @@ def approve_pending(pending_id):
 
         # Assign OTS groups from onboarding code
         from app.api_v1.auth import assign_ots_groups
-        assign_ots_groups(pending.username, onboarding_code, new_user)
+        failed_groups = assign_ots_groups(pending.username, onboarding_code, new_user)
         from app.api_v1.events import record_event_registration
         record_event_registration(pending.username, onboarding_code)
 
@@ -281,7 +281,7 @@ The OpenTAK Team"""
 
         current_app.logger.info(f"Registration approved and user created by {approver.username} for {pending.username}")
 
-        return jsonify({
+        result = {
             'message': f'Registration approved! User {new_user.username} has been created and can now log in.',
             'user': {
                 'id': new_user.id,
@@ -290,7 +290,10 @@ The OpenTAK Team"""
                 'callsign': new_user.callsign,
                 'approved_by': approver.username
             }
-        }), 200
+        }
+        if failed_groups:
+            result['failedGroups'] = failed_groups
+        return jsonify(result), 200
 
     except Exception as e:
         current_app.logger.error(f"Failed to approve registration: {str(e)}")
