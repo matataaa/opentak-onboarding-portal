@@ -2870,7 +2870,23 @@ paths:
             type: integer
       responses:
         '200':
-          description: User created
+          description: >
+            User created. If OTS refused some of the code's groups the registration still goes through,
+            the user is not in those groups (no local membership either) and `failedGroups` lists them.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    type: object
+                  failedGroups:
+                    type: array
+                    items:
+                      type: string
+                    description: Only present when OTS refused one or more groups of the onboarding code
         '403':
           description: Registration admin access required, manual approval disabled, or the code carries a role with permissions the caller does not hold
         '404':
@@ -2903,7 +2919,23 @@ paths:
             type: integer
       responses:
         '200':
-          description: User created
+          description: >
+            User created. If OTS refused some of the code's groups the registration still goes through,
+            the user is not in those groups (no local membership either) and `failedGroups` lists them.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    type: object
+                  failedGroups:
+                    type: array
+                    items:
+                      type: string
+                    description: Only present when OTS refused one or more groups of the onboarding code
         '403':
           description: Not in the approver role, or the code carries a role with permissions the caller does not hold
         '404':

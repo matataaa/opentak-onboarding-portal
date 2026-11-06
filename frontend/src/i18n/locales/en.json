@@ -362,6 +362,7 @@
     "rejectConfirm": "Reject registration for {{username}}?\n\nThis action cannot be undone. The user will be notified.",
     "rejectRegistration": "Reject Registration",
     "failedApprove": "Failed to approve registration",
+    "groupsNotAssigned": "The user could not be added to these groups in OpenTAK Server: {{groups}}. An administrator has to add them under Edit User.",
     "failedReject": "Failed to reject registration",
     "cannotApprove": "You cannot approve this: the code hands out rights you do not hold."
   },
@@ -1035,6 +1036,7 @@
       "failedResend": "Failed to resend email",
       "failedCleanup": "Failed to cleanup expired registrations",
       "failedApprove": "Failed to approve registration",
+      "groupsNotAssigned": "The user could not be added to these groups in OpenTAK Server: {{groups}}. Add them under Edit User.",
       "totalPending": "Total pending: {{total}} | Expired: {{expired}} | Active: {{active}}"
     },
     "takProfiles": {

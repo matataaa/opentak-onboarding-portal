@@ -11,7 +11,7 @@ function Approvals() {
   const { t } = useTranslation();
   const dateFormat = useDateFormat();
   const queryClient = useQueryClient();
-  const { showSuccess, showError, confirm } = useNotification();
+  const { showSuccess, showError, showWarning, confirm } = useNotification();
   const { refreshApproverStatus } = useAuth();
   const [actionLoading, setActionLoading] = useState(null);
 
@@ -29,6 +29,9 @@ function Approvals() {
       queryClient.invalidateQueries({ queryKey: ['myApprovals'] });
       refreshApproverStatus(); // Update navbar badge
       showSuccess(response.data.message);
+      if (response.data.failedGroups?.length) {
+        showWarning(t('approvals.groupsNotAssigned', { groups: response.data.failedGroups.join(', ') }), 15000);
+      }
     },
     onError: (err) => {
       showError(err.response?.data?.error || t('approvals.failedApprove'));
