@@ -8,6 +8,8 @@ from flask_jwt_extended import jwt_required
 from app.api_v1 import api_v1
 from app.rbac import has_permission, require_permission
 from app.models import EventTeamModel, OTSGroupModel, UserModel, db
+from app.api_v1.users import _group_failure
+from app.ots import apply_group_memberships, match_ots_username
 from app.pagination import search_and_paginate
 import datetime
 
@@ -17,6 +19,51 @@ def _ots_status_code(exc):
     if exc.args and isinstance(exc.args[0], dict):
         return exc.args[0].get('status_code')
     return None
+
+
+def _ots_group_members(client, group_name):
+    """The member list OTS returns for a group (a plain list in OTS 1.7/1.8); raises if OTS fails."""
+    ots_data = client.get_group_members(group_name).get('response', {})
+    if isinstance(ots_data, dict):
+        return ots_data.get('results', ots_data.get('members', []))
+    if isinstance(ots_data, list):
+        return ots_data
+    return []
+
+
+def _ots_directions(client, group_name, username):
+    """(name OTS knows username by, its directions in the group) according to OTS.
+
+    OTS looks members up by exact name, so the name is resolved like find_ots_account does;
+    a user OTS does not list keeps the requested name and has no directions.
+    Raises BadRequestError if several members differ from username only in case.
+    """
+    members = [m for m in _ots_group_members(client, group_name) if isinstance(m, dict)]
+    ots_name = match_ots_username([m.get('username') for m in members], username)
+    if ots_name is None:
+        return username, set()
+    return ots_name, {(m.get('direction') or '').upper() for m in members
+                      if m.get('username') == ots_name} & {'IN', 'OUT'}
+
+
+def _direction_of(dirs):
+    """The local direction value for a set of OTS directions, None for no membership."""
+    return 'BOTH' if dirs == {'IN', 'OUT'} else next(iter(dirs), None)
+
+
+def _set_local_direction(group, user, dirs):
+    """Make the local membership row match dirs: update, create, or delete it."""
+    from app.models import GroupUserAssociation
+    existing = GroupUserAssociation.query.filter_by(group_id=group.id, user_id=user.id).first()
+    direction = _direction_of(dirs)
+    if direction is None:
+        if existing:
+            db.session.delete(existing)
+    elif existing:
+        existing.direction = direction
+    else:
+        db.session.add(GroupUserAssociation(group_id=group.id, user_id=user.id, direction=direction))
+    db.session.commit()
 
 
 def _event_teams_of(group):
@@ -249,12 +296,7 @@ def get_group_members(group_id):
     ots_members = []
     try:
         from app.ots import otsClient
-        ots_response = otsClient.get_group_members(group.name)
-        ots_data = ots_response.get('response', {})
-        if isinstance(ots_data, dict):
-            ots_members = ots_data.get('results', ots_data.get('members', []))
-        elif isinstance(ots_data, list):
-            ots_members = ots_data
+        ots_members = _ots_group_members(otsClient, group.name)
     except Exception as e:
         current_app.logger.warning(f"Failed to fetch OTS members for group '{group.name}': {str(e)}")
 
@@ -307,43 +349,32 @@ def add_group_member(group_id):
             return jsonify({'error': 'User not found'}), 404
         username = user.username
     elif username:
-        user = UserModel.get_user_by_username(username)
+        user = UserModel.get_user_by_username(username.lower())
     else:
         return jsonify({'error': 'username or userId is required'}), 400
 
     try:
         from app.ots import otsClient
-        from app.models import GroupUserAssociation
 
         new_dirs = set(['IN', 'OUT'] if direction == 'BOTH' else [direction])
 
-        # Determine old directions to find what to remove
-        old_dir = None
-        if user:
-            existing = GroupUserAssociation.query.filter_by(group_id=group.id, user_id=user.id).first()
-            if existing:
-                old_dir = existing.direction
-        old_dirs = set(['IN', 'OUT'] if old_dir == 'BOTH' else [old_dir]) if old_dir else set()
+        # OTS, not the local row, says which directions the user has now and so what to remove or revert
+        try:
+            ots_name, old_dirs = _ots_directions(otsClient, group.name, username)
+        except Exception as e:
+            current_app.logger.error(f"Could not read the members of OTS group '{group.name}': {e}")
+            return _group_failure([group.name], False, 'nothing was changed')
 
-        # Add new directions
-        for d in new_dirs - old_dirs:
-            otsClient.add_user_to_group(username, group.name, direction=d)
-
-        # Remove directions no longer wanted
-        for d in old_dirs - new_dirs:
-            try:
-                otsClient.remove_user_from_group(username, group.name, direction=d)
-            except Exception as e:
-                current_app.logger.warning(f"Failed to remove {username} from OTS group {group.name} {d}: {e}")
+        # Add the new directions and remove the ones no longer wanted, all or nothing
+        failed, unreverted = apply_group_memberships(
+            otsClient, ots_name, {(group.name, d) for d in old_dirs}, {(group.name, d) for d in new_dirs})
+        if failed:
+            db.session.rollback()
+            return _group_failure(failed, bool(unreverted), 'nothing was changed')
 
         # Track locally
         if user:
-            if existing:
-                existing.direction = direction
-            else:
-                assoc = GroupUserAssociation(group_id=group.id, user_id=user.id, direction=direction)
-                db.session.add(assoc)
-            db.session.commit()
+            _set_local_direction(group, user, new_dirs)
 
         current_app.logger.info(f"Set user {username} in group '{group.name}' direction={direction}")
 
@@ -371,27 +402,25 @@ def remove_group_member(group_id, username):
 
     try:
         from app.ots import otsClient
-        ots_directions = ['IN', 'OUT'] if direction == 'BOTH' else [direction]
-        for d in ots_directions:
-            try:
-                otsClient.remove_user_from_group(username, group.name, direction=d)
-            except Exception as e:
-                current_app.logger.warning(f"Failed to remove {username} from OTS group {group.name} {d}: {e}")
+        removed = {'IN', 'OUT'} if direction == 'BOTH' else {direction}
+
+        user = UserModel.get_user_by_username(username.lower())
+        # OTS, not the local row, says which directions the user has now and so what to remove or revert
+        try:
+            ots_name, ots_dirs = _ots_directions(otsClient, group.name, username)
+        except Exception as e:
+            current_app.logger.error(f"Could not read the members of OTS group '{group.name}': {e}")
+            return _group_failure([group.name], False, 'nothing was changed')
+        target = ots_dirs - removed
+        failed, unreverted = apply_group_memberships(otsClient, ots_name, {(group.name, d) for d in ots_dirs},
+                                                     {(group.name, d) for d in target})
+        if failed:
+            db.session.rollback()
+            return _group_failure(failed, bool(unreverted), 'nothing was changed')
 
         # Update local tracking
-        user = UserModel.get_user_by_username(username)
         if user:
-            from app.models import GroupUserAssociation
-            existing = GroupUserAssociation.query.filter_by(group_id=group.id, user_id=user.id).first()
-            if existing:
-                if direction == 'BOTH':
-                    db.session.delete(existing)
-                elif existing.direction == 'BOTH':
-                    other_dir = 'OUT' if direction == 'IN' else 'IN'
-                    existing.direction = other_dir
-                elif existing.direction == direction:
-                    db.session.delete(existing)
-                db.session.commit()
+            _set_local_direction(group, user, target)
 
         current_app.logger.info(f"Removed user {username} from group '{group.name}' direction={direction}")
 

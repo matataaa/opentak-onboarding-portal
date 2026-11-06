@@ -591,13 +591,21 @@ def find_ots_account(client, username):
     results = client.get_all_pages(client.get_users).get('response', {}).get('results', [])
     if not results:
         raise Exception('OTS returned no user list')
-    matches = [u for u in results if (u.get('username') or '').lower() == username.lower()]
-    for account in matches:
-        if account.get('username') == username:
-            return account
+    name = match_ots_username([u.get('username') for u in results], username)
+    return next((u for u in results if u.get('username') == name), None) if name else None
+
+
+def match_ots_username(names, username):
+    """The name among OTS usernames that is username's: the exact one, else the only one differing in case.
+
+    Returns None if none matches; raises BadRequestError if several differ only in case.
+    """
+    matches = {n for n in names if (n or '').lower() == username.lower()}
+    if username in matches:
+        return username
     if len(matches) > 1:
         raise BadRequestError(f"OTS has several accounts named like '{username}'")
-    return matches[0] if matches else None
+    return next(iter(matches), None)
 
 
 def _is_ots_admin(client, real_username):

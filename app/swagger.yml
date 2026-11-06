@@ -3324,6 +3324,9 @@ paths:
       tags:
         - OTS Groups
       summary: Add or change a group member (group admin) 🔒
+      description: >
+        Reads the user's current directions in the group from OTS, sets them to the requested
+        direction there, then sets the local membership to that direction.
       security:
         - bearerAuth: []
       parameters:
@@ -3349,13 +3352,86 @@ paths:
         '200':
           description: Member set
         '400':
-          description: Invalid request or OTS failure
+          description: Invalid direction, no username or userId, or the local update failed
         '403':
           description: Group admin role required
         '404':
           description: Group or user not found
         '409':
           description: The group is flagged as missing in OTS
+        '502':
+          description: >
+            OTS did not accept the change, or the group's member list could not be read from OTS
+            (`failedGroups` is set). The portal was not changed and the memberships already changed
+            in OTS are put back; `otsMayDiffer` is true if that failed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  failedGroups:
+                    type: array
+                    items:
+                      type: string
+                  otsMayDiffer:
+                    type: boolean
+
+  /groups/{id}/members/{username}:
+    delete:
+      tags:
+        - OTS Groups
+      summary: Remove a group member for a direction (group admin) 🔒
+      description: >
+        Reads the user's current directions in the group from OTS, removes the requested ones there
+        (an OTS 404 counts as already gone), then sets the local membership to the directions OTS has left.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: direction
+          in: query
+          schema:
+            type: string
+            enum: [IN, OUT, BOTH]
+            default: BOTH
+      responses:
+        '200':
+          description: Member removed
+        '400':
+          description: Invalid direction, or the local update failed
+        '403':
+          description: Group admin role required
+        '404':
+          description: Group not found
+        '502':
+          description: >
+            OTS did not accept the change, or the group's member list could not be read from OTS
+            (`failedGroups` is set). The portal was not changed and the memberships already changed
+            in OTS are put back; `otsMayDiffer` is true if that failed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  failedGroups:
+                    type: array
+                    items:
+                      type: string
+                  otsMayDiffer:
+                    type: boolean
 
   /groups/{id}:
     get:
